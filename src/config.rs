@@ -1,4 +1,4 @@
-use std::fmt;
+use crate::error::AppError;
 
 /// Application configuration
 #[derive(Debug, Clone)]
@@ -9,47 +9,31 @@ pub struct Config {
     pub log_level: String,
 }
 
-/// Configuration errors
-#[derive(Debug)]
-pub enum ConfigError {
-    MissingRequired(String),
-    InvalidValue(String, String),
-    ParseError(String, String),
-}
-
-impl fmt::Display for ConfigError {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        match self {
-            ConfigError::MissingRequired(var) => {
-                write!(f, "Missing required environment variable: {}", var)
-            }
-            ConfigError::InvalidValue(var, reason) => {
-                write!(f, "Invalid value for {}: {}", var, reason)
-            }
-            ConfigError::ParseError(var, err) => {
-                write!(f, "Failed to parse {}: {}", var, err)
-            }
-        }
-    }
-}
-
-impl std::error::Error for ConfigError {}
-
 impl Config {
     /// Load configuration from environment variables
-    pub fn from_env() -> Result<Self, ConfigError> {
+    ///
+    /// # Errors
+    ///
+    /// Returns `AppError::Configuration` if:
+    /// - Required environment variables are missing (DATABASE_URL, APP_PORT)
+    /// - Values cannot be parsed (e.g., APP_PORT is not a valid number)
+    /// - Values fail validation (e.g., UPDATE_INTERVAL_DAYS < 1)
+    pub fn from_env() -> Result<Self, AppError> {
         // Load .env file if it exists (ignore errors if file doesn't exist)
         let _ = dotenvy::dotenv();
 
         // Load required variables
-        let database_url = std::env::var("DATABASE_URL")
-            .map_err(|_| ConfigError::MissingRequired("DATABASE_URL".to_string()))?;
+        let database_url = std::env::var("DATABASE_URL").map_err(|_| {
+            AppError::Configuration("Missing required environment variable: DATABASE_URL".to_string())
+        })?;
 
         let app_port = std::env::var("APP_PORT")
-            .map_err(|_| ConfigError::MissingRequired("APP_PORT".to_string()))?
+            .map_err(|_| {
+                AppError::Configuration("Missing required environment variable: APP_PORT".to_string())
+            })?
             .parse::<u16>()
             .map_err(|e| {
-                ConfigError::ParseError("APP_PORT".to_string(), e.to_string())
+                AppError::Configuration(format!("Failed to parse APP_PORT: {}", e))
             })?;
 
         // Load optional variables with defaults
@@ -57,7 +41,7 @@ impl Config {
             .ok()
             .map(|v| {
                 v.parse::<u32>().map_err(|e| {
-                    ConfigError::ParseError("UPDATE_INTERVAL_DAYS".to_string(), e.to_string())
+                    AppError::Configuration(format!("Failed to parse UPDATE_INTERVAL_DAYS: {}", e))
                 })
             })
             .transpose()?
@@ -65,9 +49,8 @@ impl Config {
 
         // Validate update_interval_days
         if update_interval_days < 1 {
-            return Err(ConfigError::InvalidValue(
-                "UPDATE_INTERVAL_DAYS".to_string(),
-                "must be at least 1".to_string(),
+            return Err(AppError::Configuration(
+                "Invalid value for UPDATE_INTERVAL_DAYS: must be at least 1".to_string(),
             ));
         }
 

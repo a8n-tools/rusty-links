@@ -1,5 +1,7 @@
 mod config;
+mod error;
 
+use crate::error::AppError;
 use sqlx::{postgres::PgPoolOptions, PgPool};
 use std::time::Duration;
 use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
@@ -25,11 +27,11 @@ use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
 /// 4. Migrations will run automatically on next application startup
 ///
 /// # Errors
-/// Returns an error if:
-/// - Database connection fails
-/// - Migration execution fails
-/// - Health check query fails
-async fn initialize_database(database_url: &str) -> Result<PgPool, Box<dyn std::error::Error>> {
+/// Returns `AppError` if:
+/// - Database connection fails (AppError::Database)
+/// - Migration execution fails (AppError::Database)
+/// - Health check query fails (AppError::Database)
+async fn initialize_database(database_url: &str) -> Result<PgPool, AppError> {
     tracing::info!("Initializing database connection pool...");
 
     // Create connection pool with optimized settings
