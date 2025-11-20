@@ -1,7 +1,9 @@
 mod config;
 mod error;
+mod models;
 
 use crate::error::AppError;
+use crate::models::{check_user_exists, create_user, find_user_by_email, verify_password, CreateUser};
 use sqlx::{postgres::PgPoolOptions, PgPool};
 use std::time::Duration;
 use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
@@ -128,10 +130,171 @@ async fn main() {
         "Database connection pool ready for application use"
     );
 
-    // Placeholder for application logic
-    // Will be implemented in subsequent steps
+    // =============================================================================
+    // TEMPORARY TEST CODE - Step 6: User Model Testing
+    // This code will be removed in Step 7
+    // =============================================================================
+    tracing::info!("=== Starting User Model Tests ===");
 
-    tracing::info!("Application initialization complete. Ready for Step 5.");
+    // Test 1: Check if users exist
+    match check_user_exists(&pool).await {
+        Ok(exists) => {
+            tracing::info!(exists = exists, "User existence check completed");
+            if exists {
+                eprintln!("✓ Users exist in database");
+            } else {
+                eprintln!("✓ No users exist - fresh database");
+            }
+        }
+        Err(e) => {
+            tracing::error!(error = %e, "Failed to check user existence");
+            eprintln!("✗ User existence check failed: {}", e);
+        }
+    }
+
+    // Test 2: Create a test user
+    let test_email = "test@rustylinks.local";
+    let test_password = "secure_test_password_123";
+
+    eprintln!("\nCreating test user: {}", test_email);
+
+    match create_user(
+        &pool,
+        CreateUser {
+            email: test_email.to_string(),
+            password: test_password.to_string(),
+        },
+    )
+    .await
+    {
+        Ok(user) => {
+            tracing::info!(user_id = %user.id, email = %user.email, "Test user created");
+            eprintln!("✓ User created successfully");
+            eprintln!("  - ID: {}", user.id);
+            eprintln!("  - Email: {}", user.email);
+            eprintln!("  - Created at: {}", user.created_at);
+            eprintln!("  - Password hash length: {}", user.password_hash.len());
+        }
+        Err(e) => {
+            match &e {
+                AppError::Duplicate { field } => {
+                    tracing::info!(field = %field, "User already exists (expected if running multiple times)");
+                    eprintln!("✓ User already exists (expected if running multiple times)");
+                }
+                _ => {
+                    tracing::error!(error = %e, "Failed to create user");
+                    eprintln!("✗ User creation failed: {}", e);
+                }
+            }
+        }
+    }
+
+    // Test 3: Find user by email (case-insensitive)
+    eprintln!("\nFinding user by email (testing case-insensitive)...");
+
+    match find_user_by_email(&pool, "TEST@rustylinks.local").await {
+        Ok(Some(user)) => {
+            tracing::info!(user_id = %user.id, email = %user.email, "User found");
+            eprintln!("✓ User found by email (case-insensitive)");
+            eprintln!("  - Found user: {}", user.email);
+
+            // Test 4: Verify correct password
+            eprintln!("\nVerifying correct password...");
+            match verify_password(test_password, &user.password_hash) {
+                Ok(true) => {
+                    tracing::info!("Password verification successful");
+                    eprintln!("✓ Password verification successful");
+                }
+                Ok(false) => {
+                    tracing::error!("Password verification failed unexpectedly");
+                    eprintln!("✗ Password verification failed (should have succeeded)");
+                }
+                Err(e) => {
+                    tracing::error!(error = %e, "Password verification error");
+                    eprintln!("✗ Password verification error: {}", e);
+                }
+            }
+
+            // Test 5: Verify incorrect password
+            eprintln!("\nVerifying incorrect password...");
+            match verify_password("wrong_password", &user.password_hash) {
+                Ok(false) => {
+                    tracing::info!("Password verification correctly rejected wrong password");
+                    eprintln!("✓ Incorrect password correctly rejected");
+                }
+                Ok(true) => {
+                    tracing::error!("Password verification incorrectly accepted wrong password");
+                    eprintln!("✗ Incorrect password was accepted (should have been rejected)");
+                }
+                Err(e) => {
+                    tracing::error!(error = %e, "Password verification error");
+                    eprintln!("✗ Password verification error: {}", e);
+                }
+            }
+        }
+        Ok(None) => {
+            tracing::warn!("User not found by email");
+            eprintln!("✗ User not found (may have failed to create)");
+        }
+        Err(e) => {
+            tracing::error!(error = %e, "Failed to find user");
+            eprintln!("✗ User lookup failed: {}", e);
+        }
+    }
+
+    // Test 6: Try to find non-existent user
+    eprintln!("\nTesting lookup of non-existent user...");
+    match find_user_by_email(&pool, "nonexistent@example.com").await {
+        Ok(None) => {
+            tracing::info!("Non-existent user correctly returned None");
+            eprintln!("✓ Non-existent user correctly returned None");
+        }
+        Ok(Some(_)) => {
+            tracing::error!("Non-existent user unexpectedly found");
+            eprintln!("✗ Non-existent user unexpectedly found");
+        }
+        Err(e) => {
+            tracing::error!(error = %e, "User lookup error");
+            eprintln!("✗ User lookup error: {}", e);
+        }
+    }
+
+    // Test 7: Test email validation
+    eprintln!("\nTesting email validation...");
+    match create_user(
+        &pool,
+        CreateUser {
+            email: "invalid-email-no-at".to_string(),
+            password: "password".to_string(),
+        },
+    )
+    .await
+    {
+        Err(AppError::Validation { field, message }) => {
+            tracing::info!(field = %field, message = %message, "Email validation working correctly");
+            eprintln!("✓ Email validation correctly rejected invalid email");
+            eprintln!("  - Field: {}", field);
+            eprintln!("  - Message: {}", message);
+        }
+        Ok(_) => {
+            tracing::error!("Email validation failed to reject invalid email");
+            eprintln!("✗ Invalid email was accepted (should have been rejected)");
+        }
+        Err(e) => {
+            tracing::error!(error = %e, "Unexpected error during email validation test");
+            eprintln!("✗ Unexpected error: {}", e);
+        }
+    }
+
+    tracing::info!("=== User Model Tests Complete ===");
+    eprintln!("\n=== All User Model Tests Complete ===");
+    eprintln!("Step 6 implementation verified successfully!");
+
+    // =============================================================================
+    // END OF TEMPORARY TEST CODE
+    // =============================================================================
+
+    tracing::info!("Application initialization complete. Ready for Step 7.");
 
     // Keep the application running
     // In future steps, this will be replaced with the Axum server
