@@ -8,6 +8,9 @@ edition = "2021"
 dioxus = { version = "0.5", features = ["fullstack"] }
 dioxus-web = "0.5"
 axum = { version = "0.7", features = ["tokio"] }
+axum-extra = { version = "0.9", features = ["cookie"] }
+tower = { version = "0.4", features = ["util"] }
+tower-http = { version = "0.5", features = ["cors", "trace"] }
 
 # Database
 sqlx = { version = "0.7", features = ["postgres", "runtime-tokio-native-tls", "migrate", "uuid", "chrono"] }
@@ -32,5 +35,9 @@ chrono = { version = "0.4", features = ["serde"] }
 
 # Password hashing
 argon2 = "0.5"
+
+# Session management
+rand = "0.8"
+hex = "0.4"
 
 [dev-dependencies]

@@ -1,7 +1,9 @@
+mod auth;
 mod config;
 mod error;
 mod models;
 
+use crate::auth::{create_session, create_session_cookie, delete_all_user_sessions, delete_session, get_session};
 use crate::error::AppError;
 use crate::models::{check_user_exists, create_user, find_user_by_email, verify_password, CreateUser};
 use sqlx::{postgres::PgPoolOptions, PgPool};
@@ -287,14 +289,198 @@ async fn main() {
     }
 
     tracing::info!("=== User Model Tests Complete ===");
-    eprintln!("\n=== All User Model Tests Complete ===");
-    eprintln!("Step 6 implementation verified successfully!");
+    eprintln!("\n=== User Model Tests Complete ===");
+
+    // =============================================================================
+    // TEMPORARY TEST CODE - Step 7: Session Management Testing
+    // This code will be removed in Step 8
+    // =============================================================================
+    tracing::info!("=== Starting Session Management Tests ===");
+    eprintln!("\n=== Session Management Tests ===");
+
+    // First, ensure we have a user to test with
+    let test_user = match find_user_by_email(&pool, test_email).await {
+        Ok(Some(user)) => user,
+        Ok(None) => {
+            eprintln!("Creating test user for session tests...");
+            create_user(
+                &pool,
+                CreateUser {
+                    email: test_email.to_string(),
+                    password: test_password.to_string(),
+                },
+            )
+            .await
+            .expect("Should create user for session tests")
+        }
+        Err(e) => {
+            eprintln!("✗ Failed to prepare user for session tests: {}", e);
+            std::process::exit(1);
+        }
+    };
+
+    eprintln!("\nUsing test user: {} (ID: {})", test_user.email, test_user.id);
+
+    // Test 1: Create a session
+    eprintln!("\nTest 1: Creating session...");
+    let session = match create_session(&pool, test_user.id).await {
+        Ok(session) => {
+            tracing::info!(
+                session_id = %session.id,
+                user_id = %session.user_id,
+                "Session created"
+            );
+            eprintln!("✓ Session created successfully");
+            eprintln!("  - Session ID: {}", session.id);
+            eprintln!("  - Session ID length: {} chars", session.id.len());
+            eprintln!("  - User ID: {}", session.user_id);
+            eprintln!("  - Created at: {}", session.created_at);
+            session
+        }
+        Err(e) => {
+            tracing::error!(error = %e, "Failed to create session");
+            eprintln!("✗ Session creation failed: {}", e);
+            std::process::exit(1);
+        }
+    };
+
+    // Test 2: Retrieve the session
+    eprintln!("\nTest 2: Retrieving session by ID...");
+    match get_session(&pool, &session.id).await {
+        Ok(Some(retrieved_session)) => {
+            tracing::info!(session_id = %session.id, "Session retrieved");
+            eprintln!("✓ Session retrieved successfully");
+            eprintln!("  - Session ID matches: {}", retrieved_session.id == session.id);
+            eprintln!("  - User ID matches: {}", retrieved_session.user_id == test_user.id);
+
+            if retrieved_session.id != session.id {
+                eprintln!("✗ Session ID mismatch!");
+            }
+            if retrieved_session.user_id != test_user.id {
+                eprintln!("✗ User ID mismatch!");
+            }
+        }
+        Ok(None) => {
+            tracing::error!("Session not found");
+            eprintln!("✗ Session not found (should have been found)");
+        }
+        Err(e) => {
+            tracing::error!(error = %e, "Failed to retrieve session");
+            eprintln!("✗ Session retrieval failed: {}", e);
+        }
+    }
+
+    // Test 3: Test session cookie creation
+    eprintln!("\nTest 3: Creating session cookie...");
+    let cookie = create_session_cookie(&session.id);
+    eprintln!("✓ Session cookie created");
+    eprintln!("  - Cookie name: {}", cookie.name());
+    eprintln!("  - Cookie value: {}", cookie.value());
+    eprintln!("  - HttpOnly: {:?}", cookie.http_only());
+    eprintln!("  - Secure: {:?}", cookie.secure());
+    eprintln!("  - SameSite: {:?}", cookie.same_site());
+    eprintln!("  - Path: {:?}", cookie.path());
+
+    // Test 4: Create another session for the same user
+    eprintln!("\nTest 4: Creating second session for same user...");
+    let session2 = match create_session(&pool, test_user.id).await {
+        Ok(session2) => {
+            tracing::info!(session_id = %session2.id, "Second session created");
+            eprintln!("✓ Second session created successfully");
+            eprintln!("  - Session ID: {}", session2.id);
+            eprintln!("  - Different from first: {}", session2.id != session.id);
+
+            if session2.id == session.id {
+                eprintln!("✗ Session IDs should be different!");
+            }
+
+            session2
+        }
+        Err(e) => {
+            tracing::error!(error = %e, "Failed to create second session");
+            eprintln!("✗ Second session creation failed: {}", e);
+            std::process::exit(1);
+        }
+    };
+
+    // Test 5: Look up non-existent session
+    eprintln!("\nTest 5: Looking up non-existent session...");
+    match get_session(&pool, "nonexistent_session_id_12345").await {
+        Ok(None) => {
+            tracing::info!("Non-existent session correctly returned None");
+            eprintln!("✓ Non-existent session correctly returned None");
+        }
+        Ok(Some(_)) => {
+            tracing::error!("Non-existent session unexpectedly found");
+            eprintln!("✗ Non-existent session unexpectedly found");
+        }
+        Err(e) => {
+            tracing::error!(error = %e, "Session lookup error");
+            eprintln!("✗ Session lookup error: {}", e);
+        }
+    }
+
+    // Test 6: Delete a specific session
+    eprintln!("\nTest 6: Deleting first session...");
+    match delete_session(&pool, &session.id).await {
+        Ok(_) => {
+            tracing::info!(session_id = %session.id, "Session deleted");
+            eprintln!("✓ Session deleted successfully");
+
+            // Verify it's gone
+            match get_session(&pool, &session.id).await {
+                Ok(None) => {
+                    eprintln!("✓ Session confirmed deleted (not found in database)");
+                }
+                Ok(Some(_)) => {
+                    eprintln!("✗ Session still exists after deletion!");
+                }
+                Err(e) => {
+                    eprintln!("✗ Error verifying deletion: {}", e);
+                }
+            }
+        }
+        Err(e) => {
+            tracing::error!(error = %e, "Failed to delete session");
+            eprintln!("✗ Session deletion failed: {}", e);
+        }
+    }
+
+    // Test 7: Delete all sessions for user
+    eprintln!("\nTest 7: Deleting all sessions for user...");
+    match delete_all_user_sessions(&pool, test_user.id).await {
+        Ok(_) => {
+            tracing::info!(user_id = %test_user.id, "All user sessions deleted");
+            eprintln!("✓ All user sessions deleted successfully");
+
+            // Verify second session is gone
+            match get_session(&pool, &session2.id).await {
+                Ok(None) => {
+                    eprintln!("✓ Second session confirmed deleted");
+                }
+                Ok(Some(_)) => {
+                    eprintln!("✗ Second session still exists!");
+                }
+                Err(e) => {
+                    eprintln!("✗ Error verifying deletion: {}", e);
+                }
+            }
+        }
+        Err(e) => {
+            tracing::error!(error = %e, "Failed to delete all user sessions");
+            eprintln!("✗ Delete all sessions failed: {}", e);
+        }
+    }
+
+    tracing::info!("=== Session Management Tests Complete ===");
+    eprintln!("\n=== All Session Management Tests Complete ===");
+    eprintln!("Step 7 implementation verified successfully!");
 
     // =============================================================================
     // END OF TEMPORARY TEST CODE
     // =============================================================================
 
-    tracing::info!("Application initialization complete. Ready for Step 7.");
+    tracing::info!("Application initialization complete. Ready for Step 8.");
 
     // Keep the application running
     // In future steps, this will be replaced with the Axum server
