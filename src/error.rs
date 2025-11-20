@@ -415,6 +415,66 @@ fn extract_field_from_constraint(message: &str) -> String {
     "field".to_string()
 }
 
+// HTTP response conversion for Axum
+
+/// Implement IntoResponse for AppError to enable automatic error conversion in Axum handlers
+///
+/// This allows handlers to return `Result<T, AppError>` and have errors automatically
+/// converted to proper HTTP responses with appropriate status codes and JSON bodies.
+impl axum::response::IntoResponse for AppError {
+    fn into_response(self) -> axum::response::Response {
+        use axum::http::StatusCode;
+        use axum::Json;
+
+        // Log the error for debugging
+        match &self {
+            AppError::InvalidCredentials => {
+                tracing::warn!("Authentication failed: Invalid credentials");
+            }
+            AppError::SessionExpired => {
+                tracing::info!("Session expired");
+            }
+            AppError::Unauthorized => {
+                tracing::warn!("Unauthorized access attempt");
+            }
+            AppError::Validation { field, message } => {
+                tracing::info!(field = %field, message = %message, "Validation error");
+            }
+            AppError::Duplicate { field } => {
+                tracing::info!(field = %field, "Duplicate field error");
+            }
+            AppError::NotFound { resource, id } => {
+                tracing::debug!(resource = %resource, id = %id, "Resource not found");
+            }
+            AppError::Database(e) => {
+                tracing::error!(error = %e, "Database error");
+            }
+            AppError::Internal(msg) => {
+                tracing::error!(message = %msg, "Internal error");
+            }
+            AppError::Configuration(msg) => {
+                tracing::error!(message = %msg, "Configuration error");
+            }
+            AppError::ExternalService(msg) => {
+                tracing::error!(message = %msg, "External service error");
+            }
+            AppError::Io(e) => {
+                tracing::error!(error = %e, "I/O error");
+            }
+            AppError::Json(e) => {
+                tracing::error!(error = %e, "JSON error");
+            }
+        }
+
+        // Convert error to API response
+        let response = self.to_response();
+        let status_code = StatusCode::from_u16(response.status)
+            .unwrap_or(StatusCode::INTERNAL_SERVER_ERROR);
+
+        (status_code, Json(response)).into_response()
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
