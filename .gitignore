@@ -91,3 +91,27 @@ fabric.properties
 # Built Visual Studio Code Extensions
 *.vsix
 
+# ---> Rust
+/target/
+**/*.rs.bk
+*.pdb
+Cargo.lock
+
+# Environment variables
+.env
+.env.local
+
+# Database files
+*.db
+*.sqlite
+
+# Logs
+*.log
+
+# OS specific
+.DS_Store
+Thumbs.db
+
+# Build artifacts
+dist/
+build/

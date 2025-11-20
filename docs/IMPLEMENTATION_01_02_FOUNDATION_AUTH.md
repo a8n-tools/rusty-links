@@ -13,7 +13,7 @@ This document contains implementation prompts for building the foundation and au
 
 **Prompt:**
 
-```
+````
 Initialize a new Rust project for a bookmark manager application called "Rusty Links". Set up the project structure with the following requirements:
 
 1. Create a new Cargo project with these dependencies:
@@ -46,7 +46,7 @@ Initialize a new Rust project for a bookmark manager application called "Rusty L
 5. Ensure the project compiles successfully
 
 Keep the code minimal and focused on structure. We'll implement functionality incrementally in subsequent steps.
-```
+````
 
 ---
 
@@ -56,7 +56,7 @@ Keep the code minimal and focused on structure. We'll implement functionality in
 
 **Prompt:**
 
-```
+````
 Implement the configuration management system for Rusty Links. Build on the existing project structure from Step 1.
 
 Requirements:
@@ -94,7 +94,7 @@ Requirements:
    ```
 
 Test that the application starts successfully with valid config and fails clearly with missing/invalid config.
-```
+````
 
 ---
 
@@ -104,7 +104,7 @@ Test that the application starts successfully with valid config and fails clearl
 
 **Prompt:**
 
-```
+````
 Create the complete database schema for Rusty Links using SQLx migrations. Build on the existing project from Steps 1-2.
 
 Requirements:
@@ -198,7 +198,7 @@ Requirements:
 5. Document in comments that migrations run automatically and how to create new migrations
 
 Test that the application starts and creates the database schema successfully.
-```
+````
 
 ---
 
@@ -208,7 +208,7 @@ Test that the application starts and creates the database schema successfully.
 
 **Prompt:**
 
-```
+````
 Set up the PostgreSQL connection pool for Rusty Links. Build on Steps 1-3.
 
 Requirements:
@@ -245,7 +245,7 @@ Requirements:
    - Log the result
 
 Do not create any API endpoints yet - we're just establishing the database connection. Test that the application connects to PostgreSQL successfully and runs migrations.
-```
+````
 
 ---
 
@@ -255,7 +255,7 @@ Do not create any API endpoints yet - we're just establishing the database conne
 
 **Prompt:**
 
-```
+````
 Create a comprehensive error handling framework for Rusty Links that will be used across the application. Build on Steps 1-4.
 
 Requirements:
@@ -299,7 +299,7 @@ Requirements:
 7. Update existing code in main.rs, config.rs to use AppError where appropriate
 
 Do not implement API error responses yet - we're establishing the error types. Document the error handling strategy with comments. Test that errors compile and display correctly.
-```
+````
 
 ---
 
@@ -311,7 +311,7 @@ Do not implement API error responses yet - we're establishing the error types. D
 
 **Prompt:**
 
-```
+````
 Implement the User model with secure password handling for Rusty Links. Build on Steps 1-5.
 
 Requirements:
@@ -375,7 +375,7 @@ Requirements:
    - Authentication attempts (log success/failure, not passwords)
 
 Do not create API endpoints or UI yet. Test the functions work correctly with direct database calls from main.rs (you can add temporary test code that you'll remove).
-```
+````
 
 ---
 
@@ -385,7 +385,7 @@ Do not create API endpoints or UI yet. Test the functions work correctly with di
 
 **Prompt:**
 
-```
+````
 Implement session management for Rusty Links with secure cookie-based sessions. Build on Steps 1-6.
 
 Requirements:
@@ -452,7 +452,7 @@ Requirements:
 7. Add logging for session operations
 
 Do not create authentication endpoints yet. Test session creation/retrieval/deletion works correctly.
-```
+````
 
 ---
 
@@ -462,7 +462,7 @@ Do not create authentication endpoints yet. Test session creation/retrieval/dele
 
 **Prompt:**
 
-```
+````
 Implement authentication API endpoints for Rusty Links using Axum. Build on Steps 1-7.
 
 Requirements:
@@ -530,7 +530,7 @@ Test all endpoints with curl or similar tool:
 - Logout clears session
 - /me returns user when authenticated
 - /me returns 401 when not authenticated
-```
+````
 
 ---
 
@@ -540,7 +540,7 @@ Test all endpoints with curl or similar tool:
 
 **Prompt:**
 
-```
+````
 Create the authentication UI components for Rusty Links using Dioxus. Build on Steps 1-8.
 
 Requirements:
@@ -616,7 +616,7 @@ Test the complete authentication flow:
 - Login works and shows links placeholder page
 - Logout returns to login page
 - Direct navigation to /links without auth redirects to login
-```
+````
 
 ---
 
