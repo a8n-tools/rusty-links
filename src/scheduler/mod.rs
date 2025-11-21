@@ -4,6 +4,9 @@
 //! periodic maintenance tasks such as refreshing link metadata.
 
 use crate::error::AppError;
+use crate::github;
+use crate::models::Link;
+use crate::scraper;
 use sqlx::PgPool;
 use std::time::Duration;
 use tokio::time::interval;
@@ -83,16 +86,85 @@ impl Scheduler {
     /// Execute all scheduled tasks
     ///
     /// This function is called periodically by the scheduler loop.
-    /// Currently a placeholder - tasks will be added in subsequent steps.
+    /// Currently implements:
+    /// - Refresh stale link metadata (web scraping + GitHub)
     ///
     /// Future tasks:
-    /// - Refresh GitHub metadata for repositories older than update_interval_days
-    /// - Refresh web-scraped metadata for links older than update_interval_days
     /// - Check for broken links and update their status
     /// - Clean up expired sessions
     async fn run_tasks(&self) -> Result<(), AppError> {
-        // Placeholder - tasks will be added in subsequent steps
-        tracing::trace!("No scheduled tasks configured yet");
+        self.refresh_stale_links().await
+    }
+
+    /// Refresh metadata for stale links
+    ///
+    /// Processes up to 10 links per cycle to avoid overloading external services.
+    /// Links are considered stale if they haven't been refreshed in `update_interval_days`.
+    ///
+    /// For each stale link:
+    /// - Scrapes metadata from the URL
+    /// - If GitHub repo, fetches GitHub metadata
+    /// - Updates refreshed_at timestamp
+    async fn refresh_stale_links(&self) -> Result<(), AppError> {
+        // Process up to 10 links per cycle to avoid overloading
+        let stale_links = Link::get_stale_links(&self.pool, self.update_interval_days, 10).await?;
+
+        if stale_links.is_empty() {
+            tracing::debug!("No stale links to refresh");
+            return Ok(());
+        }
+
+        tracing::info!(count = stale_links.len(), "Refreshing stale links");
+
+        for link in stale_links {
+            if let Err(e) = self.refresh_single_link(&link).await {
+                tracing::warn!(
+                    link_id = %link.id,
+                    url = %link.url,
+                    error = %e,
+                    "Failed to refresh link"
+                );
+                // Continue with other links even if one fails
+            }
+        }
+
+        Ok(())
+    }
+
+    /// Refresh a single link's metadata
+    ///
+    /// Performs the following steps:
+    /// 1. Scrapes URL for title, description, favicon
+    /// 2. If GitHub repo, fetches GitHub metadata (stars, archived, etc.)
+    /// 3. Marks link as refreshed with current timestamp
+    ///
+    /// # Arguments
+    /// * `link` - The link to refresh
+    ///
+    /// # Errors
+    /// Returns error if scraping or database update fails
+    async fn refresh_single_link(&self, link: &Link) -> Result<(), AppError> {
+        tracing::debug!(link_id = %link.id, url = %link.url, "Refreshing link");
+
+        // Scrape metadata
+        let metadata = scraper::scrape_url(&link.url).await?;
+        Link::update_scraped_metadata(&self.pool, link.id, link.user_id, metadata).await?;
+
+        // Refresh GitHub metadata if applicable
+        if link.is_github_repo {
+            if let Some((owner, repo)) = github::parse_repo_from_url(&link.url) {
+                if let Ok(gh_meta) = github::fetch_repo_metadata(&owner, &repo).await {
+                    Link::update_github_metadata(&self.pool, link.id, link.user_id, gh_meta)
+                        .await?;
+                }
+            }
+        }
+
+        // Mark as refreshed
+        Link::mark_refreshed(&self.pool, link.id, link.user_id).await?;
+
+        tracing::info!(link_id = %link.id, "Link refreshed successfully");
+
         Ok(())
     }
 }

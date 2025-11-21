@@ -98,7 +98,7 @@ Scheduled job to refresh link metadata based on UPDATE_INTERVAL_DAYS.
 
 ### Prompt
 
-```text
+````text
 Implement periodic link refresh in the scheduler for the Rusty Links application.
 
 **Part 1: Add query to Link model**
@@ -200,7 +200,7 @@ Ensure scheduler has access to:
 - `use crate::models::link::Link;`
 - `use crate::scraper;`
 - `use crate::github;`
-```
+````
 
 ### Verification
 - `cargo check` passes

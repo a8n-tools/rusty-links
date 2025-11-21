@@ -155,6 +155,42 @@ impl Link {
         Ok(links)
     }
 
+    /// Get links that need refresh (not refreshed in the last N days)
+    ///
+    /// Returns links that are:
+    /// - Active status (not archived or inaccessible)
+    /// - Either never refreshed (refreshed_at IS NULL) or last refreshed more than N days ago
+    ///
+    /// Results are ordered by staleness (oldest first, never refreshed first)
+    ///
+    /// # Arguments
+    /// * `pool` - Database connection pool
+    /// * `stale_days` - Number of days after which a link is considered stale
+    /// * `limit` - Maximum number of links to return
+    pub async fn get_stale_links(
+        pool: &PgPool,
+        stale_days: u32,
+        limit: i64,
+    ) -> Result<Vec<Link>, AppError> {
+        let stale_threshold = Utc::now() - chrono::Duration::days(stale_days as i64);
+
+        let links = sqlx::query_as::<_, Link>(
+            r#"
+            SELECT * FROM links
+            WHERE status = 'active'
+            AND (refreshed_at IS NULL OR refreshed_at < $1)
+            ORDER BY refreshed_at ASC NULLS FIRST
+            LIMIT $2
+            "#,
+        )
+        .bind(stale_threshold)
+        .bind(limit)
+        .fetch_all(pool)
+        .await?;
+
+        Ok(links)
+    }
+
     /// Update a link
     pub async fn update(
         pool: &PgPool,
