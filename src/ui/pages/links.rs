@@ -61,6 +61,7 @@ pub fn Links() -> Element {
     let mut form_languages = use_signal(|| Vec::<Uuid>::new());
     let mut form_licenses = use_signal(|| Vec::<Uuid>::new());
     let mut form_loading = use_signal(|| false);
+    let mut form_scraping = use_signal(|| false);
     let mut form_error = use_signal(|| Option::<String>::None);
 
     // Delete state
@@ -140,6 +141,7 @@ pub fn Links() -> Element {
                         form_languages: form_languages,
                         form_licenses: form_licenses,
                         form_loading: form_loading,
+                        form_scraping: form_scraping,
                         form_error: form_error,
                         editing_link_id: editing_link_id,
                         show_form: show_form,
@@ -191,6 +193,13 @@ pub fn Links() -> Element {
     }
 }
 
+#[derive(Debug, Deserialize)]
+struct ScrapeResponse {
+    title: Option<String>,
+    description: Option<String>,
+    favicon: Option<String>,
+}
+
 #[component]
 fn LinkForm(
     is_editing: bool,
@@ -203,11 +212,57 @@ fn LinkForm(
     mut form_languages: Signal<Vec<Uuid>>,
     mut form_licenses: Signal<Vec<Uuid>>,
     mut form_loading: Signal<bool>,
+    mut form_scraping: Signal<bool>,
     mut form_error: Signal<Option<String>>,
     mut editing_link_id: Signal<Option<String>>,
     mut show_form: Signal<bool>,
     mut links: Signal<Vec<Link>>,
 ) -> Element {
+    // Track if user has manually edited title/description
+    let mut title_touched = use_signal(|| false);
+    let mut description_touched = use_signal(|| false);
+
+    let scrape_url = move |_| {
+        let url = form_url();
+        if url.trim().is_empty() || editing_link_id().is_some() || form_scraping() {
+            return;
+        }
+
+        if !url.starts_with("http://") && !url.starts_with("https://") {
+            return;
+        }
+
+        spawn(async move {
+            form_scraping.set(true);
+            let client = reqwest::Client::new();
+            let result = client
+                .post("/api/scrape")
+                .json(&serde_json::json!({ "url": url }))
+                .send()
+                .await;
+
+            form_scraping.set(false);
+
+            if let Ok(resp) = result {
+                if resp.status().is_success() {
+                    if let Ok(scraped) = resp.json::<ScrapeResponse>().await {
+                        // Only auto-fill if user hasn't manually edited
+                        if !title_touched() {
+                            if let Some(title) = scraped.title {
+                                form_title.set(title);
+                            }
+                        }
+                        if !description_touched() {
+                            if let Some(desc) = scraped.description {
+                                form_description.set(desc);
+                            }
+                        }
+                    }
+                }
+            }
+        });
+    };
+
     let on_submit = move |_| {
         let url_val = form_url();
         let title_val = form_title();
@@ -368,6 +423,10 @@ fn LinkForm(
                         value: "{form_url}",
                         disabled: form_loading(),
                         oninput: move |evt| form_url.set(evt.value()),
+                        onblur: scrape_url,
+                    }
+                    if form_scraping() {
+                        span { class: "scraping-indicator", "Fetching metadata..." }
                     }
                 }
             }
@@ -381,7 +440,10 @@ fn LinkForm(
                     placeholder: "Optional title",
                     value: "{form_title}",
                     disabled: form_loading(),
-                    oninput: move |evt| form_title.set(evt.value()),
+                    oninput: move |evt| {
+                        title_touched.set(true);
+                        form_title.set(evt.value());
+                    },
                 }
             }
 
@@ -393,7 +455,10 @@ fn LinkForm(
                     placeholder: "Optional description",
                     value: "{form_description}",
                     disabled: form_loading(),
-                    oninput: move |evt| form_description.set(evt.value()),
+                    oninput: move |evt| {
+                        description_touched.set(true);
+                        form_description.set(evt.value());
+                    },
                 }
             }
 

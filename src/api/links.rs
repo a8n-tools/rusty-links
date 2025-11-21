@@ -9,6 +9,7 @@
 use crate::auth::{get_session, get_session_from_cookies};
 use crate::error::AppError;
 use crate::models::{Category, CreateLink, Language, License, Link, LinkWithCategories, Tag, UpdateLink, User};
+use crate::scraper;
 use axum::{
     extract::{Path, State},
     http::StatusCode,
@@ -64,7 +65,7 @@ async fn get_authenticated_user(pool: &PgPool, jar: &CookieJar) -> Result<User, 
 async fn create_link_handler(
     State(pool): State<PgPool>,
     jar: CookieJar,
-    Json(request): Json<CreateLink>,
+    Json(mut request): Json<CreateLink>,
 ) -> Result<impl IntoResponse, AppError> {
     let user = get_authenticated_user(&pool, &jar).await?;
 
@@ -73,6 +74,26 @@ async fn create_link_handler(
         url = %request.url,
         "Creating new link"
     );
+
+    // Scrape URL for metadata if not provided by user
+    // Don't fail link creation if scraping fails
+    if let Ok(metadata) = scraper::scrape_url(&request.url).await {
+        // Use scraped data only if user didn't provide it
+        if request.title.is_none() && metadata.title.is_some() {
+            request.title = metadata.title;
+            tracing::debug!("Using scraped title");
+        }
+        if request.description.is_none() && metadata.description.is_some() {
+            request.description = metadata.description;
+            tracing::debug!("Using scraped description");
+        }
+        if request.logo.is_none() && metadata.favicon.is_some() {
+            request.logo = metadata.favicon;
+            tracing::debug!("Using scraped favicon");
+        }
+    } else {
+        tracing::warn!(url = %request.url, "Failed to scrape URL, continuing with user-provided data");
+    }
 
     let link = Link::create(&pool, user.id, request).await?;
 

@@ -15,7 +15,7 @@ Scrape page title, description, and favicon from URLs.
 
 ### Prompt
 
-```text
+````text
 Implement basic web scraping in `src/scraper/mod.rs` for the Rusty Links application.
 
 Add `reqwest` with features for the scraper:
@@ -67,7 +67,7 @@ Auto-populate link metadata on creation.
 
 ### Prompt
 
-```text
+````text
 Integrate the web scraper with link creation in the Rusty Links application.
 
 **Part 1: Add scrape endpoint**
@@ -105,7 +105,7 @@ In `src/ui/pages/links.rs`:
 2. Auto-fill title and description if user hasn't modified them
 3. Show loading indicator while scraping
 4. Show scraped favicon preview if available
-```
+````
 
 ### Verification
 - `cargo check` passes

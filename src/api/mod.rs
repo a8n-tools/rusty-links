@@ -16,6 +16,7 @@ pub mod categories;
 pub mod languages;
 pub mod licenses;
 pub mod links;
+pub mod scrape;
 pub mod tags;
 
 use axum::{
@@ -62,5 +63,6 @@ pub fn create_router(pool: PgPool) -> Router {
         .nest("/tags", tags::create_router())
         .nest("/languages", languages::create_router())
         .nest("/licenses", licenses::create_router())
+        .nest("/scrape", scrape::create_router())
         .with_state(pool)
 }
