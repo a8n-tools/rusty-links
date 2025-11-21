@@ -493,6 +493,58 @@ impl Link {
         Ok(licenses)
     }
 
+    /// Update GitHub metadata for a link
+    ///
+    /// Updates GitHub-specific fields and sets refreshed_at timestamp.
+    /// This function should only be called for links where is_github_repo = true.
+    pub async fn update_github_metadata(
+        pool: &PgPool,
+        link_id: Uuid,
+        user_id: Uuid,
+        metadata: crate::github::GitHubRepoMetadata,
+    ) -> Result<(), AppError> {
+        // Verify link belongs to user and is a GitHub repo
+        let link = Self::get_by_id(pool, link_id, user_id).await?;
+
+        if !link.is_github_repo {
+            return Err(AppError::validation(
+                "link",
+                "This link is not a GitHub repository",
+            ));
+        }
+
+        tracing::info!(
+            link_id = %link_id,
+            stars = metadata.stars,
+            archived = metadata.archived,
+            "Updating GitHub metadata for link"
+        );
+
+        sqlx::query(
+            r#"
+            UPDATE links
+            SET
+                github_stars = $2,
+                github_archived = $3,
+                github_last_commit = $4,
+                refreshed_at = NOW(),
+                updated_at = NOW()
+            WHERE id = $1 AND user_id = $5
+            "#,
+        )
+        .bind(link_id)
+        .bind(metadata.stars)
+        .bind(metadata.archived)
+        .bind(metadata.last_commit)
+        .bind(user_id)
+        .execute(pool)
+        .await?;
+
+        tracing::info!(link_id = %link_id, "GitHub metadata updated successfully");
+
+        Ok(())
+    }
+
     /// Get all links with their metadata for a user
     pub async fn get_all_with_categories(
         pool: &PgPool,

@@ -18,6 +18,7 @@ struct Link {
     status: String,
     is_github_repo: bool,
     github_stars: Option<i32>,
+    github_archived: Option<bool>,
     created_at: String,
     #[serde(default)]
     categories: Vec<CategoryInfo>,
@@ -657,6 +658,9 @@ fn LinkCard(
                 tags: link.tags.clone(),
                 languages: link.languages.clone(),
                 licenses: link.licenses.clone(),
+                is_github_repo: Some(link.is_github_repo),
+                github_stars: link.github_stars,
+                github_archived: link.github_archived,
             }
 
             div { class: "link-meta",

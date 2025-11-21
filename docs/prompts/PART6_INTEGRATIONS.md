@@ -173,7 +173,7 @@ Auto-detect GitHub URLs and enrich with repo data.
 
 ### Prompt
 
-```text
+````text
 Integrate GitHub metadata with links in the Rusty Links application.
 
 **Part 1: Update Link model**
@@ -211,7 +211,7 @@ In link cards, for GitHub repos show:
 - Last commit date (optional, could be in details view)
 
 Update `src/ui/pages/links.rs` to display GitHub-specific info.
-```
+````
 
 ### Verification
 - `cargo check` passes
@@ -227,7 +227,7 @@ Manual refresh button to update link metadata.
 
 ### Prompt
 
-```text
+````text
 Add manual refresh functionality for links in the Rusty Links application.
 
 **Part 1: Add refresh endpoint**
@@ -264,7 +264,7 @@ In link cards or detail view, show:
 - Format using relative time (today, yesterday, X days ago)
 
 Add CSS for refresh button: `.btn-refresh`
-```
+````
 
 ### Verification
 - `cargo check` passes
