@@ -394,6 +394,23 @@ impl From<sqlx::migrate::MigrateError> for AppError {
     }
 }
 
+/// Convert reqwest::Error to AppError
+impl From<reqwest::Error> for AppError {
+    fn from(err: reqwest::Error) -> Self {
+        AppError::ExternalService(format!("HTTP request failed: {}", err))
+    }
+}
+
+/// Convert url::ParseError to AppError
+impl From<url::ParseError> for AppError {
+    fn from(err: url::ParseError) -> Self {
+        AppError::Validation {
+            field: "url".to_string(),
+            message: format!("Invalid URL: {}", err),
+        }
+    }
+}
+
 // Helper functions
 
 /// Capitalize the first letter of a string

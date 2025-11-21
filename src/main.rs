@@ -2,6 +2,7 @@ mod api;
 mod auth;
 mod config;
 mod error;
+mod github;
 mod models;
 mod scraper;
 mod ui;

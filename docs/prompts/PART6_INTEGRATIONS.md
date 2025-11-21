@@ -121,7 +121,7 @@ Fetch repository metadata (stars, description, archived status).
 
 ### Prompt
 
-```text
+````text
 Implement GitHub API integration in `src/github/mod.rs` for the Rusty Links application.
 
 **Part 1: Implement in `src/github/mod.rs`**
@@ -157,7 +157,7 @@ Implement GitHub API integration in `src/github/mod.rs` for the Rusty Links appl
    - `GITHUB_TOKEN` env var for authenticated requests (higher rate limit)
 
 Export in `src/main.rs`: `mod github;`
-```
+````
 
 ### Verification
 - `cargo check` passes
