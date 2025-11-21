@@ -8,7 +8,7 @@
 //! Links are scoped to users - each user can only access their own links.
 
 use crate::error::AppError;
-use crate::models::Category;
+use crate::models::{Category, Tag};
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 use sqlx::PgPool;
@@ -297,7 +297,73 @@ impl Link {
         Ok(categories)
     }
 
-    /// Get all links with their categories for a user
+    /// Add a tag to a link
+    pub async fn add_tag(
+        pool: &PgPool,
+        link_id: Uuid,
+        tag_id: Uuid,
+        user_id: Uuid,
+    ) -> Result<(), AppError> {
+        let _ = Self::get_by_id(pool, link_id, user_id).await?;
+        let _ = Tag::get_by_id(pool, tag_id, user_id).await?;
+
+        sqlx::query(
+            r#"
+            INSERT INTO link_tags (link_id, tag_id)
+            VALUES ($1, $2)
+            ON CONFLICT DO NOTHING
+            "#,
+        )
+        .bind(link_id)
+        .bind(tag_id)
+        .execute(pool)
+        .await?;
+
+        Ok(())
+    }
+
+    /// Remove a tag from a link
+    pub async fn remove_tag(
+        pool: &PgPool,
+        link_id: Uuid,
+        tag_id: Uuid,
+        user_id: Uuid,
+    ) -> Result<(), AppError> {
+        let _ = Self::get_by_id(pool, link_id, user_id).await?;
+
+        sqlx::query("DELETE FROM link_tags WHERE link_id = $1 AND tag_id = $2")
+            .bind(link_id)
+            .bind(tag_id)
+            .execute(pool)
+            .await?;
+
+        Ok(())
+    }
+
+    /// Get tags for a link
+    pub async fn get_tags(
+        pool: &PgPool,
+        link_id: Uuid,
+        user_id: Uuid,
+    ) -> Result<Vec<Tag>, AppError> {
+        let _ = Self::get_by_id(pool, link_id, user_id).await?;
+
+        let tags = sqlx::query_as::<_, Tag>(
+            r#"
+            SELECT t.* FROM tags t
+            JOIN link_tags lt ON lt.tag_id = t.id
+            WHERE lt.link_id = $1
+            ORDER BY t.name
+            "#,
+        )
+        .bind(link_id)
+        .fetch_all(pool)
+        .await?;
+
+        Ok(tags)
+    }
+
+    /// Get all links with their categories and tags for a user
     pub async fn get_all_with_categories(
         pool: &PgPool,
         user_id: Uuid,
@@ -318,19 +384,32 @@ impl Link {
             .fetch_all(pool)
             .await?;
 
-            result.push(LinkWithCategories { link, categories });
+            let tags = sqlx::query_as::<_, Tag>(
+                r#"
+                SELECT t.* FROM tags t
+                JOIN link_tags lt ON lt.tag_id = t.id
+                WHERE lt.link_id = $1
+                ORDER BY t.name
+                "#,
+            )
+            .bind(link.id)
+            .fetch_all(pool)
+            .await?;
+
+            result.push(LinkWithCategories { link, categories, tags });
         }
 
         Ok(result)
     }
 }
 
-/// Link with its associated categories
+/// Link with its associated categories and tags
 #[derive(Debug, Clone, Serialize)]
 pub struct LinkWithCategories {
     #[serde(flatten)]
     pub link: Link,
     pub categories: Vec<Category>,
+    pub tags: Vec<Tag>,
 }
 
 #[cfg(test)]

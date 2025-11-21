@@ -8,7 +8,7 @@
 
 use crate::auth::{get_session, get_session_from_cookies};
 use crate::error::AppError;
-use crate::models::{Category, CreateLink, Link, LinkWithCategories, UpdateLink, User};
+use crate::models::{Category, CreateLink, Link, LinkWithCategories, Tag, UpdateLink, User};
 use axum::{
     extract::{Path, State},
     http::StatusCode,
@@ -205,14 +205,54 @@ async fn get_categories_handler(
     Ok(Json(categories))
 }
 
+#[derive(Debug, serde::Deserialize)]
+struct AddTagRequest {
+    tag_id: uuid::Uuid,
+}
+
+/// POST /api/links/:id/tags
+async fn add_tag_handler(
+    State(pool): State<PgPool>,
+    jar: CookieJar,
+    Path(id): Path<uuid::Uuid>,
+    Json(request): Json<AddTagRequest>,
+) -> Result<Json<Vec<Tag>>, AppError> {
+    let user = get_authenticated_user(&pool, &jar).await?;
+    Link::add_tag(&pool, id, request.tag_id, user.id).await?;
+    let tags = Link::get_tags(&pool, id, user.id).await?;
+    Ok(Json(tags))
+}
+
+/// DELETE /api/links/:id/tags/:tag_id
+async fn remove_tag_handler(
+    State(pool): State<PgPool>,
+    jar: CookieJar,
+    Path((id, tag_id)): Path<(uuid::Uuid, uuid::Uuid)>,
+) -> Result<Json<Vec<Tag>>, AppError> {
+    let user = get_authenticated_user(&pool, &jar).await?;
+    Link::remove_tag(&pool, id, tag_id, user.id).await?;
+    let tags = Link::get_tags(&pool, id, user.id).await?;
+    Ok(Json(tags))
+}
+
+/// GET /api/links/:id/tags
+async fn get_tags_handler(
+    State(pool): State<PgPool>,
+    jar: CookieJar,
+    Path(id): Path<uuid::Uuid>,
+) -> Result<Json<Vec<Tag>>, AppError> {
+    let user = get_authenticated_user(&pool, &jar).await?;
+    let tags = Link::get_tags(&pool, id, user.id).await?;
+    Ok(Json(tags))
+}
+
 /// Create the links router
 pub fn create_router() -> Router<PgPool> {
     Router::new()
         .route("/", post(create_link_handler).get(list_links_handler))
         .route("/:id", put(update_link_handler).delete(delete_link_handler))
-        .route(
-            "/:id/categories",
-            post(add_category_handler).get(get_categories_handler),
-        )
+        .route("/:id/categories", post(add_category_handler).get(get_categories_handler))
         .route("/:id/categories/:category_id", axum::routing::delete(remove_category_handler))
+        .route("/:id/tags", post(add_tag_handler).get(get_tags_handler))
+        .route("/:id/tags/:tag_id", axum::routing::delete(remove_tag_handler))
 }
