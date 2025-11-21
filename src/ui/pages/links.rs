@@ -4,18 +4,7 @@ use uuid::Uuid;
 use crate::ui::components::navbar::Navbar;
 use crate::ui::components::category_select::CategorySelect;
 use crate::ui::components::tag_select::TagSelect;
-
-#[derive(Debug, Clone, Deserialize, PartialEq)]
-struct CategoryInfo {
-    id: Uuid,
-    name: String,
-}
-
-#[derive(Debug, Clone, Deserialize, PartialEq)]
-struct TagInfo {
-    id: Uuid,
-    name: String,
-}
+use crate::ui::components::metadata_badges::{MetadataBadges, CategoryInfo, TagInfo, LanguageInfo, LicenseInfo};
 
 #[derive(Debug, Clone, Deserialize, PartialEq)]
 struct Link {
@@ -32,6 +21,10 @@ struct Link {
     categories: Vec<CategoryInfo>,
     #[serde(default)]
     tags: Vec<TagInfo>,
+    #[serde(default)]
+    languages: Vec<LanguageInfo>,
+    #[serde(default)]
+    licenses: Vec<LicenseInfo>,
 }
 
 #[derive(Debug, Serialize)]
@@ -538,15 +531,11 @@ fn LinkCard(
                 p { class: "link-description", "{truncated_desc}" }
             }
 
-            if !link.categories.is_empty() || !link.tags.is_empty() {
-                div { class: "link-badges",
-                    for cat in link.categories.iter() {
-                        span { class: "badge category-badge", "{cat.name}" }
-                    }
-                    for tag in link.tags.iter() {
-                        span { class: "badge tag-badge", "{tag.name}" }
-                    }
-                }
+            MetadataBadges {
+                categories: link.categories.clone(),
+                tags: link.tags.clone(),
+                languages: link.languages.clone(),
+                licenses: link.licenses.clone(),
             }
 
             div { class: "link-meta",
