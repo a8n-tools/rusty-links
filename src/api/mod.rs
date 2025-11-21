@@ -14,6 +14,7 @@
 pub mod auth;
 pub mod categories;
 pub mod links;
+pub mod tags;
 
 use axum::{
     routing::{get, post},
@@ -56,5 +57,6 @@ pub fn create_router(pool: PgPool) -> Router {
         .nest("/auth", auth_router)
         .nest("/links", links::create_router())
         .nest("/categories", categories::create_router())
+        .nest("/tags", tags::create_router())
         .with_state(pool)
 }

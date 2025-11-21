@@ -17,9 +17,11 @@
 
 pub mod category;
 pub mod link;
+pub mod tag;
 pub mod user;
 
 // Re-export commonly used types for convenience
 pub use category::{Category, CategoryWithChildren, CreateCategory};
 pub use link::{CreateLink, Link, UpdateLink};
+pub use tag::{CreateTag, Tag};
 pub use user::{check_user_exists, create_user, find_user_by_email, verify_password, CreateUser, User};
