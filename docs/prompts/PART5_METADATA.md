@@ -220,7 +220,7 @@ UI for assigning metadata to links (dropdowns, multi-select).
 
 ### Prompt
 
-```text
+````text
 Create comprehensive metadata assignment UI for the Rusty Links application.
 
 **Part 1: Create `src/ui/components/language_select.rs`**
@@ -276,7 +276,7 @@ Create helper function `sync_metadata(link_id, old_ids, new_ids, add_fn, remove_
 pub mod language_select;
 pub mod license_select;
 ```
-```
+````
 
 ### Verification
 - `cargo check` passes
