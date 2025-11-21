@@ -13,6 +13,8 @@
 
 pub mod auth;
 pub mod categories;
+pub mod languages;
+pub mod licenses;
 pub mod links;
 pub mod tags;
 
@@ -58,5 +60,7 @@ pub fn create_router(pool: PgPool) -> Router {
         .nest("/links", links::create_router())
         .nest("/categories", categories::create_router())
         .nest("/tags", tags::create_router())
+        .nest("/languages", languages::create_router())
+        .nest("/licenses", licenses::create_router())
         .with_state(pool)
 }

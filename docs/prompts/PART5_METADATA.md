@@ -16,7 +16,7 @@ Models for programming languages and software licenses.
 
 ### Prompt
 
-```text
+````text
 Create Language and License models for the Rusty Links application.
 
 **Part 1: Language model in `src/models/language.rs`**
@@ -58,7 +58,7 @@ Add to `src/models/mod.rs`:
 pub mod language;
 pub mod license;
 ```
-```
+````
 
 ### Verification
 - `cargo check` passes
@@ -73,7 +73,7 @@ Endpoints for listing and managing languages/licenses.
 
 ### Prompt
 
-```text
+````text
 Create Language and License API endpoints for the Rusty Links application.
 
 **Part 1: `src/api/languages.rs`**
@@ -102,7 +102,7 @@ Wire into `src/api/mod.rs`:
 .nest("/languages", languages::create_router(pool.clone()))
 .nest("/licenses", licenses::create_router(pool.clone()))
 ```
-```
+````
 
 ### Verification
 - `cargo check` passes

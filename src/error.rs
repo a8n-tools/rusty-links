@@ -75,6 +75,11 @@ pub enum AppError {
     /// The user is authenticated but lacks permission for this operation.
     Unauthorized,
 
+    /// Operation is forbidden
+    ///
+    /// The user is authenticated but the operation is not allowed.
+    Forbidden(String),
+
     /// Requested resource was not found
     ///
     /// Includes the resource type (e.g., "user", "link") and identifier.
@@ -205,6 +210,11 @@ impl AppError {
         }
     }
 
+    /// Create a forbidden operation error
+    pub fn forbidden(message: &str) -> Self {
+        AppError::Forbidden(message.to_string())
+    }
+
     /// Get the HTTP status code for this error
     ///
     /// Maps each error variant to an appropriate HTTP status code
@@ -225,6 +235,7 @@ impl AppError {
             AppError::InvalidCredentials => 401,
             AppError::SessionExpired => 401,
             AppError::Unauthorized => 403,
+            AppError::Forbidden(_) => 403,
             AppError::NotFound { .. } => 404,
             AppError::Duplicate { .. } => 409,
             AppError::Database(_) => 500,
@@ -248,6 +259,7 @@ impl AppError {
             AppError::InvalidCredentials => "INVALID_CREDENTIALS",
             AppError::SessionExpired => "SESSION_EXPIRED",
             AppError::Unauthorized => "UNAUTHORIZED",
+            AppError::Forbidden(_) => "FORBIDDEN",
             AppError::NotFound { .. } => "NOT_FOUND",
             AppError::Duplicate { .. } => "DUPLICATE_FIELD",
             AppError::ExternalService(_) => "EXTERNAL_SERVICE_ERROR",
@@ -289,6 +301,7 @@ impl AppError {
             AppError::Unauthorized => {
                 "You are not authorized to access this resource.".to_string()
             }
+            AppError::Forbidden(msg) => msg.clone(),
             AppError::NotFound { resource, .. } => {
                 format!("{} not found.", capitalize_first(resource))
             }
@@ -443,6 +456,9 @@ impl axum::response::IntoResponse for AppError {
             }
             AppError::Unauthorized => {
                 tracing::warn!("Unauthorized access attempt");
+            }
+            AppError::Forbidden(msg) => {
+                tracing::warn!(message = %msg, "Forbidden operation");
             }
             AppError::Validation { field, message } => {
                 tracing::info!(field = %field, message = %message, "Validation error");
