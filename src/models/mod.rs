@@ -16,12 +16,16 @@
 //! - `license` - Software licenses
 
 pub mod category;
+pub mod language;
+pub mod license;
 pub mod link;
 pub mod tag;
 pub mod user;
 
 // Re-export commonly used types for convenience
 pub use category::{Category, CategoryWithChildren, CreateCategory};
+pub use language::Language;
+pub use license::License;
 pub use link::{CreateLink, Link, LinkWithCategories, UpdateLink};
 pub use tag::{CreateTag, Tag};
 pub use user::{check_user_exists, create_user, find_user_by_email, verify_password, CreateUser, User};
