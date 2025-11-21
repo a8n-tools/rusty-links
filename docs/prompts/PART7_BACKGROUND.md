@@ -215,7 +215,7 @@ Check if links are still accessible, update status.
 
 ### Prompt
 
-```text
+````text
 Add link health checking to the scheduler for the Rusty Links application.
 
 **Part 1: Add health check function to scraper**
@@ -319,7 +319,7 @@ async fn refresh_single_link(&self, link: &Link) -> Result<(), AppError> {
     Ok(())
 }
 ```
-```
+````
 
 ### Verification
 - `cargo check` passes

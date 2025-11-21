@@ -134,9 +134,11 @@ impl Scheduler {
     /// Refresh a single link's metadata
     ///
     /// Performs the following steps:
-    /// 1. Scrapes URL for title, description, favicon
-    /// 2. If GitHub repo, fetches GitHub metadata (stars, archived, etc.)
-    /// 3. Marks link as refreshed with current timestamp
+    /// 1. Checks URL health (accessibility)
+    /// 2. Updates status if inaccessible or restores to active if recovered
+    /// 3. Scrapes URL for title, description, favicon (if healthy)
+    /// 4. If GitHub repo, fetches GitHub metadata (stars, archived, etc.)
+    /// 5. Marks link as refreshed with current timestamp
     ///
     /// # Arguments
     /// * `link` - The link to refresh
@@ -146,6 +148,31 @@ impl Scheduler {
     async fn refresh_single_link(&self, link: &Link) -> Result<(), AppError> {
         tracing::debug!(link_id = %link.id, url = %link.url, "Refreshing link");
 
+        // Check if URL is accessible
+        let is_healthy = scraper::check_url_health(&link.url).await?;
+
+        if !is_healthy {
+            tracing::warn!(
+                link_id = %link.id,
+                url = %link.url,
+                "Link is not accessible, marking as inaccessible"
+            );
+            Link::update_status(&self.pool, link.id, "inaccessible").await?;
+            Link::mark_refreshed(&self.pool, link.id, link.user_id).await?;
+            return Ok(());
+        }
+
+        // If link was previously inaccessible but is now healthy, restore to active
+        if link.status == "inaccessible" || link.status == "repo_unavailable" {
+            tracing::info!(
+                link_id = %link.id,
+                url = %link.url,
+                previous_status = %link.status,
+                "Link is now accessible, restoring to active status"
+            );
+            Link::update_status(&self.pool, link.id, "active").await?;
+        }
+
         // Scrape metadata
         let metadata = scraper::scrape_url(&link.url).await?;
         Link::update_scraped_metadata(&self.pool, link.id, link.user_id, metadata).await?;
@@ -153,9 +180,31 @@ impl Scheduler {
         // Refresh GitHub metadata if applicable
         if link.is_github_repo {
             if let Some((owner, repo)) = github::parse_repo_from_url(&link.url) {
-                if let Ok(gh_meta) = github::fetch_repo_metadata(&owner, &repo).await {
-                    Link::update_github_metadata(&self.pool, link.id, link.user_id, gh_meta)
-                        .await?;
+                match github::fetch_repo_metadata(&owner, &repo).await {
+                    Ok(gh_meta) => {
+                        Link::update_github_metadata(&self.pool, link.id, link.user_id, gh_meta)
+                            .await?;
+                    }
+                    Err(e) => {
+                        // Check if GitHub repo is unavailable (404, etc.)
+                        let error_msg = e.to_string();
+                        if error_msg.contains("404") || error_msg.contains("Not Found") {
+                            tracing::warn!(
+                                link_id = %link.id,
+                                url = %link.url,
+                                error = %e,
+                                "GitHub repository not found, marking as repo_unavailable"
+                            );
+                            Link::update_status(&self.pool, link.id, "repo_unavailable").await?;
+                        } else {
+                            tracing::warn!(
+                                link_id = %link.id,
+                                url = %link.url,
+                                error = %e,
+                                "Failed to fetch GitHub metadata, continuing with refresh"
+                            );
+                        }
+                    }
                 }
             }
         }

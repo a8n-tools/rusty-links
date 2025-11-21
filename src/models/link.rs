@@ -602,6 +602,28 @@ impl Link {
         Ok(())
     }
 
+    /// Update link status
+    ///
+    /// Updates the status field of a link. Valid statuses are:
+    /// - "active": Link is working normally
+    /// - "archived": User has archived the link
+    /// - "inaccessible": Link returned an error or non-success status
+    /// - "repo_unavailable": GitHub repository is unavailable (404, etc.)
+    pub async fn update_status(
+        pool: &PgPool,
+        id: Uuid,
+        status: &str,
+    ) -> Result<(), AppError> {
+        sqlx::query(
+            "UPDATE links SET status = $1, updated_at = NOW() WHERE id = $2"
+        )
+        .bind(status)
+        .bind(id)
+        .execute(pool)
+        .await?;
+        Ok(())
+    }
+
     /// Update GitHub metadata for a link
     ///
     /// Updates GitHub-specific fields and sets refreshed_at timestamp.

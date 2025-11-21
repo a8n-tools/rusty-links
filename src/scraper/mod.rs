@@ -97,6 +97,37 @@ pub async fn scrape_url(url: &str) -> Result<ScrapedMetadata, AppError> {
     Ok(metadata)
 }
 
+/// Check if a URL is accessible (returns HTTP 2xx or 3xx)
+///
+/// Makes a HEAD request to the URL to check if it's accessible without
+/// downloading the full page content. This is used to detect broken links.
+///
+/// # Arguments
+/// * `url` - The URL to check
+///
+/// # Returns
+/// * `Ok(true)` - URL is accessible (returns 2xx or 3xx status)
+/// * `Ok(false)` - URL is not accessible (connection failed or non-success status)
+/// * `Err(AppError)` - Only returns error if client creation fails
+pub async fn check_url_health(url: &str) -> Result<bool, AppError> {
+    let client = reqwest::Client::builder()
+        .timeout(Duration::from_secs(10))
+        .redirect(reqwest::redirect::Policy::limited(5))
+        .build()
+        .map_err(|e| AppError::Internal(e.to_string()))?;
+
+    match client.head(url).send().await {
+        Ok(response) => {
+            let status = response.status();
+            Ok(status.is_success() || status.is_redirection())
+        }
+        Err(e) => {
+            tracing::debug!(url = %url, error = %e, "Health check failed");
+            Ok(false)
+        }
+    }
+}
+
 /// Extract title from HTML document
 fn extract_title(document: &Html) -> Option<String> {
     // Try og:title first
