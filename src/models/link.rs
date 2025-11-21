@@ -8,7 +8,7 @@
 //! Links are scoped to users - each user can only access their own links.
 
 use crate::error::AppError;
-use crate::models::{Category, Tag};
+use crate::models::{Category, Language, License, Tag};
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 use sqlx::PgPool;
@@ -363,7 +363,137 @@ impl Link {
         Ok(tags)
     }
 
-    /// Get all links with their categories and tags for a user
+    /// Add a language to a link
+    pub async fn add_language(
+        pool: &PgPool,
+        link_id: Uuid,
+        language_id: Uuid,
+        user_id: Uuid,
+    ) -> Result<(), AppError> {
+        let _ = Self::get_by_id(pool, link_id, user_id).await?;
+
+        sqlx::query(
+            r#"
+            INSERT INTO link_languages (link_id, language_id)
+            VALUES ($1, $2)
+            ON CONFLICT DO NOTHING
+            "#,
+        )
+        .bind(link_id)
+        .bind(language_id)
+        .execute(pool)
+        .await?;
+
+        Ok(())
+    }
+
+    /// Remove a language from a link
+    pub async fn remove_language(
+        pool: &PgPool,
+        link_id: Uuid,
+        language_id: Uuid,
+        user_id: Uuid,
+    ) -> Result<(), AppError> {
+        let _ = Self::get_by_id(pool, link_id, user_id).await?;
+
+        sqlx::query("DELETE FROM link_languages WHERE link_id = $1 AND language_id = $2")
+            .bind(link_id)
+            .bind(language_id)
+            .execute(pool)
+            .await?;
+
+        Ok(())
+    }
+
+    /// Get languages for a link
+    pub async fn get_languages(
+        pool: &PgPool,
+        link_id: Uuid,
+        user_id: Uuid,
+    ) -> Result<Vec<Language>, AppError> {
+        let _ = Self::get_by_id(pool, link_id, user_id).await?;
+
+        let languages = sqlx::query_as::<_, Language>(
+            r#"
+            SELECT l.* FROM languages l
+            JOIN link_languages ll ON ll.language_id = l.id
+            WHERE ll.link_id = $1
+            ORDER BY l.name
+            "#,
+        )
+        .bind(link_id)
+        .fetch_all(pool)
+        .await?;
+
+        Ok(languages)
+    }
+
+    /// Add a license to a link
+    pub async fn add_license(
+        pool: &PgPool,
+        link_id: Uuid,
+        license_id: Uuid,
+        user_id: Uuid,
+    ) -> Result<(), AppError> {
+        let _ = Self::get_by_id(pool, link_id, user_id).await?;
+
+        sqlx::query(
+            r#"
+            INSERT INTO link_licenses (link_id, license_id)
+            VALUES ($1, $2)
+            ON CONFLICT DO NOTHING
+            "#,
+        )
+        .bind(link_id)
+        .bind(license_id)
+        .execute(pool)
+        .await?;
+
+        Ok(())
+    }
+
+    /// Remove a license from a link
+    pub async fn remove_license(
+        pool: &PgPool,
+        link_id: Uuid,
+        license_id: Uuid,
+        user_id: Uuid,
+    ) -> Result<(), AppError> {
+        let _ = Self::get_by_id(pool, link_id, user_id).await?;
+
+        sqlx::query("DELETE FROM link_licenses WHERE link_id = $1 AND license_id = $2")
+            .bind(link_id)
+            .bind(license_id)
+            .execute(pool)
+            .await?;
+
+        Ok(())
+    }
+
+    /// Get licenses for a link
+    pub async fn get_licenses(
+        pool: &PgPool,
+        link_id: Uuid,
+        user_id: Uuid,
+    ) -> Result<Vec<License>, AppError> {
+        let _ = Self::get_by_id(pool, link_id, user_id).await?;
+
+        let licenses = sqlx::query_as::<_, License>(
+            r#"
+            SELECT l.* FROM licenses l
+            JOIN link_licenses ll ON ll.license_id = l.id
+            WHERE ll.link_id = $1
+            ORDER BY l.name
+            "#,
+        )
+        .bind(link_id)
+        .fetch_all(pool)
+        .await?;
+
+        Ok(licenses)
+    }
+
+    /// Get all links with their metadata for a user
     pub async fn get_all_with_categories(
         pool: &PgPool,
         user_id: Uuid,
@@ -396,20 +526,46 @@ impl Link {
             .fetch_all(pool)
             .await?;
 
-            result.push(LinkWithCategories { link, categories, tags });
+            let languages = sqlx::query_as::<_, Language>(
+                r#"
+                SELECT l.* FROM languages l
+                JOIN link_languages ll ON ll.language_id = l.id
+                WHERE ll.link_id = $1
+                ORDER BY l.name
+                "#,
+            )
+            .bind(link.id)
+            .fetch_all(pool)
+            .await?;
+
+            let licenses = sqlx::query_as::<_, License>(
+                r#"
+                SELECT l.* FROM licenses l
+                JOIN link_licenses ll ON ll.license_id = l.id
+                WHERE ll.link_id = $1
+                ORDER BY l.name
+                "#,
+            )
+            .bind(link.id)
+            .fetch_all(pool)
+            .await?;
+
+            result.push(LinkWithCategories { link, categories, tags, languages, licenses });
         }
 
         Ok(result)
     }
 }
 
-/// Link with its associated categories and tags
+/// Link with its associated metadata
 #[derive(Debug, Clone, Serialize)]
 pub struct LinkWithCategories {
     #[serde(flatten)]
     pub link: Link,
     pub categories: Vec<Category>,
     pub tags: Vec<Tag>,
+    pub languages: Vec<Language>,
+    pub licenses: Vec<License>,
 }
 
 #[cfg(test)]

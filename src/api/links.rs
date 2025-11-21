@@ -8,7 +8,7 @@
 
 use crate::auth::{get_session, get_session_from_cookies};
 use crate::error::AppError;
-use crate::models::{Category, CreateLink, Link, LinkWithCategories, Tag, UpdateLink, User};
+use crate::models::{Category, CreateLink, Language, License, Link, LinkWithCategories, Tag, UpdateLink, User};
 use axum::{
     extract::{Path, State},
     http::StatusCode,
@@ -246,6 +246,88 @@ async fn get_tags_handler(
     Ok(Json(tags))
 }
 
+#[derive(Debug, serde::Deserialize)]
+struct AddLanguageRequest {
+    language_id: uuid::Uuid,
+}
+
+/// POST /api/links/:id/languages
+async fn add_language_handler(
+    State(pool): State<PgPool>,
+    jar: CookieJar,
+    Path(id): Path<uuid::Uuid>,
+    Json(request): Json<AddLanguageRequest>,
+) -> Result<Json<Vec<Language>>, AppError> {
+    let user = get_authenticated_user(&pool, &jar).await?;
+    Link::add_language(&pool, id, request.language_id, user.id).await?;
+    let languages = Link::get_languages(&pool, id, user.id).await?;
+    Ok(Json(languages))
+}
+
+/// DELETE /api/links/:id/languages/:language_id
+async fn remove_language_handler(
+    State(pool): State<PgPool>,
+    jar: CookieJar,
+    Path((id, language_id)): Path<(uuid::Uuid, uuid::Uuid)>,
+) -> Result<Json<Vec<Language>>, AppError> {
+    let user = get_authenticated_user(&pool, &jar).await?;
+    Link::remove_language(&pool, id, language_id, user.id).await?;
+    let languages = Link::get_languages(&pool, id, user.id).await?;
+    Ok(Json(languages))
+}
+
+/// GET /api/links/:id/languages
+async fn get_languages_handler(
+    State(pool): State<PgPool>,
+    jar: CookieJar,
+    Path(id): Path<uuid::Uuid>,
+) -> Result<Json<Vec<Language>>, AppError> {
+    let user = get_authenticated_user(&pool, &jar).await?;
+    let languages = Link::get_languages(&pool, id, user.id).await?;
+    Ok(Json(languages))
+}
+
+#[derive(Debug, serde::Deserialize)]
+struct AddLicenseRequest {
+    license_id: uuid::Uuid,
+}
+
+/// POST /api/links/:id/licenses
+async fn add_license_handler(
+    State(pool): State<PgPool>,
+    jar: CookieJar,
+    Path(id): Path<uuid::Uuid>,
+    Json(request): Json<AddLicenseRequest>,
+) -> Result<Json<Vec<License>>, AppError> {
+    let user = get_authenticated_user(&pool, &jar).await?;
+    Link::add_license(&pool, id, request.license_id, user.id).await?;
+    let licenses = Link::get_licenses(&pool, id, user.id).await?;
+    Ok(Json(licenses))
+}
+
+/// DELETE /api/links/:id/licenses/:license_id
+async fn remove_license_handler(
+    State(pool): State<PgPool>,
+    jar: CookieJar,
+    Path((id, license_id)): Path<(uuid::Uuid, uuid::Uuid)>,
+) -> Result<Json<Vec<License>>, AppError> {
+    let user = get_authenticated_user(&pool, &jar).await?;
+    Link::remove_license(&pool, id, license_id, user.id).await?;
+    let licenses = Link::get_licenses(&pool, id, user.id).await?;
+    Ok(Json(licenses))
+}
+
+/// GET /api/links/:id/licenses
+async fn get_licenses_handler(
+    State(pool): State<PgPool>,
+    jar: CookieJar,
+    Path(id): Path<uuid::Uuid>,
+) -> Result<Json<Vec<License>>, AppError> {
+    let user = get_authenticated_user(&pool, &jar).await?;
+    let licenses = Link::get_licenses(&pool, id, user.id).await?;
+    Ok(Json(licenses))
+}
+
 /// Create the links router
 pub fn create_router() -> Router<PgPool> {
     Router::new()
@@ -255,4 +337,8 @@ pub fn create_router() -> Router<PgPool> {
         .route("/:id/categories/:category_id", axum::routing::delete(remove_category_handler))
         .route("/:id/tags", post(add_tag_handler).get(get_tags_handler))
         .route("/:id/tags/:tag_id", axum::routing::delete(remove_tag_handler))
+        .route("/:id/languages", post(add_language_handler).get(get_languages_handler))
+        .route("/:id/languages/:language_id", axum::routing::delete(remove_language_handler))
+        .route("/:id/licenses", post(add_license_handler).get(get_licenses_handler))
+        .route("/:id/licenses/:license_id", axum::routing::delete(remove_license_handler))
 }
