@@ -5,13 +5,14 @@
 //! # Modules
 //!
 //! - `auth` - Authentication endpoints (login, logout, setup, etc.)
+//! - `links` - Link management endpoints
 //!
 //! Future modules will include:
-//! - `links` - Link management endpoints
 //! - `categories` - Category management endpoints
 //! - `tags` - Tag management endpoints
 
 pub mod auth;
+pub mod links;
 
 use axum::{
     routing::{get, post},
@@ -33,18 +34,13 @@ use sqlx::PgPool;
 /// - GET /api/auth/me - Get current user
 /// - GET /api/auth/check-setup - Check if setup is required
 ///
+/// ## Links (`/api/links`)
+/// - POST /api/links - Create a new link
+/// - GET /api/links - List all links
+///
 /// # State
 ///
 /// The router requires a `PgPool` as shared state for database access.
-///
-/// # Example
-///
-/// ```rust
-/// let pool = PgPool::connect(&database_url).await?;
-/// let app = create_router(pool);
-/// let listener = tokio::net::TcpListener::bind("0.0.0.0:8080").await?;
-/// axum::serve(listener, app).await?;
-/// ```
 pub fn create_router(pool: PgPool) -> Router {
     // Create auth router
     let auth_router = Router::new()
@@ -57,5 +53,6 @@ pub fn create_router(pool: PgPool) -> Router {
     // Create main API router
     Router::new()
         .nest("/auth", auth_router)
+        .nest("/links", links::create_router())
         .with_state(pool)
 }
