@@ -4,7 +4,8 @@
       "Bash(cargo check:*)",
       "Bash(tree:*)",
       "Bash(cat:*)",
-      "Bash(chmod:*)"
+      "Bash(chmod:*)",
+      "Bash(mkdir:*)"
     ],
     "deny": [],
     "ask": []

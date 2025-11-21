@@ -1,2 +1,3 @@
-// Frontend components module
-// Will be implemented in subsequent steps
+pub mod app;
+pub mod pages;
+pub mod components;
