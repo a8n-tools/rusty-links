@@ -155,19 +155,22 @@ impl Scheduler {
             tracing::warn!(
                 link_id = %link.id,
                 url = %link.url,
-                "Link is not accessible, marking as inaccessible"
+                consecutive_failures = link.consecutive_failures + 1,
+                "Link is not accessible, recording failure"
             );
-            Link::update_status(&self.pool, link.id, "inaccessible").await?;
+            Link::record_failure(&self.pool, link.id).await?;
             Link::mark_refreshed(&self.pool, link.id, link.user_id).await?;
             return Ok(());
         }
 
+        // On success, reset failures
+        Link::reset_failures(&self.pool, link.id).await?;
+
         // If link was previously inaccessible but is now healthy, restore to active
-        if link.status == "inaccessible" || link.status == "repo_unavailable" {
+        if link.status == "inaccessible" {
             tracing::info!(
                 link_id = %link.id,
                 url = %link.url,
-                previous_status = %link.status,
                 "Link is now accessible, restoring to active status"
             );
             Link::update_status(&self.pool, link.id, "active").await?;

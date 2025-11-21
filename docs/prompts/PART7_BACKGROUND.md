@@ -335,7 +335,7 @@ Mark links as stale when unreachable.
 
 ### Prompt
 
-```text
+````text
 Add stale link detection and UI indicators for the Rusty Links application.
 
 **Part 1: Track consecutive failures**
@@ -425,7 +425,7 @@ In `src/ui/pages/links.rs`:
 Add CSS:
 - `.link-status-active`, `.link-status-archived`, `.link-status-inaccessible`
 - `.status-indicator` (small colored dot)
-```
+````
 
 ### Verification
 - `cargo check` passes

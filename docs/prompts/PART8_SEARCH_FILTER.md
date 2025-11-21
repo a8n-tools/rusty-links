@@ -16,7 +16,7 @@ Search links by title, description, URL.
 
 ### Prompt
 
-```text
+````text
 Add search functionality to the links API for the Rusty Links application.
 
 **Part 1: Add search query to Link model**
@@ -99,7 +99,7 @@ The endpoint now supports query parameters:
 - `GET /api/links?status=active` - only active links
 - `GET /api/links?is_github=true` - only GitHub repos
 - `GET /api/links?query=rust&status=active` - combined
-```
+````
 
 ### Verification
 - `cargo check` passes

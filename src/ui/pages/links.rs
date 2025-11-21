@@ -16,6 +16,7 @@ struct Link {
     title: Option<String>,
     description: Option<String>,
     status: String,
+    consecutive_failures: i32,
     is_github_repo: bool,
     github_stars: Option<i32>,
     github_archived: Option<bool>,
@@ -72,6 +73,9 @@ pub fn Links() -> Element {
     // Refresh state
     let mut refreshing_id = use_signal(|| Option::<String>::None);
 
+    // Filter state
+    let mut status_filter = use_signal(|| "all".to_string());
+
     // Fetch links on mount
     use_effect(move || {
         spawn(async move {
@@ -112,23 +116,37 @@ pub fn Links() -> Element {
             div { class: "links-page",
                 div { class: "links-header",
                     h1 { class: "links-title", "My Links" }
-                    if !show_form() {
-                        button {
-                            class: "btn btn-primary",
-                            onclick: move |_| {
-                                form_url.set(String::new());
-                                form_title.set(String::new());
-                                form_description.set(String::new());
-                                form_status.set("active".to_string());
-                                form_categories.set(Vec::new());
-                                form_tags.set(Vec::new());
-                                form_languages.set(Vec::new());
-                                form_licenses.set(Vec::new());
-                                form_error.set(None);
-                                editing_link_id.set(None);
-                                show_form.set(true);
-                            },
-                            "+ Add Link"
+                    div { class: "links-actions",
+                        if !show_form() {
+                            select {
+                                class: "status-filter",
+                                value: "{status_filter()}",
+                                onchange: move |evt| {
+                                    status_filter.set(evt.value().clone());
+                                },
+                                option { value: "all", "All Links" }
+                                option { value: "active", "Active Only" }
+                                option { value: "archived", "Archived" }
+                                option { value: "inaccessible", "Inaccessible" }
+                                option { value: "repo_unavailable", "Repo Unavailable" }
+                            }
+                            button {
+                                class: "btn btn-primary",
+                                onclick: move |_| {
+                                    form_url.set(String::new());
+                                    form_title.set(String::new());
+                                    form_description.set(String::new());
+                                    form_status.set("active".to_string());
+                                    form_categories.set(Vec::new());
+                                    form_tags.set(Vec::new());
+                                    form_languages.set(Vec::new());
+                                    form_licenses.set(Vec::new());
+                                    form_error.set(None);
+                                    editing_link_id.set(None);
+                                    show_form.set(true);
+                                },
+                                "+ Add Link"
+                            }
                         }
                     }
                 }
@@ -169,26 +187,46 @@ pub fn Links() -> Element {
                             p { class: "empty-subtitle", "Add your first link to get started!" }
                         }
                     } else {
-                        div { class: "links-list",
-                            for link in links() {
-                                LinkCard {
-                                    key: "{link.id}",
-                                    link: link.clone(),
-                                    deleting_id: deleting_id,
-                                    refreshing_id: refreshing_id,
-                                    links: links,
-                                    error: error,
-                                    form_url: form_url,
-                                    form_title: form_title,
-                                    form_description: form_description,
-                                    form_status: form_status,
-                                    form_categories: form_categories,
-                                    form_tags: form_tags,
-                                    form_languages: form_languages,
-                                    form_licenses: form_licenses,
-                                    form_error: form_error,
-                                    editing_link_id: editing_link_id,
-                                    show_form: show_form,
+                        {
+                            let filtered_links: Vec<Link> = links().into_iter()
+                                .filter(|link| {
+                                    let filter = status_filter();
+                                    filter == "all" || link.status == filter
+                                })
+                                .collect();
+
+                            if filtered_links.is_empty() {
+                                rsx! {
+                                    div { class: "empty-state",
+                                        p { class: "empty-title", "No links match the selected filter" }
+                                        p { class: "empty-subtitle", "Try changing the filter to see more links" }
+                                    }
+                                }
+                            } else {
+                                rsx! {
+                                    div { class: "links-list",
+                                        for link in filtered_links {
+                                            LinkCard {
+                                                key: "{link.id}",
+                                                link: link.clone(),
+                                                deleting_id: deleting_id,
+                                                refreshing_id: refreshing_id,
+                                                links: links,
+                                                error: error,
+                                                form_url: form_url,
+                                                form_title: form_title,
+                                                form_description: form_description,
+                                                form_status: form_status,
+                                                form_categories: form_categories,
+                                                form_tags: form_tags,
+                                                form_languages: form_languages,
+                                                form_licenses: form_licenses,
+                                                form_error: form_error,
+                                                editing_link_id: editing_link_id,
+                                                show_form: show_form,
+                                            }
+                                        }
+                                    }
                                 }
                             }
                         }
@@ -582,16 +620,49 @@ fn LinkCard(
     let link_id_for_delete = link.id.clone();
     let link_id_for_refresh = link.id.clone();
 
+    // Determine status icon and label
+    let status_icon = match link.status.as_str() {
+        "active" => "●",
+        "archived" => "📦",
+        "inaccessible" => "⚠️",
+        "repo_unavailable" => "⚠️",
+        _ => "●",
+    };
+    let status_label = match link.status.as_str() {
+        "active" => "Active",
+        "archived" => "Archived",
+        "inaccessible" => "Inaccessible",
+        "repo_unavailable" => "Repo Unavailable",
+        _ => link.status.as_str(),
+    };
+    let status_class = match link.status.as_str() {
+        "active" => "status-active",
+        "archived" => "status-archived",
+        "inaccessible" => "status-inaccessible",
+        "repo_unavailable" => "status-repo-unavailable",
+        _ => "status-unknown",
+    };
+
     rsx! {
-        div { class: "link-card",
+        div {
+            class: "link-card link-card-{link.status}",
             div { class: "link-card-header",
-                h3 { class: "link-title",
+                h3 {
+                    class: if link.status == "inaccessible" || link.status == "repo_unavailable" {
+                        "link-title link-title-unavailable"
+                    } else {
+                        "link-title"
+                    },
                     a { href: "{link.url}", target: "_blank", rel: "noopener noreferrer",
                         "{display_title}"
                     }
                 }
                 div { class: "link-header-right",
-                    span { class: "link-status status-{link.status}", "{link.status}" }
+                    span {
+                        class: "link-status {status_class}",
+                        span { class: "status-indicator", "{status_icon}" }
+                        span { class: "status-label", "{status_label}" }
+                    }
                     div { class: "link-actions",
                         button {
                             class: "btn-icon",
@@ -654,6 +725,52 @@ fn LinkCard(
                                 });
                             },
                             if is_refreshing { "..." } else { "🔄" }
+                        }
+                        // Add "Mark as Active" button for inaccessible links
+                        if link.status == "inaccessible" || link.status == "repo_unavailable" {
+                            button {
+                                class: "btn-icon btn-success",
+                                title: "Mark as Active",
+                                disabled: is_deleting || is_refreshing,
+                                onclick: move |_| {
+                                    let id = link.id.clone();
+                                    spawn(async move {
+                                        let client = reqwest::Client::new();
+                                        let body = serde_json::json!({"status": "active"});
+                                        let response = client
+                                            .patch(&format!("/api/links/{}", id))
+                                            .header("Content-Type", "application/json")
+                                            .body(body.to_string())
+                                            .send()
+                                            .await;
+
+                                        match response {
+                                            Ok(resp) => {
+                                                if resp.status().is_success() {
+                                                    match resp.json::<Link>().await {
+                                                        Ok(updated_link) => {
+                                                            let mut current = links();
+                                                            if let Some(pos) = current.iter().position(|l| l.id == id) {
+                                                                current[pos] = updated_link;
+                                                                links.set(current);
+                                                            }
+                                                        }
+                                                        Err(e) => {
+                                                            error.set(Some(format!("Failed to parse updated link: {}", e)));
+                                                        }
+                                                    }
+                                                } else {
+                                                    error.set(Some("Failed to update link status".to_string()));
+                                                }
+                                            }
+                                            Err(e) => {
+                                                error.set(Some(format!("Network error: {}", e)));
+                                            }
+                                        }
+                                    });
+                                },
+                                "✓"
+                            }
                         }
                         button {
                             class: "btn-icon btn-danger",

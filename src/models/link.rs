@@ -33,6 +33,7 @@ pub struct Link {
     pub github_archived: Option<bool>,
     pub github_last_commit: Option<DateTime<Utc>>,
     pub status: String,
+    pub consecutive_failures: i32,
     pub refreshed_at: Option<DateTime<Utc>>,
     pub created_at: DateTime<Utc>,
     pub updated_at: DateTime<Utc>,
@@ -618,6 +619,51 @@ impl Link {
             "UPDATE links SET status = $1, updated_at = NOW() WHERE id = $2"
         )
         .bind(status)
+        .bind(id)
+        .execute(pool)
+        .await?;
+        Ok(())
+    }
+
+    /// Increment failure count and potentially mark as inaccessible
+    ///
+    /// Increments the consecutive_failures counter. After 3 consecutive failures,
+    /// automatically marks the link as inaccessible.
+    ///
+    /// # Arguments
+    /// * `pool` - Database connection pool
+    /// * `id` - Link ID
+    pub async fn record_failure(pool: &PgPool, id: Uuid) -> Result<(), AppError> {
+        sqlx::query(
+            r#"
+            UPDATE links
+            SET consecutive_failures = consecutive_failures + 1,
+                status = CASE
+                    WHEN consecutive_failures >= 2 THEN 'inaccessible'
+                    ELSE status
+                END,
+                updated_at = NOW()
+            WHERE id = $1
+            "#
+        )
+        .bind(id)
+        .execute(pool)
+        .await?;
+        Ok(())
+    }
+
+    /// Reset failure count on successful access
+    ///
+    /// Resets the consecutive_failures counter to 0. Should be called when
+    /// a link is successfully accessed during health checks.
+    ///
+    /// # Arguments
+    /// * `pool` - Database connection pool
+    /// * `id` - Link ID
+    pub async fn reset_failures(pool: &PgPool, id: Uuid) -> Result<(), AppError> {
+        sqlx::query(
+            "UPDATE links SET consecutive_failures = 0, updated_at = NOW() WHERE id = $1"
+        )
         .bind(id)
         .execute(pool)
         .await?;

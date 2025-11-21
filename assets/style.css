@@ -273,6 +273,120 @@ body {
     margin-bottom: 1rem;
 }
 
+/* Status Filter */
+.links-actions {
+    display: flex;
+    gap: 1rem;
+    align-items: center;
+}
+
+.status-filter {
+    padding: 0.5rem 1rem;
+    border: 1px solid var(--rust-border);
+    border-radius: 6px;
+    background-color: white;
+    font-size: 0.875rem;
+    cursor: pointer;
+    transition: border-color 0.2s;
+}
+
+.status-filter:hover {
+    border-color: var(--rust-primary);
+}
+
+.status-filter:focus {
+    outline: none;
+    border-color: var(--rust-primary);
+    box-shadow: 0 0 0 3px rgba(183, 65, 14, 0.1);
+}
+
+/* Link Status Indicators */
+.link-status {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.25rem;
+    padding: 0.25rem 0.75rem;
+    border-radius: 12px;
+    font-size: 0.75rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+
+.status-indicator {
+    font-size: 0.75rem;
+}
+
+.status-label {
+    font-size: 0.75rem;
+}
+
+.status-active {
+    background-color: #d1fae5;
+    color: #065f46;
+}
+
+.status-archived {
+    background-color: #e5e7eb;
+    color: #374151;
+}
+
+.status-inaccessible {
+    background-color: #fee2e2;
+    color: #991b1b;
+}
+
+.status-repo-unavailable {
+    background-color: #fed7aa;
+    color: #92400e;
+}
+
+.status-unknown {
+    background-color: #f3f4f6;
+    color: #6b7280;
+}
+
+/* Link Card Status Variations */
+.link-card-archived {
+    opacity: 0.7;
+}
+
+.link-card-inaccessible {
+    border-left: 3px solid #ef4444;
+}
+
+.link-card-repo-unavailable {
+    border-left: 3px solid #f59e0b;
+}
+
+/* Unavailable Link Title Styling */
+.link-title-unavailable a {
+    text-decoration: line-through;
+    color: var(--rust-text-secondary);
+}
+
+.link-title-unavailable a:hover {
+    color: var(--rust-text-secondary);
+}
+
+/* Success Button */
+.btn-success {
+    color: #065f46;
+    background-color: transparent;
+    border: none;
+    cursor: pointer;
+    transition: background-color 0.2s;
+}
+
+.btn-success:hover {
+    background-color: #d1fae5;
+}
+
+.btn-success:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+}
+
 /* Responsive Design */
 @media (max-width: 640px) {
     .auth-card {
@@ -286,5 +400,14 @@ body {
     .navbar-content {
         flex-direction: column;
         gap: 1rem;
+    }
+
+    .links-actions {
+        flex-direction: column;
+        width: 100%;
+    }
+
+    .status-filter {
+        width: 100%;
     }
 }
