@@ -16,7 +16,7 @@ Background task runner using tokio.
 
 ### Prompt
 
-```text
+````text
 Set up background task scheduling in `src/scheduler/mod.rs` for the Rusty Links application.
 
 **Part 1: Implement in `src/scheduler/mod.rs`**
@@ -83,7 +83,7 @@ tracing::info!("Background scheduler started");
 ```
 
 Export in `src/main.rs`: `mod scheduler;`
-```
+````
 
 ### Verification
 - `cargo check` passes

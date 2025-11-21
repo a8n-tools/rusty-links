@@ -493,6 +493,79 @@ impl Link {
         Ok(licenses)
     }
 
+    /// Update scraped metadata for a link
+    ///
+    /// Updates title, description, and logo from web scraping results.
+    /// Does not update refreshed_at - use mark_refreshed() for that.
+    pub async fn update_scraped_metadata(
+        pool: &PgPool,
+        link_id: Uuid,
+        user_id: Uuid,
+        metadata: crate::scraper::ScrapedMetadata,
+    ) -> Result<(), AppError> {
+        // Verify link belongs to user
+        let _ = Self::get_by_id(pool, link_id, user_id).await?;
+
+        tracing::info!(
+            link_id = %link_id,
+            has_title = metadata.title.is_some(),
+            has_description = metadata.description.is_some(),
+            has_favicon = metadata.favicon.is_some(),
+            "Updating scraped metadata for link"
+        );
+
+        sqlx::query(
+            r#"
+            UPDATE links
+            SET
+                title = COALESCE($2, title),
+                description = COALESCE($3, description),
+                logo = COALESCE($4, logo),
+                updated_at = NOW()
+            WHERE id = $1 AND user_id = $5
+            "#,
+        )
+        .bind(link_id)
+        .bind(&metadata.title)
+        .bind(&metadata.description)
+        .bind(&metadata.favicon)
+        .bind(user_id)
+        .execute(pool)
+        .await?;
+
+        tracing::info!(link_id = %link_id, "Scraped metadata updated successfully");
+
+        Ok(())
+    }
+
+    /// Mark a link as refreshed
+    ///
+    /// Updates the refreshed_at timestamp to the current time.
+    pub async fn mark_refreshed(
+        pool: &PgPool,
+        link_id: Uuid,
+        user_id: Uuid,
+    ) -> Result<(), AppError> {
+        // Verify link belongs to user
+        let _ = Self::get_by_id(pool, link_id, user_id).await?;
+
+        tracing::debug!(link_id = %link_id, "Marking link as refreshed");
+
+        sqlx::query(
+            r#"
+            UPDATE links
+            SET refreshed_at = NOW()
+            WHERE id = $1 AND user_id = $2
+            "#,
+        )
+        .bind(link_id)
+        .bind(user_id)
+        .execute(pool)
+        .await?;
+
+        Ok(())
+    }
+
     /// Update GitHub metadata for a link
     ///
     /// Updates GitHub-specific fields and sets refreshed_at timestamp.

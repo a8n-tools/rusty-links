@@ -20,6 +20,7 @@ struct Link {
     github_stars: Option<i32>,
     github_archived: Option<bool>,
     created_at: String,
+    refreshed_at: Option<String>,
     #[serde(default)]
     categories: Vec<CategoryInfo>,
     #[serde(default)]
@@ -67,6 +68,9 @@ pub fn Links() -> Element {
 
     // Delete state
     let mut deleting_id = use_signal(|| Option::<String>::None);
+
+    // Refresh state
+    let mut refreshing_id = use_signal(|| Option::<String>::None);
 
     // Fetch links on mount
     use_effect(move || {
@@ -171,6 +175,7 @@ pub fn Links() -> Element {
                                     key: "{link.id}",
                                     link: link.clone(),
                                     deleting_id: deleting_id,
+                                    refreshing_id: refreshing_id,
                                     links: links,
                                     error: error,
                                     form_url: form_url,
@@ -546,6 +551,7 @@ fn LinkForm(
 fn LinkCard(
     link: Link,
     mut deleting_id: Signal<Option<String>>,
+    mut refreshing_id: Signal<Option<String>>,
     mut links: Signal<Vec<Link>>,
     mut error: Signal<Option<String>>,
     mut form_url: Signal<String>,
@@ -569,9 +575,12 @@ fn LinkCard(
     };
 
     let created_date = &link.created_at[..10];
+    let refreshed_date = link.refreshed_at.as_ref().map(|r| &r[..10]);
     let is_deleting = deleting_id() == Some(link.id.clone());
+    let is_refreshing = refreshing_id() == Some(link.id.clone());
     let link_for_edit = link.clone();
     let link_id_for_delete = link.id.clone();
+    let link_id_for_refresh = link.id.clone();
 
     rsx! {
         div { class: "link-card",
@@ -587,7 +596,7 @@ fn LinkCard(
                         button {
                             class: "btn-icon",
                             title: "Edit",
-                            disabled: is_deleting,
+                            disabled: is_deleting || is_refreshing,
                             onclick: move |_| {
                                 let l = link_for_edit.clone();
                                 form_url.set(l.url.clone());
@@ -605,9 +614,51 @@ fn LinkCard(
                             "✏️"
                         }
                         button {
+                            class: "btn-icon btn-refresh",
+                            title: "Refresh metadata",
+                            disabled: is_refreshing,
+                            onclick: move |_| {
+                                let id = link_id_for_refresh.clone();
+                                refreshing_id.set(Some(id.clone()));
+
+                                spawn(async move {
+                                    let client = reqwest::Client::new();
+                                    let response = client.post(&format!("/api/links/{}/refresh", id)).send().await;
+
+                                    match response {
+                                        Ok(resp) => {
+                                            if resp.status().is_success() {
+                                                match resp.json::<Link>().await {
+                                                    Ok(updated_link) => {
+                                                        // Update the link in the list
+                                                        let mut current = links();
+                                                        if let Some(pos) = current.iter().position(|l| l.id == id) {
+                                                            current[pos] = updated_link;
+                                                            links.set(current);
+                                                        }
+                                                    }
+                                                    Err(e) => {
+                                                        error.set(Some(format!("Failed to parse refreshed link: {}", e)));
+                                                    }
+                                                }
+                                            } else {
+                                                error.set(Some("Failed to refresh link".to_string()));
+                                            }
+                                        }
+                                        Err(e) => {
+                                            error.set(Some(format!("Network error: {}", e)));
+                                        }
+                                    }
+
+                                    refreshing_id.set(None);
+                                });
+                            },
+                            if is_refreshing { "..." } else { "🔄" }
+                        }
+                        button {
                             class: "btn-icon btn-danger",
                             title: "Delete",
-                            disabled: is_deleting,
+                            disabled: is_deleting || is_refreshing,
                             onclick: move |_| {
                                 let id = link_id_for_delete.clone();
                                 deleting_id.set(Some(id.clone()));
@@ -665,6 +716,9 @@ fn LinkCard(
 
             div { class: "link-meta",
                 span { class: "link-date", "Added {created_date}" }
+                if let Some(ref_date) = refreshed_date {
+                    span { class: "link-refreshed", " • Refreshed {ref_date}" }
+                }
             }
         }
     }

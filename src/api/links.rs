@@ -401,6 +401,105 @@ async fn get_licenses_handler(
     Ok(Json(licenses))
 }
 
+/// POST /api/links/:id/refresh
+///
+/// Refresh all metadata for a link (web scraping + GitHub if applicable)
+///
+/// # Response
+/// - 200 OK: Returns the updated link with fresh metadata
+/// - 401 Unauthorized: No valid session
+/// - 404 Not Found: Link not found or doesn't belong to user
+async fn refresh_link_handler(
+    State(pool): State<PgPool>,
+    jar: CookieJar,
+    Path(id): Path<uuid::Uuid>,
+) -> Result<Json<Link>, AppError> {
+    let user = get_authenticated_user(&pool, &jar).await?;
+
+    tracing::info!(
+        user_id = %user.id,
+        link_id = %id,
+        "Refreshing metadata for link"
+    );
+
+    // Verify link exists and belongs to user
+    let link = Link::get_by_id(&pool, id, user.id).await?;
+
+    // If it's a GitHub repository, refresh GitHub metadata
+    if link.is_github_repo {
+        if let Some((owner, repo)) = crate::github::parse_repo_from_url(&link.url) {
+            match crate::github::fetch_repo_metadata(&owner, &repo).await {
+                Ok(metadata) => {
+                    tracing::info!(
+                        link_id = %id,
+                        owner = %owner,
+                        repo = %repo,
+                        stars = metadata.stars,
+                        "Successfully fetched GitHub metadata"
+                    );
+
+                    if let Err(e) = Link::update_github_metadata(&pool, id, user.id, metadata).await {
+                        tracing::warn!(
+                            link_id = %id,
+                            error = %e,
+                            "Failed to update GitHub metadata during refresh"
+                        );
+                    }
+                }
+                Err(e) => {
+                    tracing::warn!(
+                        link_id = %id,
+                        owner = %owner,
+                        repo = %repo,
+                        error = %e,
+                        "Failed to fetch GitHub metadata during refresh"
+                    );
+                }
+            }
+        }
+    } else {
+        // Not a GitHub repo - scrape the URL for metadata
+        match scraper::scrape_url(&link.url).await {
+            Ok(metadata) => {
+                tracing::info!(
+                    link_id = %id,
+                    has_title = metadata.title.is_some(),
+                    has_description = metadata.description.is_some(),
+                    "Successfully scraped metadata"
+                );
+
+                if let Err(e) = Link::update_scraped_metadata(&pool, id, user.id, metadata).await {
+                    tracing::warn!(
+                        link_id = %id,
+                        error = %e,
+                        "Failed to update scraped metadata during refresh"
+                    );
+                }
+            }
+            Err(e) => {
+                tracing::warn!(
+                    link_id = %id,
+                    error = %e,
+                    "Failed to scrape URL during refresh"
+                );
+            }
+        }
+    }
+
+    // Mark the link as refreshed
+    Link::mark_refreshed(&pool, id, user.id).await?;
+
+    // Fetch and return updated link
+    let updated_link = Link::get_by_id(&pool, id, user.id).await?;
+
+    tracing::info!(
+        link_id = %id,
+        "Link metadata refreshed successfully"
+    );
+
+    Ok(Json(updated_link))
+}
+
 /// POST /api/links/:id/refresh-github
 ///
 /// Refresh GitHub metadata for a link
@@ -473,6 +572,7 @@ pub fn create_router() -> Router<PgPool> {
     Router::new()
         .route("/", post(create_link_handler).get(list_links_handler))
         .route("/:id", put(update_link_handler).delete(delete_link_handler))
+        .route("/:id/refresh", post(refresh_link_handler))
         .route("/:id/refresh-github", post(refresh_github_handler))
         .route("/:id/categories", post(add_category_handler).get(get_categories_handler))
         .route("/:id/categories/:category_id", axum::routing::delete(remove_category_handler))
