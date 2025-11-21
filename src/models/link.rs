@@ -1,0 +1,255 @@
+//! Link model and database operations
+//!
+//! This module handles bookmark link management including:
+//! - Link creation with URL parsing
+//! - Link retrieval (single and list)
+//! - Link updates and deletion
+//!
+//! Links are scoped to users - each user can only access their own links.
+
+use crate::error::AppError;
+use chrono::{DateTime, Utc};
+use serde::{Deserialize, Serialize};
+use sqlx::PgPool;
+use url::Url;
+use uuid::Uuid;
+
+/// Link entity
+///
+/// Represents a bookmarked link with metadata.
+#[derive(Debug, Clone, Serialize, Deserialize, sqlx::FromRow)]
+pub struct Link {
+    pub id: Uuid,
+    pub user_id: Uuid,
+    pub url: String,
+    pub domain: String,
+    pub path: Option<String>,
+    pub title: Option<String>,
+    pub description: Option<String>,
+    pub logo: Option<String>,
+    pub is_github_repo: bool,
+    pub github_stars: Option<i32>,
+    pub github_archived: Option<bool>,
+    pub github_last_commit: Option<DateTime<Utc>>,
+    pub status: String,
+    pub refreshed_at: Option<DateTime<Utc>>,
+    pub created_at: DateTime<Utc>,
+    pub updated_at: DateTime<Utc>,
+}
+
+/// Data for creating a new link
+#[derive(Debug, Clone, Deserialize)]
+pub struct CreateLink {
+    pub url: String,
+    pub title: Option<String>,
+    pub description: Option<String>,
+    pub logo: Option<String>,
+}
+
+/// Data for updating a link
+#[derive(Debug, Clone, Deserialize, Default)]
+pub struct UpdateLink {
+    pub title: Option<String>,
+    pub description: Option<String>,
+    pub status: Option<String>,
+    pub logo: Option<String>,
+}
+
+impl Link {
+    /// Create a new link
+    ///
+    /// Parses the URL to extract domain and path, then inserts into the database.
+    pub async fn create(
+        pool: &PgPool,
+        user_id: Uuid,
+        create_link: CreateLink,
+    ) -> Result<Link, AppError> {
+        // Parse and validate URL
+        let parsed_url = Url::parse(&create_link.url).map_err(|e| {
+            AppError::validation("url", &format!("Invalid URL: {}", e))
+        })?;
+
+        // Extract domain and path
+        let domain = parsed_url
+            .host_str()
+            .ok_or_else(|| AppError::validation("url", "URL must have a domain"))?
+            .to_string();
+
+        let path = {
+            let p = parsed_url.path();
+            if p.is_empty() || p == "/" {
+                None
+            } else {
+                Some(p.to_string())
+            }
+        };
+
+        // Check if it's a GitHub repo
+        let is_github_repo = domain == "github.com"
+            && path.as_ref().map_or(false, |p| {
+                let parts: Vec<&str> = p.trim_matches('/').split('/').collect();
+                parts.len() >= 2
+            });
+
+        tracing::info!(
+            user_id = %user_id,
+            url = %create_link.url,
+            domain = %domain,
+            "Creating new link"
+        );
+
+        let link = sqlx::query_as::<_, Link>(
+            r#"
+            INSERT INTO links (user_id, url, domain, path, title, description, logo, is_github_repo)
+            VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+            RETURNING *
+            "#,
+        )
+        .bind(user_id)
+        .bind(&create_link.url)
+        .bind(&domain)
+        .bind(&path)
+        .bind(&create_link.title)
+        .bind(&create_link.description)
+        .bind(&create_link.logo)
+        .bind(is_github_repo)
+        .fetch_one(pool)
+        .await?;
+
+        tracing::info!(link_id = %link.id, "Link created successfully");
+
+        Ok(link)
+    }
+
+    /// Get a link by ID (must belong to user)
+    pub async fn get_by_id(pool: &PgPool, id: Uuid, user_id: Uuid) -> Result<Link, AppError> {
+        let link = sqlx::query_as::<_, Link>(
+            r#"
+            SELECT * FROM links
+            WHERE id = $1 AND user_id = $2
+            "#,
+        )
+        .bind(id)
+        .bind(user_id)
+        .fetch_optional(pool)
+        .await?
+        .ok_or_else(|| AppError::not_found("link", &id.to_string()))?;
+
+        Ok(link)
+    }
+
+    /// Get all links for a user
+    pub async fn get_all_by_user(pool: &PgPool, user_id: Uuid) -> Result<Vec<Link>, AppError> {
+        let links = sqlx::query_as::<_, Link>(
+            r#"
+            SELECT * FROM links
+            WHERE user_id = $1
+            ORDER BY created_at DESC
+            "#,
+        )
+        .bind(user_id)
+        .fetch_all(pool)
+        .await?;
+
+        Ok(links)
+    }
+
+    /// Update a link
+    pub async fn update(
+        pool: &PgPool,
+        id: Uuid,
+        user_id: Uuid,
+        update: UpdateLink,
+    ) -> Result<Link, AppError> {
+        // Validate status if provided
+        if let Some(ref status) = update.status {
+            let valid_statuses = ["active", "archived", "inaccessible", "repo_unavailable"];
+            if !valid_statuses.contains(&status.as_str()) {
+                return Err(AppError::validation(
+                    "status",
+                    "Status must be one of: active, archived, inaccessible, repo_unavailable",
+                ));
+            }
+        }
+
+        let link = sqlx::query_as::<_, Link>(
+            r#"
+            UPDATE links
+            SET
+                title = COALESCE($3, title),
+                description = COALESCE($4, description),
+                status = COALESCE($5, status),
+                logo = COALESCE($6, logo),
+                updated_at = NOW()
+            WHERE id = $1 AND user_id = $2
+            RETURNING *
+            "#,
+        )
+        .bind(id)
+        .bind(user_id)
+        .bind(&update.title)
+        .bind(&update.description)
+        .bind(&update.status)
+        .bind(&update.logo)
+        .fetch_optional(pool)
+        .await?
+        .ok_or_else(|| AppError::not_found("link", &id.to_string()))?;
+
+        tracing::info!(link_id = %id, "Link updated");
+
+        Ok(link)
+    }
+
+    /// Delete a link
+    pub async fn delete(pool: &PgPool, id: Uuid, user_id: Uuid) -> Result<(), AppError> {
+        let result = sqlx::query(
+            r#"
+            DELETE FROM links
+            WHERE id = $1 AND user_id = $2
+            "#,
+        )
+        .bind(id)
+        .bind(user_id)
+        .execute(pool)
+        .await?;
+
+        if result.rows_affected() == 0 {
+            return Err(AppError::not_found("link", &id.to_string()));
+        }
+
+        tracing::info!(link_id = %id, "Link deleted");
+
+        Ok(())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_url_parsing() {
+        let url = Url::parse("https://github.com/rust-lang/rust").unwrap();
+        assert_eq!(url.host_str(), Some("github.com"));
+        assert_eq!(url.path(), "/rust-lang/rust");
+    }
+
+    #[test]
+    fn test_github_detection() {
+        // Valid GitHub repo URLs
+        let github_urls = [
+            "https://github.com/rust-lang/rust",
+            "https://github.com/owner/repo",
+        ];
+
+        for url_str in &github_urls {
+            let parsed = Url::parse(url_str).unwrap();
+            let domain = parsed.host_str().unwrap();
+            let path = parsed.path();
+            let parts: Vec<&str> = path.trim_matches('/').split('/').collect();
+
+            assert_eq!(domain, "github.com");
+            assert!(parts.len() >= 2, "Should have owner and repo in path");
+        }
+    }
+}
