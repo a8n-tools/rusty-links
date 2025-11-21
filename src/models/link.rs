@@ -8,6 +8,7 @@
 //! Links are scoped to users - each user can only access their own links.
 
 use crate::error::AppError;
+use crate::models::Category;
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 use sqlx::PgPool;
@@ -221,6 +222,115 @@ impl Link {
 
         Ok(())
     }
+
+    /// Add a category to a link
+    pub async fn add_category(
+        pool: &PgPool,
+        link_id: Uuid,
+        category_id: Uuid,
+        user_id: Uuid,
+    ) -> Result<(), AppError> {
+        // Verify link belongs to user
+        let _ = Self::get_by_id(pool, link_id, user_id).await?;
+
+        // Verify category belongs to user
+        let _ = Category::get_by_id(pool, category_id, user_id).await?;
+
+        // Insert (ignore if already exists)
+        sqlx::query(
+            r#"
+            INSERT INTO link_categories (link_id, category_id)
+            VALUES ($1, $2)
+            ON CONFLICT DO NOTHING
+            "#,
+        )
+        .bind(link_id)
+        .bind(category_id)
+        .execute(pool)
+        .await?;
+
+        Ok(())
+    }
+
+    /// Remove a category from a link
+    pub async fn remove_category(
+        pool: &PgPool,
+        link_id: Uuid,
+        category_id: Uuid,
+        user_id: Uuid,
+    ) -> Result<(), AppError> {
+        // Verify link belongs to user
+        let _ = Self::get_by_id(pool, link_id, user_id).await?;
+
+        sqlx::query(
+            "DELETE FROM link_categories WHERE link_id = $1 AND category_id = $2",
+        )
+        .bind(link_id)
+        .bind(category_id)
+        .execute(pool)
+        .await?;
+
+        Ok(())
+    }
+
+    /// Get categories for a link
+    pub async fn get_categories(
+        pool: &PgPool,
+        link_id: Uuid,
+        user_id: Uuid,
+    ) -> Result<Vec<Category>, AppError> {
+        // Verify link belongs to user
+        let _ = Self::get_by_id(pool, link_id, user_id).await?;
+
+        let categories = sqlx::query_as::<_, Category>(
+            r#"
+            SELECT c.* FROM categories c
+            JOIN link_categories lc ON lc.category_id = c.id
+            WHERE lc.link_id = $1
+            ORDER BY c.name
+            "#,
+        )
+        .bind(link_id)
+        .fetch_all(pool)
+        .await?;
+
+        Ok(categories)
+    }
+
+    /// Get all links with their categories for a user
+    pub async fn get_all_with_categories(
+        pool: &PgPool,
+        user_id: Uuid,
+    ) -> Result<Vec<LinkWithCategories>, AppError> {
+        let links = Self::get_all_by_user(pool, user_id).await?;
+
+        let mut result = Vec::with_capacity(links.len());
+        for link in links {
+            let categories = sqlx::query_as::<_, Category>(
+                r#"
+                SELECT c.* FROM categories c
+                JOIN link_categories lc ON lc.category_id = c.id
+                WHERE lc.link_id = $1
+                ORDER BY c.name
+                "#,
+            )
+            .bind(link.id)
+            .fetch_all(pool)
+            .await?;
+
+            result.push(LinkWithCategories { link, categories });
+        }
+
+        Ok(result)
+    }
+}
+
+/// Link with its associated categories
+#[derive(Debug, Clone, Serialize)]
+pub struct LinkWithCategories {
+    #[serde(flatten)]
+    pub link: Link,
+    pub categories: Vec<Category>,
 }
 
 #[cfg(test)]

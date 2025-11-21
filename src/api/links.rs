@@ -8,7 +8,7 @@
 
 use crate::auth::{get_session, get_session_from_cookies};
 use crate::error::AppError;
-use crate::models::{CreateLink, Link, UpdateLink, User};
+use crate::models::{Category, CreateLink, Link, LinkWithCategories, UpdateLink, User};
 use axum::{
     extract::{Path, State},
     http::StatusCode,
@@ -81,20 +81,20 @@ async fn create_link_handler(
 
 /// GET /api/links
 ///
-/// Returns all links for the authenticated user.
+/// Returns all links for the authenticated user with their categories.
 ///
 /// # Response
-/// - 200 OK: Returns array of links
+/// - 200 OK: Returns array of links with categories
 /// - 401 Unauthorized: No valid session
 async fn list_links_handler(
     State(pool): State<PgPool>,
     jar: CookieJar,
-) -> Result<Json<Vec<Link>>, AppError> {
+) -> Result<Json<Vec<LinkWithCategories>>, AppError> {
     let user = get_authenticated_user(&pool, &jar).await?;
 
     tracing::debug!(user_id = %user.id, "Fetching links");
 
-    let links = Link::get_all_by_user(&pool, user.id).await?;
+    let links = Link::get_all_with_categories(&pool, user.id).await?;
 
     tracing::debug!(user_id = %user.id, count = links.len(), "Links fetched");
 
@@ -164,9 +164,55 @@ async fn delete_link_handler(
     Ok(StatusCode::NO_CONTENT)
 }
 
+#[derive(Debug, serde::Deserialize)]
+struct AddCategoryRequest {
+    category_id: uuid::Uuid,
+}
+
+/// POST /api/links/:id/categories
+async fn add_category_handler(
+    State(pool): State<PgPool>,
+    jar: CookieJar,
+    Path(id): Path<uuid::Uuid>,
+    Json(request): Json<AddCategoryRequest>,
+) -> Result<Json<Vec<Category>>, AppError> {
+    let user = get_authenticated_user(&pool, &jar).await?;
+    Link::add_category(&pool, id, request.category_id, user.id).await?;
+    let categories = Link::get_categories(&pool, id, user.id).await?;
+    Ok(Json(categories))
+}
+
+/// DELETE /api/links/:id/categories/:category_id
+async fn remove_category_handler(
+    State(pool): State<PgPool>,
+    jar: CookieJar,
+    Path((id, category_id)): Path<(uuid::Uuid, uuid::Uuid)>,
+) -> Result<Json<Vec<Category>>, AppError> {
+    let user = get_authenticated_user(&pool, &jar).await?;
+    Link::remove_category(&pool, id, category_id, user.id).await?;
+    let categories = Link::get_categories(&pool, id, user.id).await?;
+    Ok(Json(categories))
+}
+
+/// GET /api/links/:id/categories
+async fn get_categories_handler(
+    State(pool): State<PgPool>,
+    jar: CookieJar,
+    Path(id): Path<uuid::Uuid>,
+) -> Result<Json<Vec<Category>>, AppError> {
+    let user = get_authenticated_user(&pool, &jar).await?;
+    let categories = Link::get_categories(&pool, id, user.id).await?;
+    Ok(Json(categories))
+}
+
 /// Create the links router
 pub fn create_router() -> Router<PgPool> {
     Router::new()
         .route("/", post(create_link_handler).get(list_links_handler))
         .route("/:id", put(update_link_handler).delete(delete_link_handler))
+        .route(
+            "/:id/categories",
+            post(add_category_handler).get(get_categories_handler),
+        )
+        .route("/:id/categories/:category_id", axum::routing::delete(remove_category_handler))
 }
