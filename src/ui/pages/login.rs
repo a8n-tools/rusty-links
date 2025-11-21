@@ -1,4 +1,5 @@
 use dioxus::prelude::*;
+use dioxus_router::prelude::*;
 use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -22,7 +23,6 @@ pub fn Login() -> Element {
     let nav = navigator();
 
     let on_submit = move |evt: FormEvent| {
-        evt.prevent_default();
 
         let email_val = email();
         let password_val = password();

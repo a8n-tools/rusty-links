@@ -5,7 +5,7 @@ edition = "2021"
 
 [dependencies]
 # Web framework
-dioxus = { version = "0.5", features = ["fullstack"] }
+dioxus = { version = "0.5", features = ["fullstack", "router"] }
 dioxus-web = "0.5"
 axum = { version = "0.7", features = ["tokio"] }
 axum-extra = { version = "0.9", features = ["cookie"] }

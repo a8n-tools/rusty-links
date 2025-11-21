@@ -7,8 +7,6 @@ mod ui;
 
 use crate::error::AppError;
 use axum::Router;
-use dioxus::prelude::*;
-use dioxus::fullstack::prelude::*;
 use sqlx::{postgres::PgPoolOptions, PgPool};
 use std::time::Duration;
 use tower_http::{cors::CorsLayer, trace::TraceLayer};
@@ -133,21 +131,14 @@ async fn main() {
     tracing::info!("Creating API router...");
     let api_router = api::create_router(pool.clone());
 
-    // Build main application with Dioxus frontend and API
-    tracing::info!("Configuring Dioxus frontend...");
+    // Build main application with API routes
+    tracing::info!("Configuring application...");
     let app = Router::new()
-        .serve_dioxus_application(ServeConfigBuilder::default(), || {
-            VirtualDom::new(ui::app::App)
-        })
         .nest("/api", api_router)
-        .layer(
-            CorsLayer::permissive() // Allow all origins for Phase 1
-        )
-        .layer(
-            TraceLayer::new_for_http() // Add request/response tracing
-        );
+        .layer(CorsLayer::permissive())
+        .layer(TraceLayer::new_for_http());
 
-    tracing::info!("Application configured with Dioxus frontend, API routes, CORS and tracing middleware");
+    tracing::info!("Application configured with API routes, CORS and tracing middleware");
 
     // Bind to configured port
     let addr = format!("0.0.0.0:{}", config.app_port);
@@ -165,7 +156,8 @@ async fn main() {
     tracing::info!(
         port = config.app_port,
         address = %addr,
-        "Server listening on port {}"
+        "Server listening on port {}",
+        config.app_port
     );
     eprintln!("🚀 Server listening on http://{}", addr);
     eprintln!("\nAPI Endpoints:");

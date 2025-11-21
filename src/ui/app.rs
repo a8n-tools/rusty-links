@@ -1,4 +1,5 @@
 use dioxus::prelude::*;
+use dioxus_router::prelude::*;
 use serde::Deserialize;
 use crate::ui::pages::{setup::Setup, login::Login, links::Links};
 
@@ -16,7 +17,7 @@ struct User {
 #[component]
 pub fn App() -> Element {
     rsx! {
-        document::Link { rel: "stylesheet", href: "/assets/style.css" }
+        link { rel: "stylesheet", href: "/assets/style.css" }
         Router::<Route> {}
     }
 }

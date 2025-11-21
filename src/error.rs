@@ -374,6 +374,13 @@ impl From<serde_json::Error> for AppError {
     }
 }
 
+/// Convert sqlx::migrate::MigrateError to AppError
+impl From<sqlx::migrate::MigrateError> for AppError {
+    fn from(err: sqlx::migrate::MigrateError) -> Self {
+        AppError::Internal(format!("Migration error: {}", err))
+    }
+}
+
 // Helper functions
 
 /// Capitalize the first letter of a string
