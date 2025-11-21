@@ -4,6 +4,7 @@ mod config;
 mod error;
 mod github;
 mod models;
+mod scheduler;
 mod scraper;
 mod ui;
 
@@ -128,6 +129,15 @@ async fn main() {
             std::process::exit(1);
         }
     };
+
+    // Start background scheduler
+    tracing::info!("Starting background scheduler...");
+    let scheduler = scheduler::Scheduler::new(pool.clone(), config.update_interval_days);
+    let _scheduler_handle = scheduler.start();
+    tracing::info!(
+        update_interval_days = config.update_interval_days,
+        "Background scheduler started successfully"
+    );
 
     // Create API router
     tracing::info!("Creating API router...");
