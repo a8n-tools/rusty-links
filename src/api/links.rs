@@ -3,19 +3,22 @@
 //! This module provides REST API endpoints for link management:
 //! - POST /api/links - Create a new link
 //! - GET /api/links - List all links for the authenticated user
+//! - PUT /api/links/:id - Update a link
+//! - DELETE /api/links/:id - Delete a link
 
 use crate::auth::{get_session, get_session_from_cookies};
 use crate::error::AppError;
-use crate::models::{CreateLink, Link, User};
+use crate::models::{CreateLink, Link, UpdateLink, User};
 use axum::{
-    extract::State,
+    extract::{Path, State},
     http::StatusCode,
     response::IntoResponse,
-    routing::{get, post},
+    routing::{post, put},
     Json, Router,
 };
 use axum_extra::extract::CookieJar;
 use sqlx::PgPool;
+use uuid::Uuid;
 
 /// Helper function to get authenticated user from session cookie
 async fn get_authenticated_user(pool: &PgPool, jar: &CookieJar) -> Result<User, AppError> {
@@ -98,8 +101,72 @@ async fn list_links_handler(
     Ok(Json(links))
 }
 
+/// PUT /api/links/:id
+///
+/// Updates an existing link.
+///
+/// # Request Body
+/// ```json
+/// {
+///     "title": "New Title",
+///     "description": "New description",
+///     "status": "archived"
+/// }
+/// ```
+///
+/// # Response
+/// - 200 OK: Returns the updated link
+/// - 400 Bad Request: Invalid status value
+/// - 401 Unauthorized: No valid session
+/// - 404 Not Found: Link not found or doesn't belong to user
+async fn update_link_handler(
+    State(pool): State<PgPool>,
+    jar: CookieJar,
+    Path(id): Path<Uuid>,
+    Json(request): Json<UpdateLink>,
+) -> Result<Json<Link>, AppError> {
+    let user = get_authenticated_user(&pool, &jar).await?;
+
+    tracing::info!(
+        user_id = %user.id,
+        link_id = %id,
+        "Updating link"
+    );
+
+    let link = Link::update(&pool, id, user.id, request).await?;
+
+    Ok(Json(link))
+}
+
+/// DELETE /api/links/:id
+///
+/// Deletes a link.
+///
+/// # Response
+/// - 204 No Content: Link deleted successfully
+/// - 401 Unauthorized: No valid session
+/// - 404 Not Found: Link not found or doesn't belong to user
+async fn delete_link_handler(
+    State(pool): State<PgPool>,
+    jar: CookieJar,
+    Path(id): Path<Uuid>,
+) -> Result<StatusCode, AppError> {
+    let user = get_authenticated_user(&pool, &jar).await?;
+
+    tracing::info!(
+        user_id = %user.id,
+        link_id = %id,
+        "Deleting link"
+    );
+
+    Link::delete(&pool, id, user.id).await?;
+
+    Ok(StatusCode::NO_CONTENT)
+}
+
 /// Create the links router
 pub fn create_router() -> Router<PgPool> {
     Router::new()
         .route("/", post(create_link_handler).get(list_links_handler))
+        .route("/:id", put(update_link_handler).delete(delete_link_handler))
 }
