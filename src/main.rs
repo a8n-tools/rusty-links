@@ -3,6 +3,7 @@ mod auth;
 mod config;
 mod error;
 mod models;
+mod scraper;
 mod ui;
 
 use crate::error::AppError;

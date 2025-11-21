@@ -22,8 +22,11 @@ tokio = { version = "1", features = ["full"] }
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
 
-# HTTP client (for frontend API calls)
-reqwest = { version = "0.11", features = ["json"] }
+# HTTP client (for frontend API calls and scraping)
+reqwest = { version = "0.11", features = ["json", "cookies"] }
+
+# HTML parsing
+scraper = "0.18"
 
 # Configuration
 dotenvy = "0.15"

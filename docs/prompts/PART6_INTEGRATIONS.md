@@ -52,7 +52,7 @@ Add `scraper = "0.18"` for HTML parsing.
    - Redirects (follow up to 5 redirects)
 
 Export the module in `src/main.rs`: `mod scraper;`
-```
+````
 
 ### Verification
 - `cargo check` passes
