@@ -12,6 +12,7 @@
 //! - `tags` - Tag management endpoints
 
 pub mod auth;
+pub mod categories;
 pub mod links;
 
 use axum::{
@@ -54,5 +55,6 @@ pub fn create_router(pool: PgPool) -> Router {
     Router::new()
         .nest("/auth", auth_router)
         .nest("/links", links::create_router())
+        .nest("/categories", categories::create_router())
         .with_state(pool)
 }
