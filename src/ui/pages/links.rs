@@ -1,6 +1,21 @@
 use dioxus::prelude::*;
 use serde::{Deserialize, Serialize};
+use uuid::Uuid;
 use crate::ui::components::navbar::Navbar;
+use crate::ui::components::category_select::CategorySelect;
+use crate::ui::components::tag_select::TagSelect;
+
+#[derive(Debug, Clone, Deserialize, PartialEq)]
+struct CategoryInfo {
+    id: Uuid,
+    name: String,
+}
+
+#[derive(Debug, Clone, Deserialize, PartialEq)]
+struct TagInfo {
+    id: Uuid,
+    name: String,
+}
 
 #[derive(Debug, Clone, Deserialize, PartialEq)]
 struct Link {
@@ -13,6 +28,10 @@ struct Link {
     is_github_repo: bool,
     github_stars: Option<i32>,
     created_at: String,
+    #[serde(default)]
+    categories: Vec<CategoryInfo>,
+    #[serde(default)]
+    tags: Vec<TagInfo>,
 }
 
 #[derive(Debug, Serialize)]
@@ -42,6 +61,8 @@ pub fn Links() -> Element {
     let mut form_title = use_signal(|| String::new());
     let mut form_description = use_signal(|| String::new());
     let mut form_status = use_signal(|| "active".to_string());
+    let mut form_categories = use_signal(|| Vec::<Uuid>::new());
+    let mut form_tags = use_signal(|| Vec::<Uuid>::new());
     let mut form_loading = use_signal(|| false);
     let mut form_error = use_signal(|| Option::<String>::None);
 
@@ -96,6 +117,8 @@ pub fn Links() -> Element {
                                 form_title.set(String::new());
                                 form_description.set(String::new());
                                 form_status.set("active".to_string());
+                                form_categories.set(Vec::new());
+                                form_tags.set(Vec::new());
                                 form_error.set(None);
                                 editing_link_id.set(None);
                                 show_form.set(true);
@@ -113,6 +136,8 @@ pub fn Links() -> Element {
                         form_title: form_title,
                         form_description: form_description,
                         form_status: form_status,
+                        form_categories: form_categories,
+                        form_tags: form_tags,
                         form_loading: form_loading,
                         form_error: form_error,
                         editing_link_id: editing_link_id,
@@ -148,6 +173,8 @@ pub fn Links() -> Element {
                                     form_title: form_title,
                                     form_description: form_description,
                                     form_status: form_status,
+                                    form_categories: form_categories,
+                                    form_tags: form_tags,
                                     form_error: form_error,
                                     editing_link_id: editing_link_id,
                                     show_form: show_form,
@@ -168,6 +195,8 @@ fn LinkForm(
     mut form_title: Signal<String>,
     mut form_description: Signal<String>,
     mut form_status: Signal<String>,
+    mut form_categories: Signal<Vec<Uuid>>,
+    mut form_tags: Signal<Vec<Uuid>>,
     mut form_loading: Signal<bool>,
     mut form_error: Signal<Option<String>>,
     mut editing_link_id: Signal<Option<String>>,
@@ -179,6 +208,8 @@ fn LinkForm(
         let title_val = form_title();
         let desc_val = form_description();
         let status_val = form_status();
+        let categories_val = form_categories();
+        let tags_val = form_tags();
         let edit_id = editing_link_id();
 
         // Validation for create
@@ -224,7 +255,36 @@ fn LinkForm(
                 Ok(resp) => {
                     if resp.status().is_success() {
                         match resp.json::<Link>().await {
-                            Ok(updated_link) => {
+                            Ok(mut updated_link) => {
+                                let link_id = updated_link.id.clone();
+
+                                // Save categories
+                                for cat_id in &categories_val {
+                                    let _ = client
+                                        .post(&format!("/api/links/{}/categories", link_id))
+                                        .json(&serde_json::json!({ "category_id": cat_id }))
+                                        .send()
+                                        .await;
+                                }
+
+                                // Save tags
+                                for tag_id in &tags_val {
+                                    let _ = client
+                                        .post(&format!("/api/links/{}/tags", link_id))
+                                        .json(&serde_json::json!({ "tag_id": tag_id }))
+                                        .send()
+                                        .await;
+                                }
+
+                                // Refetch link to get updated categories/tags
+                                if let Ok(resp) = client.get("/api/links").send().await {
+                                    if let Ok(all_links) = resp.json::<Vec<Link>>().await {
+                                        if let Some(refreshed) = all_links.iter().find(|l| l.id == link_id) {
+                                            updated_link = refreshed.clone();
+                                        }
+                                    }
+                                }
+
                                 let mut current = links();
                                 if is_update {
                                     if let Some(pos) = current.iter().position(|l| l.id == updated_link.id) {
@@ -238,6 +298,8 @@ fn LinkForm(
                                 form_title.set(String::new());
                                 form_description.set(String::new());
                                 form_status.set("active".to_string());
+                                form_categories.set(Vec::new());
+                                form_tags.set(Vec::new());
                                 form_error.set(None);
                                 editing_link_id.set(None);
                                 show_form.set(false);
@@ -323,6 +385,22 @@ fn LinkForm(
                 }
             }
 
+            div { class: "form-group",
+                label { class: "form-label", "Categories" }
+                CategorySelect {
+                    selected_ids: form_categories(),
+                    on_change: move |ids| form_categories.set(ids),
+                }
+            }
+
+            div { class: "form-group",
+                label { class: "form-label", "Tags" }
+                TagSelect {
+                    selected_ids: form_tags(),
+                    on_change: move |ids| form_tags.set(ids),
+                }
+            }
+
             div { class: "form-actions",
                 button {
                     class: "btn btn-secondary",
@@ -333,6 +411,8 @@ fn LinkForm(
                         form_title.set(String::new());
                         form_description.set(String::new());
                         form_status.set("active".to_string());
+                        form_categories.set(Vec::new());
+                        form_tags.set(Vec::new());
                         form_error.set(None);
                         editing_link_id.set(None);
                         show_form.set(false);
@@ -361,6 +441,8 @@ fn LinkCard(
     mut form_title: Signal<String>,
     mut form_description: Signal<String>,
     mut form_status: Signal<String>,
+    mut form_categories: Signal<Vec<Uuid>>,
+    mut form_tags: Signal<Vec<Uuid>>,
     mut form_error: Signal<Option<String>>,
     mut editing_link_id: Signal<Option<String>>,
     mut show_form: Signal<bool>,
@@ -399,6 +481,8 @@ fn LinkCard(
                                 form_title.set(l.title.unwrap_or_default());
                                 form_description.set(l.description.unwrap_or_default());
                                 form_status.set(l.status.clone());
+                                form_categories.set(l.categories.iter().map(|c| c.id).collect());
+                                form_tags.set(l.tags.iter().map(|t| t.id).collect());
                                 form_error.set(None);
                                 editing_link_id.set(Some(l.id));
                                 show_form.set(true);
@@ -452,6 +536,17 @@ fn LinkCard(
 
             if !truncated_desc.is_empty() {
                 p { class: "link-description", "{truncated_desc}" }
+            }
+
+            if !link.categories.is_empty() || !link.tags.is_empty() {
+                div { class: "link-badges",
+                    for cat in link.categories.iter() {
+                        span { class: "badge category-badge", "{cat.name}" }
+                    }
+                    for tag in link.tags.iter() {
+                        span { class: "badge tag-badge", "{tag.name}" }
+                    }
+                }
             }
 
             div { class: "link-meta",
