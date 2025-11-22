@@ -914,7 +914,9 @@ struct ImportLink {
     description: Option<String>,
     categories: Option<Vec<String>>,
     tags: Option<Vec<String>>,
+    #[allow(dead_code)]
     languages: Option<Vec<String>>,
+    #[allow(dead_code)]
     licenses: Option<Vec<String>>,
 }
 

@@ -3,11 +3,13 @@ use serde::Deserialize;
 use crate::ui::pages::{setup::Setup, login::Login, links::Links};
 
 #[derive(Debug, Deserialize)]
+#[allow(dead_code)]
 struct CheckSetupResponse {
     setup_required: bool,
 }
 
 #[derive(Debug, Deserialize)]
+#[allow(dead_code)]
 struct User {
     id: String,
     email: String,

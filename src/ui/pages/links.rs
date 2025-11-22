@@ -35,6 +35,7 @@ struct Link {
 }
 
 #[derive(Debug, Clone, Deserialize)]
+#[allow(dead_code)]
 struct PaginatedResponse {
     links: Vec<Link>,
     total: i64,
@@ -44,6 +45,7 @@ struct PaginatedResponse {
 }
 
 #[derive(Debug, Serialize)]
+#[allow(dead_code)]
 struct CreateLinkRequest {
     url: String,
     title: Option<String>,
@@ -51,6 +53,7 @@ struct CreateLinkRequest {
 }
 
 #[derive(Debug, Serialize)]
+#[allow(dead_code)]
 struct UpdateLinkRequest {
     title: Option<String>,
     description: Option<String>,
@@ -58,6 +61,7 @@ struct UpdateLinkRequest {
 }
 
 #[derive(Default, Clone, PartialEq)]
+#[allow(dead_code)]
 struct Filters {
     status: Option<String>,
     category_id: Option<Uuid>,
@@ -120,6 +124,9 @@ pub fn Links() -> Element {
     // Selection state
     let mut selection_mode = use_signal(|| false);
     let mut selected_ids = use_signal(|| HashSet::<String>::new());
+
+    // Keyboard shortcuts state
+    let mut show_shortcuts_help = use_signal(|| false);
 
     // Fetch links with search query and filters
     let fetch_links = move || {
@@ -263,8 +270,105 @@ pub fn Links() -> Element {
 
     let is_editing = editing_link_id().is_some();
 
+    // Keyboard shortcuts handler
+    let handle_keydown = move |evt: KeyboardEvent| {
+        use dioxus::prelude::keyboard_types::Key;
+
+        let key = evt.key();
+
+        // Check if we're typing in input/textarea (except for Escape key)
+        #[cfg(target_arch = "wasm32")]
+        {
+            use wasm_bindgen::JsCast;
+            if let Some(window) = web_sys::window() {
+                if let Some(document) = window.document() {
+                    if let Some(active_element) = document.active_element() {
+                        let tag_name = active_element.tag_name().to_lowercase();
+                        if (tag_name == "input" || tag_name == "textarea") && key != Key::Escape {
+                            return;
+                        }
+                    }
+                }
+            }
+        }
+
+        match key {
+            // "/" - Focus search
+            Key::Character(ref s) if s.as_str() == "/" => {
+                #[cfg(target_arch = "wasm32")]
+                {
+                    use wasm_bindgen::JsCast;
+                    if let Some(window) = web_sys::window() {
+                        if let Some(document) = window.document() {
+                            if let Some(search_input) = document.query_selector(".search-input").ok().flatten() {
+                                if let Some(input) = search_input.dyn_ref::<web_sys::HtmlElement>() {
+                                    input.focus().ok();
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+            // "n" or "c" - Create new link
+            Key::Character(ref s) if s.as_str() == "n" || s.as_str() == "c" => {
+                if !show_form() {
+                    form_url.set(String::new());
+                    form_title.set(String::new());
+                    form_description.set(String::new());
+                    form_status.set("active".to_string());
+                    form_categories.set(Vec::new());
+                    form_tags.set(Vec::new());
+                    form_languages.set(Vec::new());
+                    form_licenses.set(Vec::new());
+                    form_error.set(None);
+                    editing_link_id.set(None);
+                    show_form.set(true);
+                }
+            }
+            // "Escape" - Close form/modal
+            Key::Escape => {
+                if show_form() {
+                    show_form.set(false);
+                    editing_link_id.set(None);
+                } else if show_shortcuts_help() {
+                    show_shortcuts_help.set(false);
+                }
+            }
+            // "f" - Toggle filters
+            Key::Character(ref s) if s.as_str() == "f" => {
+                if !show_form() {
+                    show_filters.set(!show_filters());
+                }
+            }
+            // "s" - Toggle selection mode
+            Key::Character(ref s) if s.as_str() == "s" => {
+                if !show_form() {
+                    selection_mode.set(!selection_mode());
+                    if !selection_mode() {
+                        selected_ids.set(HashSet::new());
+                    }
+                }
+            }
+            // "a" - Select all (when in selection mode)
+            Key::Character(ref s) if s.as_str() == "a" => {
+                if selection_mode() && !show_form() {
+                    let all_ids: HashSet<String> = links().iter().map(|l| l.id.clone()).collect();
+                    selected_ids.set(all_ids);
+                }
+            }
+            // "?" - Show keyboard shortcuts help
+            Key::Character(ref s) if s.as_str() == "?" => {
+                show_shortcuts_help.set(!show_shortcuts_help());
+            }
+            _ => {}
+        }
+    };
+
     rsx! {
-        div { class: "page-container",
+        div {
+            class: "page-container",
+            onkeydown: handle_keydown,
+            tabindex: -1,
             Navbar {}
             div { class: "links-page",
                 div { class: "links-header",
@@ -302,6 +406,7 @@ pub fn Links() -> Element {
                                             Ok(resp) => {
                                                 if resp.status().is_success() {
                                                     match resp.text().await {
+                                                        #[allow(unused_variables)]
                                                         Ok(data) => {
                                                             // Create download using web_sys
                                                             #[cfg(target_arch = "wasm32")]
@@ -356,7 +461,7 @@ pub fn Links() -> Element {
                                 r#type: "file",
                                 accept: ".json",
                                 style: "display: none;",
-                                onchange: move |evt| {
+                                onchange: move |_evt| {
                                     #[cfg(target_arch = "wasm32")]
                                     {
                                         use wasm_bindgen::JsCast;
@@ -886,6 +991,66 @@ pub fn Links() -> Element {
                                 current_page.set(page);
                                 fetch_links();
                             },
+                        }
+                    }
+                }
+            }
+
+            // Keyboard shortcuts help indicator
+            button {
+                class: "keyboard-help-indicator",
+                onclick: move |_| show_shortcuts_help.set(!show_shortcuts_help()),
+                title: "Keyboard shortcuts (?)",
+                "?"
+            }
+
+            // Keyboard shortcuts help modal
+            if show_shortcuts_help() {
+                div {
+                    class: "modal-overlay",
+                    onclick: move |_| show_shortcuts_help.set(false),
+                    div {
+                        class: "modal-content shortcuts-modal",
+                        onclick: move |evt| evt.stop_propagation(),
+                        div { class: "modal-header",
+                            h2 { "Keyboard Shortcuts" }
+                            button {
+                                class: "modal-close",
+                                onclick: move |_| show_shortcuts_help.set(false),
+                                "✕"
+                            }
+                        }
+                        div { class: "shortcuts-list",
+                            div { class: "shortcut-item",
+                                kbd { "/" }
+                                span { "Focus search input" }
+                            }
+                            div { class: "shortcut-item",
+                                kbd { "n" }
+                                span { " or " }
+                                kbd { "c" }
+                                span { "Create new link" }
+                            }
+                            div { class: "shortcut-item",
+                                kbd { "f" }
+                                span { "Toggle filters panel" }
+                            }
+                            div { class: "shortcut-item",
+                                kbd { "s" }
+                                span { "Toggle selection mode" }
+                            }
+                            div { class: "shortcut-item",
+                                kbd { "a" }
+                                span { "Select all links (when in selection mode)" }
+                            }
+                            div { class: "shortcut-item",
+                                kbd { "Esc" }
+                                span { "Close form or modal" }
+                            }
+                            div { class: "shortcut-item",
+                                kbd { "?" }
+                                span { "Show/hide this help" }
+                            }
                         }
                     }
                 }

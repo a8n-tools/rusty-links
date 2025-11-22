@@ -2,12 +2,14 @@ use dioxus::prelude::*;
 use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Serialize, Deserialize)]
+#[allow(dead_code)]
 struct LoginRequest {
     email: String,
     password: String,
 }
 
 #[derive(Debug, Deserialize)]
+#[allow(dead_code)]
 struct User {
     id: String,
     email: String,
@@ -21,7 +23,7 @@ pub fn Login() -> Element {
     let mut error = use_signal(|| Option::<String>::None);
     let nav = navigator();
 
-    let on_submit = move |evt: FormEvent| {
+    let on_submit = move |_evt: FormEvent| {
 
         let email_val = email();
         let password_val = password();
