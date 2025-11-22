@@ -63,6 +63,8 @@ pub struct LinkSearchParams {
     pub query: Option<String>,        // Text search in title, description, url, domain
     pub status: Option<String>,       // Filter by status
     pub is_github: Option<bool>,      // Filter GitHub repos only
+    pub category_id: Option<Uuid>,    // Filter by category
+    pub tag_id: Option<Uuid>,         // Filter by tag
 }
 
 impl Link {
@@ -167,12 +169,12 @@ impl Link {
     /// Search links with text query and filters
     ///
     /// Searches across title, description, url, and domain fields.
-    /// Also supports filtering by status and GitHub repository flag.
+    /// Also supports filtering by status, GitHub repository flag, category, and tag.
     ///
     /// # Arguments
     /// * `pool` - Database connection pool
     /// * `user_id` - User ID to scope the search
-    /// * `params` - Search parameters (query, status, is_github)
+    /// * `params` - Search parameters (query, status, is_github, category_id, tag_id)
     ///
     /// # Returns
     /// Vector of links matching the search criteria, ordered by creation date (newest first)
@@ -187,22 +189,28 @@ impl Link {
 
         let links = sqlx::query_as::<_, Link>(
             r#"
-            SELECT * FROM links
-            WHERE user_id = $1
+            SELECT DISTINCT l.* FROM links l
+            LEFT JOIN link_categories lc ON l.id = lc.link_id
+            LEFT JOIN link_tags lt ON l.id = lt.link_id
+            WHERE l.user_id = $1
             AND ($2::text IS NULL OR
-                LOWER(title) LIKE $2 OR
-                LOWER(description) LIKE $2 OR
-                LOWER(url) LIKE $2 OR
-                LOWER(domain) LIKE $2)
-            AND ($3::text IS NULL OR status = $3)
-            AND ($4::bool IS NULL OR is_github_repo = $4)
-            ORDER BY created_at DESC
+                LOWER(l.title) LIKE $2 OR
+                LOWER(l.description) LIKE $2 OR
+                LOWER(l.url) LIKE $2 OR
+                LOWER(l.domain) LIKE $2)
+            AND ($3::text IS NULL OR l.status = $3)
+            AND ($4::bool IS NULL OR l.is_github_repo = $4)
+            AND ($5::uuid IS NULL OR lc.category_id = $5)
+            AND ($6::uuid IS NULL OR lt.tag_id = $6)
+            ORDER BY l.created_at DESC
             "#,
         )
         .bind(user_id)
         .bind(&query_pattern)
         .bind(&params.status)
         .bind(params.is_github)
+        .bind(params.category_id)
+        .bind(params.tag_id)
         .fetch_all(pool)
         .await?;
 

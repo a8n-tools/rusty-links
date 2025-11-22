@@ -161,13 +161,17 @@ async fn create_link_handler(
 /// - `query`: Optional text search across title, description, url, domain
 /// - `status`: Optional filter by status (active, archived, inaccessible, repo_unavailable)
 /// - `is_github`: Optional filter for GitHub repositories only (true/false)
+/// - `category_id`: Optional filter by category UUID
+/// - `tag_id`: Optional filter by tag UUID
 ///
 /// # Examples
 /// - GET /api/links - All links
 /// - GET /api/links?query=rust - Search for "rust"
 /// - GET /api/links?status=active - Only active links
 /// - GET /api/links?is_github=true - Only GitHub repos
-/// - GET /api/links?query=rust&status=active - Combined filters
+/// - GET /api/links?category_id=<uuid> - Links in specific category
+/// - GET /api/links?tag_id=<uuid> - Links with specific tag
+/// - GET /api/links?query=rust&status=active&category_id=<uuid> - Combined filters
 ///
 /// # Response
 /// - 200 OK: Returns array of links with categories
@@ -184,6 +188,8 @@ async fn list_links_handler(
         query = ?params.query,
         status = ?params.status,
         is_github = ?params.is_github,
+        category_id = ?params.category_id,
+        tag_id = ?params.tag_id,
         "Fetching links with search params"
     );
 

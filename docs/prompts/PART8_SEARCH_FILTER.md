@@ -114,7 +114,7 @@ API filtering by category and tag.
 
 ### Prompt
 
-```text
+````text
 Add category and tag filtering to the links API for the Rusty Links application.
 
 **Part 1: Extend LinkSearchParams**
@@ -183,7 +183,7 @@ Additional query parameters:
 - `GET /api/links?category_id=uuid` - links in category
 - `GET /api/links?tag_id=uuid` - links with tag
 - `GET /api/links?query=rust&category_id=uuid` - combined search + filter
-```
+````
 
 ### Verification
 - `cargo check` passes
