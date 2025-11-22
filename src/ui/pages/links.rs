@@ -46,6 +46,16 @@ struct UpdateLinkRequest {
     status: Option<String>,
 }
 
+#[derive(Default, Clone, PartialEq)]
+struct Filters {
+    status: Option<String>,
+    category_id: Option<Uuid>,
+    tag_id: Option<Uuid>,
+    language_id: Option<Uuid>,
+    license_id: Option<Uuid>,
+    is_github: Option<bool>,
+}
+
 #[component]
 pub fn Links() -> Element {
     let mut links = use_signal(|| Vec::<Link>::new());
@@ -75,24 +85,64 @@ pub fn Links() -> Element {
 
     // Filter state
     let mut status_filter = use_signal(|| "all".to_string());
+    let mut filters = use_signal(Filters::default);
+    let mut show_filters = use_signal(|| false);
+
+    // Filter options
+    let mut categories = use_signal(|| Vec::<CategoryInfo>::new());
+    let mut tags = use_signal(|| Vec::<TagInfo>::new());
+    let mut languages = use_signal(|| Vec::<LanguageInfo>::new());
+    let mut licenses = use_signal(|| Vec::<LicenseInfo>::new());
 
     // Search state
     let mut search_query = use_signal(|| String::new());
 
-    // Fetch links with search query
+    // Fetch links with search query and filters
     let fetch_links = move || {
         let query = search_query();
+        let current_filters = filters();
         spawn(async move {
             loading.set(true);
             let client = reqwest::Client::new();
 
-            // Build URL with query parameter if search is active
-            let url = if query.is_empty() {
+            // Build URL with query parameters
+            let mut params = Vec::new();
+
+            if !query.is_empty() {
+                let encoded_query = query.replace(' ', "%20").replace('&', "%26");
+                params.push(format!("query={}", encoded_query));
+            }
+
+            if let Some(ref status) = current_filters.status {
+                params.push(format!("status={}", status));
+            }
+
+            if let Some(category_id) = current_filters.category_id {
+                params.push(format!("category_id={}", category_id));
+            }
+
+            if let Some(tag_id) = current_filters.tag_id {
+                params.push(format!("tag_id={}", tag_id));
+            }
+
+            if let Some(language_id) = current_filters.language_id {
+                params.push(format!("language_id={}", language_id));
+            }
+
+            if let Some(license_id) = current_filters.license_id {
+                params.push(format!("license_id={}", license_id));
+            }
+
+            if let Some(is_github) = current_filters.is_github {
+                if is_github {
+                    params.push("is_github=true".to_string());
+                }
+            }
+
+            let url = if params.is_empty() {
                 "/api/links".to_string()
             } else {
-                // Simple URL encoding for query parameter
-                let encoded_query = query.replace(' ', "%20").replace('&', "%26");
-                format!("/api/links?query={}", encoded_query)
+                format!("/api/links?{}", params.join("&"))
             };
 
             let response = client.get(&url).send().await;
@@ -126,6 +176,49 @@ pub fn Links() -> Element {
     // Fetch links on mount
     use_effect(move || {
         fetch_links();
+    });
+
+    // Fetch filter options on mount
+    use_effect(move || {
+        spawn(async move {
+            let client = reqwest::Client::new();
+
+            // Fetch categories
+            if let Ok(resp) = client.get("/api/categories").send().await {
+                if resp.status().is_success() {
+                    if let Ok(data) = resp.json::<Vec<CategoryInfo>>().await {
+                        categories.set(data);
+                    }
+                }
+            }
+
+            // Fetch tags
+            if let Ok(resp) = client.get("/api/tags").send().await {
+                if resp.status().is_success() {
+                    if let Ok(data) = resp.json::<Vec<TagInfo>>().await {
+                        tags.set(data);
+                    }
+                }
+            }
+
+            // Fetch languages
+            if let Ok(resp) = client.get("/api/languages").send().await {
+                if resp.status().is_success() {
+                    if let Ok(data) = resp.json::<Vec<LanguageInfo>>().await {
+                        languages.set(data);
+                    }
+                }
+            }
+
+            // Fetch licenses
+            if let Ok(resp) = client.get("/api/licenses").send().await {
+                if resp.status().is_success() {
+                    if let Ok(data) = resp.json::<Vec<LicenseInfo>>().await {
+                        licenses.set(data);
+                    }
+                }
+            }
+        });
     });
 
     let is_editing = editing_link_id().is_some();
@@ -215,6 +308,142 @@ pub fn Links() -> Element {
                                 },
                                 title: "Clear search",
                                 "✕"
+                            }
+                        }
+                    }
+
+                    // Filter toggle and panel
+                    div { class: "filter-section",
+                        button {
+                            class: "btn btn-secondary filter-toggle-btn",
+                            onclick: move |_| show_filters.set(!show_filters()),
+                            if show_filters() { "▼ Hide Filters" } else { "▶ Show Filters" }
+                        }
+
+                        if show_filters() {
+                            div { class: "filter-panel",
+                                // Status filter
+                                div { class: "filter-group",
+                                    label { "Status" }
+                                    select {
+                                        value: "{filters().status.clone().unwrap_or_default()}",
+                                        onchange: move |evt| {
+                                            let mut f = filters();
+                                            let value = evt.value();
+                                            f.status = if value.is_empty() { None } else { Some(value) };
+                                            filters.set(f);
+                                            fetch_links();
+                                        },
+                                        option { value: "", "All statuses" }
+                                        option { value: "active", "Active" }
+                                        option { value: "archived", "Archived" }
+                                        option { value: "inaccessible", "Inaccessible" }
+                                        option { value: "repo_unavailable", "Repo Unavailable" }
+                                    }
+                                }
+
+                                // Category filter
+                                div { class: "filter-group",
+                                    label { "Category" }
+                                    select {
+                                        value: "{filters().category_id.map(|id| id.to_string()).unwrap_or_default()}",
+                                        onchange: move |evt| {
+                                            let mut f = filters();
+                                            let value = evt.value();
+                                            f.category_id = if value.is_empty() { None } else { value.parse().ok() };
+                                            filters.set(f);
+                                            fetch_links();
+                                        },
+                                        option { value: "", "All categories" }
+                                        for cat in categories() {
+                                            option { value: "{cat.id}", "{cat.name}" }
+                                        }
+                                    }
+                                }
+
+                                // Tag filter
+                                div { class: "filter-group",
+                                    label { "Tag" }
+                                    select {
+                                        value: "{filters().tag_id.map(|id| id.to_string()).unwrap_or_default()}",
+                                        onchange: move |evt| {
+                                            let mut f = filters();
+                                            let value = evt.value();
+                                            f.tag_id = if value.is_empty() { None } else { value.parse().ok() };
+                                            filters.set(f);
+                                            fetch_links();
+                                        },
+                                        option { value: "", "All tags" }
+                                        for tag in tags() {
+                                            option { value: "{tag.id}", "{tag.name}" }
+                                        }
+                                    }
+                                }
+
+                                // Language filter
+                                div { class: "filter-group",
+                                    label { "Language" }
+                                    select {
+                                        value: "{filters().language_id.map(|id| id.to_string()).unwrap_or_default()}",
+                                        onchange: move |evt| {
+                                            let mut f = filters();
+                                            let value = evt.value();
+                                            f.language_id = if value.is_empty() { None } else { value.parse().ok() };
+                                            filters.set(f);
+                                            fetch_links();
+                                        },
+                                        option { value: "", "All languages" }
+                                        for lang in languages() {
+                                            option { value: "{lang.id}", "{lang.name}" }
+                                        }
+                                    }
+                                }
+
+                                // License filter
+                                div { class: "filter-group",
+                                    label { "License" }
+                                    select {
+                                        value: "{filters().license_id.map(|id| id.to_string()).unwrap_or_default()}",
+                                        onchange: move |evt| {
+                                            let mut f = filters();
+                                            let value = evt.value();
+                                            f.license_id = if value.is_empty() { None } else { value.parse().ok() };
+                                            filters.set(f);
+                                            fetch_links();
+                                        },
+                                        option { value: "", "All licenses" }
+                                        for lic in licenses() {
+                                            option { value: "{lic.id}", "{lic.name}" }
+                                        }
+                                    }
+                                }
+
+                                // GitHub only checkbox
+                                div { class: "filter-group filter-group-checkbox",
+                                    label {
+                                        input {
+                                            r#type: "checkbox",
+                                            checked: filters().is_github.unwrap_or(false),
+                                            onchange: move |evt| {
+                                                let mut f = filters();
+                                                f.is_github = if evt.checked() { Some(true) } else { None };
+                                                filters.set(f);
+                                                fetch_links();
+                                            },
+                                        }
+                                        " GitHub repositories only"
+                                    }
+                                }
+
+                                // Clear filters button
+                                button {
+                                    class: "btn btn-secondary",
+                                    onclick: move |_| {
+                                        filters.set(Filters::default());
+                                        fetch_links();
+                                    },
+                                    "Clear All Filters"
+                                }
                             }
                         }
                     }

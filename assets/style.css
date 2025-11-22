@@ -357,6 +357,83 @@ body {
     color: var(--rust-text-secondary);
 }
 
+/* Filter Section */
+.filter-section {
+    margin: 1rem 0;
+}
+
+.filter-toggle-btn {
+    margin-bottom: 1rem;
+    font-size: 0.875rem;
+}
+
+.filter-panel {
+    background-color: var(--rust-surface);
+    border: 1px solid var(--rust-border);
+    border-radius: 8px;
+    padding: 1.5rem;
+    margin-bottom: 1.5rem;
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+    gap: 1.5rem;
+}
+
+.filter-group {
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+}
+
+.filter-group label {
+    font-size: 0.875rem;
+    font-weight: 600;
+    color: var(--rust-text);
+}
+
+.filter-group select {
+    padding: 0.5rem 0.75rem;
+    border: 1px solid var(--rust-border);
+    border-radius: 6px;
+    background-color: white;
+    font-size: 0.875rem;
+    cursor: pointer;
+    transition: border-color 0.2s;
+}
+
+.filter-group select:hover {
+    border-color: var(--rust-primary);
+}
+
+.filter-group select:focus {
+    outline: none;
+    border-color: var(--rust-primary);
+    box-shadow: 0 0 0 3px rgba(183, 65, 14, 0.1);
+}
+
+.filter-group-checkbox {
+    display: flex;
+    align-items: center;
+}
+
+.filter-group-checkbox label {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    cursor: pointer;
+    font-weight: normal;
+}
+
+.filter-group-checkbox input[type="checkbox"] {
+    width: 1.125rem;
+    height: 1.125rem;
+    cursor: pointer;
+}
+
+.filter-panel button {
+    grid-column: 1 / -1;
+    justify-self: flex-start;
+}
+
 /* Link Status Indicators */
 .link-status {
     display: inline-flex;

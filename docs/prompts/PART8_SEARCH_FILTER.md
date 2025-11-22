@@ -400,7 +400,7 @@ Filter dropdowns/checkboxes for all metadata types.
 
 ### Prompt
 
-```text
+````text
 Add comprehensive filtering UI to the Links page in `src/ui/pages/links.rs`.
 
 **Part 1: Create filter state**
@@ -556,7 +556,7 @@ use_effect(move || {
         licenses.set(lics);
     });
 });
-```
+````
 
 Add CSS:
 - `.filter-panel` - collapsible filter container
