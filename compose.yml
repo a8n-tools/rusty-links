@@ -1,0 +1,52 @@
+version: '3.8'
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: rusty-links-db
+    environment:
+      POSTGRES_USER: rustylinks
+      POSTGRES_PASSWORD: ${DB_PASSWORD:-changeme}
+      POSTGRES_DB: rustylinks
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    ports:
+      - "5432:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U rustylinks"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+    networks:
+      - rusty-links-network
+
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: rusty-links-app
+    environment:
+      DATABASE_URL: postgres://rustylinks:${DB_PASSWORD:-changeme}@postgres:5432/rustylinks
+      APP_PORT: 8080
+      UPDATE_INTERVAL_DAYS: ${UPDATE_INTERVAL_DAYS:-30}
+      UPDATE_INTERVAL_HOURS: ${UPDATE_INTERVAL_HOURS:-24}
+      BATCH_SIZE: ${BATCH_SIZE:-50}
+      JITTER_PERCENT: ${JITTER_PERCENT:-20}
+      RUST_LOG: ${RUST_LOG:-info}
+    ports:
+      - "${HOST_PORT:-8080}:8080"
+    depends_on:
+      postgres:
+        condition: service_healthy
+    restart: unless-stopped
+    networks:
+      - rusty-links-network
+
+volumes:
+  postgres_data:
+    driver: local
+
+networks:
+  rusty-links-network:
+    driver: bridge

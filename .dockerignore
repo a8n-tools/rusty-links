@@ -15,12 +15,14 @@ target/
 *.md
 README.md
 LICENSE
+docs/
 
 # Docker files
-Dockerfile
+Dockerfile.dev
 .dockerignore
 docker-compose.yml
-.dockerignore
+compose.yml
+compose.dev.yml
 
 # IDE
 .idea/

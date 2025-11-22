@@ -1,0 +1,29 @@
+version: '3.8'
+
+services:
+  app:
+    # Override build for development
+    build:
+      context: .
+      dockerfile: Dockerfile.dev
+    # Mount source code for hot reloading
+    volumes:
+      - ./src:/app/src
+      - ./assets:/app/assets
+      - ./migrations:/app/migrations
+      - ./Cargo.toml:/app/Cargo.toml
+      - ./Cargo.lock:/app/Cargo.lock
+      # Use a volume for target to speed up builds
+      - cargo_target:/app/target
+    environment:
+      RUST_LOG: debug
+      RUST_BACKTRACE: 1
+    # Override command to use cargo watch for auto-reload
+    command: cargo watch -x run
+    # For development, we can expose the container directly
+    stdin_open: true
+    tty: true
+
+volumes:
+  cargo_target:
+    driver: local
