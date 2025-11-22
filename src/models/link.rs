@@ -57,6 +57,14 @@ pub struct UpdateLink {
     pub logo: Option<String>,
 }
 
+/// Search parameters for filtering links
+#[derive(Debug, Deserialize, Default)]
+pub struct LinkSearchParams {
+    pub query: Option<String>,        // Text search in title, description, url, domain
+    pub status: Option<String>,       // Filter by status
+    pub is_github: Option<bool>,      // Filter GitHub repos only
+}
+
 impl Link {
     /// Create a new link
     ///
@@ -150,6 +158,51 @@ impl Link {
             "#,
         )
         .bind(user_id)
+        .fetch_all(pool)
+        .await?;
+
+        Ok(links)
+    }
+
+    /// Search links with text query and filters
+    ///
+    /// Searches across title, description, url, and domain fields.
+    /// Also supports filtering by status and GitHub repository flag.
+    ///
+    /// # Arguments
+    /// * `pool` - Database connection pool
+    /// * `user_id` - User ID to scope the search
+    /// * `params` - Search parameters (query, status, is_github)
+    ///
+    /// # Returns
+    /// Vector of links matching the search criteria, ordered by creation date (newest first)
+    pub async fn search(
+        pool: &PgPool,
+        user_id: Uuid,
+        params: &LinkSearchParams,
+    ) -> Result<Vec<Link>, AppError> {
+        let query_pattern = params.query
+            .as_ref()
+            .map(|q| format!("%{}%", q.to_lowercase()));
+
+        let links = sqlx::query_as::<_, Link>(
+            r#"
+            SELECT * FROM links
+            WHERE user_id = $1
+            AND ($2::text IS NULL OR
+                LOWER(title) LIKE $2 OR
+                LOWER(description) LIKE $2 OR
+                LOWER(url) LIKE $2 OR
+                LOWER(domain) LIKE $2)
+            AND ($3::text IS NULL OR status = $3)
+            AND ($4::bool IS NULL OR is_github_repo = $4)
+            ORDER BY created_at DESC
+            "#,
+        )
+        .bind(user_id)
+        .bind(&query_pattern)
+        .bind(&params.status)
+        .bind(params.is_github)
         .fetch_all(pool)
         .await?;
 

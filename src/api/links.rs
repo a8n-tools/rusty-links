@@ -8,10 +8,10 @@
 
 use crate::auth::{get_session, get_session_from_cookies};
 use crate::error::AppError;
-use crate::models::{Category, CreateLink, Language, License, Link, LinkWithCategories, Tag, UpdateLink, User};
+use crate::models::{Category, CreateLink, Language, License, Link, LinkSearchParams, LinkWithCategories, Tag, UpdateLink, User};
 use crate::scraper;
 use axum::{
-    extract::{Path, State},
+    extract::{Path, Query, State},
     http::StatusCode,
     response::IntoResponse,
     routing::{post, put},
@@ -155,6 +155,19 @@ async fn create_link_handler(
 /// GET /api/links
 ///
 /// Returns all links for the authenticated user with their categories.
+/// Supports optional query parameters for filtering and searching.
+///
+/// # Query Parameters
+/// - `query`: Optional text search across title, description, url, domain
+/// - `status`: Optional filter by status (active, archived, inaccessible, repo_unavailable)
+/// - `is_github`: Optional filter for GitHub repositories only (true/false)
+///
+/// # Examples
+/// - GET /api/links - All links
+/// - GET /api/links?query=rust - Search for "rust"
+/// - GET /api/links?status=active - Only active links
+/// - GET /api/links?is_github=true - Only GitHub repos
+/// - GET /api/links?query=rust&status=active - Combined filters
 ///
 /// # Response
 /// - 200 OK: Returns array of links with categories
@@ -162,16 +175,41 @@ async fn create_link_handler(
 async fn list_links_handler(
     State(pool): State<PgPool>,
     jar: CookieJar,
+    Query(params): Query<LinkSearchParams>,
 ) -> Result<Json<Vec<LinkWithCategories>>, AppError> {
     let user = get_authenticated_user(&pool, &jar).await?;
 
-    tracing::debug!(user_id = %user.id, "Fetching links");
+    tracing::debug!(
+        user_id = %user.id,
+        query = ?params.query,
+        status = ?params.status,
+        is_github = ?params.is_github,
+        "Fetching links with search params"
+    );
 
-    let links = Link::get_all_with_categories(&pool, user.id).await?;
+    // Use search function which handles all filtering
+    let links = Link::search(&pool, user.id, &params).await?;
 
     tracing::debug!(user_id = %user.id, count = links.len(), "Links fetched");
 
-    Ok(Json(links))
+    // Enrich links with categories, tags, languages, and licenses
+    let mut links_with_metadata = Vec::with_capacity(links.len());
+    for link in links {
+        let categories = Link::get_categories(&pool, link.id, user.id).await?;
+        let tags = Link::get_tags(&pool, link.id, user.id).await?;
+        let languages = Link::get_languages(&pool, link.id, user.id).await?;
+        let licenses = Link::get_licenses(&pool, link.id, user.id).await?;
+
+        links_with_metadata.push(LinkWithCategories {
+            link,
+            categories,
+            tags,
+            languages,
+            licenses,
+        });
+    }
+
+    Ok(Json(links_with_metadata))
 }
 
 /// PUT /api/links/:id
