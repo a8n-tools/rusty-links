@@ -1,0 +1,175 @@
+# Caddyfile for Rusty Links
+# Caddy automatically handles HTTPS with Let's Encrypt
+#
+# Features:
+# - Automatic HTTPS with Let's Encrypt
+# - Automatic certificate renewal
+# - HTTP to HTTPS redirect
+# - Security headers
+# - Gzip compression
+# - Reverse proxy to backend
+
+# Main site configuration
+links.yourdomain.com {
+    # Reverse proxy to backend application
+    reverse_proxy localhost:8080 {
+        # Health check
+        health_uri /api/health
+        health_interval 10s
+        health_timeout 5s
+
+        # Proxy headers
+        header_up Host {host}
+        header_up X-Real-IP {remote_host}
+        header_up X-Forwarded-For {remote_host}
+        header_up X-Forwarded-Proto {scheme}
+        header_up X-Forwarded-Host {host}
+    }
+
+    # Security headers
+    header {
+        # Enable HSTS
+        Strict-Transport-Security "max-age=31536000; includeSubDomains; preload"
+
+        # Prevent clickjacking
+        X-Frame-Options "SAMEORIGIN"
+
+        # Prevent MIME-type sniffing
+        X-Content-Type-Options "nosniff"
+
+        # Enable XSS protection
+        X-XSS-Protection "1; mode=block"
+
+        # Control referrer information
+        Referrer-Policy "strict-origin-when-cross-origin"
+
+        # Content Security Policy
+        Content-Security-Policy "default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data: https:; font-src 'self'; connect-src 'self'; frame-ancestors 'none'; base-uri 'self'; form-action 'self'"
+
+        # Permissions policy
+        Permissions-Policy "geolocation=(), microphone=(), camera=()"
+
+        # Remove server header
+        -Server
+    }
+
+    # Logging
+    log {
+        output file /var/log/caddy/rustylinks_access.log {
+            roll_size 10mb
+            roll_keep 10
+        }
+        format json
+    }
+
+    # Error handling
+    handle_errors {
+        @404 {
+            expression {http.error.status_code} == 404
+        }
+        respond @404 "Page not found" 404
+
+        @500 {
+            expression {http.error.status_code} >= 500
+        }
+        respond @500 "Server error" 500
+    }
+
+    # Gzip compression
+    encode gzip
+
+    # Request limits
+    request_body {
+        max_size 10MB
+    }
+
+    # Rate limiting (optional - requires rate_limit plugin)
+    # rate_limit {
+    #     zone rustylinks {
+    #         key {remote_host}
+    #         events 60
+    #         window 1m
+    #     }
+    # }
+}
+
+# Alternative: Simple configuration
+# If you don't need all the bells and whistles:
+#
+# links.yourdomain.com {
+#     reverse_proxy localhost:8080
+#     encode gzip
+# }
+
+# Development configuration (HTTP only, no TLS)
+# Use this for local testing
+# :80 {
+#     reverse_proxy localhost:8080
+# }
+
+# Multi-domain configuration
+# If you want to serve on multiple domains:
+#
+# links.yourdomain.com, links.example.com {
+#     reverse_proxy localhost:8080
+#     encode gzip
+# }
+
+# Path-based routing (if needed in future)
+# links.yourdomain.com {
+#     # API routes
+#     handle /api/* {
+#         reverse_proxy localhost:8080
+#     }
+#
+#     # Static files (if served separately)
+#     handle /static/* {
+#         root * /var/www/rustylinks/static
+#         file_server
+#     }
+#
+#     # Default to backend
+#     handle {
+#         reverse_proxy localhost:8080
+#     }
+# }
+
+# IP-based access restriction (optional)
+# links.yourdomain.com {
+#     @allowed {
+#         remote_ip 192.168.1.0/24 10.0.0.0/8
+#     }
+#
+#     handle @allowed {
+#         reverse_proxy localhost:8080
+#     }
+#
+#     handle {
+#         respond "Access denied" 403
+#     }
+# }
+
+# Basic authentication (optional)
+# Useful for adding an extra layer of protection
+#
+# links.yourdomain.com {
+#     basicauth {
+#         # Generate hash with: caddy hash-password
+#         user $2a$14$...hash...
+#     }
+#
+#     reverse_proxy localhost:8080
+# }
+
+# Cloudflare configuration
+# If using Cloudflare, you might want:
+#
+# links.yourdomain.com {
+#     # Trust Cloudflare IPs
+#     trusted_proxies cloudflare {
+#         interval 12h
+#         timeout 15s
+#     }
+#
+#     reverse_proxy localhost:8080
+# }
