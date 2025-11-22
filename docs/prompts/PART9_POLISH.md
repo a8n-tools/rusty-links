@@ -16,7 +16,7 @@ Sort by date, title, stars, status.
 
 ### Prompt
 
-```text
+````text
 Add sorting functionality to the links API and UI for the Rusty Links application.
 
 **Part 1: Extend LinkSearchParams**
@@ -112,7 +112,7 @@ if sort_by() != "created_at" || sort_order() != "desc" {
 Add CSS:
 - `.sort-container` - sort controls container
 - `.sort-order-btn` - ascending/descending toggle button
-```
+````
 
 ### Verification
 - `cargo check` passes

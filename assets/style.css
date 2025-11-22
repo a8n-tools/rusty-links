@@ -434,6 +434,67 @@ body {
     justify-self: flex-start;
 }
 
+/* Sort Controls */
+.sort-container {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    margin: 1rem 0;
+    padding: 0.75rem;
+    background-color: var(--rust-surface);
+    border-radius: 6px;
+}
+
+.sort-label {
+    font-size: 0.875rem;
+    font-weight: 600;
+    color: var(--rust-text);
+}
+
+.sort-select {
+    padding: 0.5rem 0.75rem;
+    border: 1px solid var(--rust-border);
+    border-radius: 6px;
+    background-color: white;
+    font-size: 0.875rem;
+    cursor: pointer;
+    transition: border-color 0.2s;
+    min-width: 150px;
+}
+
+.sort-select:hover {
+    border-color: var(--rust-primary);
+}
+
+.sort-select:focus {
+    outline: none;
+    border-color: var(--rust-primary);
+    box-shadow: 0 0 0 3px rgba(183, 65, 14, 0.1);
+}
+
+.sort-order-btn {
+    width: 2.5rem;
+    height: 2.5rem;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 1.25rem;
+    border: 1px solid var(--rust-border);
+    border-radius: 6px;
+    background-color: white;
+    cursor: pointer;
+    transition: all 0.2s;
+}
+
+.sort-order-btn:hover {
+    background-color: var(--rust-surface);
+    border-color: var(--rust-primary);
+}
+
+.sort-order-btn:active {
+    transform: scale(0.95);
+}
+
 /* Link Status Indicators */
 .link-status {
     display: inline-flex;

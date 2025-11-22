@@ -67,6 +67,8 @@ pub struct LinkSearchParams {
     pub tag_id: Option<Uuid>,         // Filter by tag
     pub language_id: Option<Uuid>,    // Filter by programming language
     pub license_id: Option<Uuid>,     // Filter by software license
+    pub sort_by: Option<String>,      // Sort field: created_at, title, github_stars, status, updated_at
+    pub sort_order: Option<String>,   // Sort order: asc, desc (default: desc)
 }
 
 impl Link {
@@ -172,14 +174,15 @@ impl Link {
     ///
     /// Searches across title, description, url, and domain fields.
     /// Also supports filtering by status, GitHub repository flag, category, tag, language, and license.
+    /// Results can be sorted by various fields in ascending or descending order.
     ///
     /// # Arguments
     /// * `pool` - Database connection pool
     /// * `user_id` - User ID to scope the search
-    /// * `params` - Search parameters (query, status, is_github, category_id, tag_id, language_id, license_id)
+    /// * `params` - Search parameters (query, status, is_github, category_id, tag_id, language_id, license_id, sort_by, sort_order)
     ///
     /// # Returns
-    /// Vector of links matching the search criteria, ordered by creation date (newest first)
+    /// Vector of links matching the search criteria, sorted according to parameters
     pub async fn search(
         pool: &PgPool,
         user_id: Uuid,
@@ -189,7 +192,22 @@ impl Link {
             .as_ref()
             .map(|q| format!("%{}%", q.to_lowercase()));
 
-        let links = sqlx::query_as::<_, Link>(
+        // Validate and build sort clause to prevent SQL injection
+        let sort_field = match params.sort_by.as_deref() {
+            Some("title") => "LOWER(l.title)",
+            Some("github_stars") => "l.github_stars",
+            Some("status") => "l.status",
+            Some("updated_at") => "l.updated_at",
+            _ => "l.created_at",  // default
+        };
+
+        let sort_order = match params.sort_order.as_deref() {
+            Some("asc") => "ASC",
+            _ => "DESC",  // default
+        };
+
+        // Build query with validated ORDER BY clause
+        let query_str = format!(
             r#"
             SELECT DISTINCT l.* FROM links l
             LEFT JOIN link_categories lc ON l.id = lc.link_id
@@ -208,19 +226,22 @@ impl Link {
             AND ($6::uuid IS NULL OR lt.tag_id = $6)
             AND ($7::uuid IS NULL OR ll.language_id = $7)
             AND ($8::uuid IS NULL OR lli.license_id = $8)
-            ORDER BY l.created_at DESC
+            ORDER BY {} {} NULLS LAST
             "#,
-        )
-        .bind(user_id)
-        .bind(&query_pattern)
-        .bind(&params.status)
-        .bind(params.is_github)
-        .bind(params.category_id)
-        .bind(params.tag_id)
-        .bind(params.language_id)
-        .bind(params.license_id)
-        .fetch_all(pool)
-        .await?;
+            sort_field, sort_order
+        );
+
+        let links = sqlx::query_as::<_, Link>(&query_str)
+            .bind(user_id)
+            .bind(&query_pattern)
+            .bind(&params.status)
+            .bind(params.is_github)
+            .bind(params.category_id)
+            .bind(params.tag_id)
+            .bind(params.language_id)
+            .bind(params.license_id)
+            .fetch_all(pool)
+            .await?;
 
         Ok(links)
     }

@@ -155,7 +155,7 @@ async fn create_link_handler(
 /// GET /api/links
 ///
 /// Returns all links for the authenticated user with their categories.
-/// Supports optional query parameters for filtering and searching.
+/// Supports optional query parameters for filtering, searching, and sorting.
 ///
 /// # Query Parameters
 /// - `query`: Optional text search across title, description, url, domain
@@ -165,17 +165,17 @@ async fn create_link_handler(
 /// - `tag_id`: Optional filter by tag UUID
 /// - `language_id`: Optional filter by programming language UUID
 /// - `license_id`: Optional filter by software license UUID
+/// - `sort_by`: Optional sort field (created_at, updated_at, title, github_stars, status) - default: created_at
+/// - `sort_order`: Optional sort order (asc, desc) - default: desc
 ///
 /// # Examples
-/// - GET /api/links - All links
+/// - GET /api/links - All links (sorted by created_at desc)
 /// - GET /api/links?query=rust - Search for "rust"
 /// - GET /api/links?status=active - Only active links
 /// - GET /api/links?is_github=true - Only GitHub repos
-/// - GET /api/links?category_id=<uuid> - Links in specific category
-/// - GET /api/links?tag_id=<uuid> - Links with specific tag
-/// - GET /api/links?language_id=<uuid> - Links using specific language
-/// - GET /api/links?license_id=<uuid> - Links with specific license
-/// - GET /api/links?query=rust&status=active&language_id=<uuid> - Combined filters
+/// - GET /api/links?sort_by=title&sort_order=asc - Sort by title A-Z
+/// - GET /api/links?sort_by=github_stars&sort_order=desc - Sort by stars (highest first)
+/// - GET /api/links?query=rust&status=active&sort_by=updated_at - Combined filters and sorting
 ///
 /// # Response
 /// - 200 OK: Returns array of links with categories
@@ -196,6 +196,8 @@ async fn list_links_handler(
         tag_id = ?params.tag_id,
         language_id = ?params.language_id,
         license_id = ?params.license_id,
+        sort_by = ?params.sort_by,
+        sort_order = ?params.sort_order,
         "Fetching links with search params"
     );
 

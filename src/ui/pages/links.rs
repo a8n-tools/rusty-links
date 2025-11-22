@@ -97,10 +97,16 @@ pub fn Links() -> Element {
     // Search state
     let mut search_query = use_signal(|| String::new());
 
+    // Sort state
+    let mut sort_by = use_signal(|| "created_at".to_string());
+    let mut sort_order = use_signal(|| "desc".to_string());
+
     // Fetch links with search query and filters
     let fetch_links = move || {
         let query = search_query();
         let current_filters = filters();
+        let current_sort_by = sort_by();
+        let current_sort_order = sort_order();
         spawn(async move {
             loading.set(true);
             let client = reqwest::Client::new();
@@ -137,6 +143,12 @@ pub fn Links() -> Element {
                 if is_github {
                     params.push("is_github=true".to_string());
                 }
+            }
+
+            // Add sort parameters (only if not default)
+            if current_sort_by != "created_at" || current_sort_order != "desc" {
+                params.push(format!("sort_by={}", current_sort_by));
+                params.push(format!("sort_order={}", current_sort_order));
             }
 
             let url = if params.is_empty() {
@@ -445,6 +457,34 @@ pub fn Links() -> Element {
                                     "Clear All Filters"
                                 }
                             }
+                        }
+                    }
+
+                    // Sort controls
+                    div { class: "sort-container",
+                        label { class: "sort-label", "Sort by:" }
+                        select {
+                            class: "sort-select",
+                            value: "{sort_by()}",
+                            onchange: move |evt| {
+                                sort_by.set(evt.value());
+                                fetch_links();
+                            },
+                            option { value: "created_at", "Date Added" }
+                            option { value: "updated_at", "Last Updated" }
+                            option { value: "title", "Title" }
+                            option { value: "github_stars", "GitHub Stars" }
+                            option { value: "status", "Status" }
+                        }
+                        button {
+                            class: "btn-icon sort-order-btn",
+                            title: if sort_order() == "desc" { "Descending" } else { "Ascending" },
+                            onclick: move |_| {
+                                let new_order = if sort_order() == "desc" { "asc" } else { "desc" };
+                                sort_order.set(new_order.to_string());
+                                fetch_links();
+                            },
+                            if sort_order() == "desc" { "↓" } else { "↑" }
                         }
                     }
 
