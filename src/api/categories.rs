@@ -7,7 +7,7 @@ use axum::{
     extract::{Path, State},
     http::StatusCode,
     response::IntoResponse,
-    routing::{get, post, put},
+    routing::{get, post},
     Json, Router,
 };
 use axum_extra::extract::CookieJar;

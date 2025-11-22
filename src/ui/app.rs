@@ -1,5 +1,4 @@
 use dioxus::prelude::*;
-use dioxus_router::prelude::*;
 use serde::Deserialize;
 use crate::ui::pages::{setup::Setup, login::Login, links::Links};
 

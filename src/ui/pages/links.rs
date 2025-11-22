@@ -84,15 +84,15 @@ pub fn Links() -> Element {
     let mut form_tags = use_signal(|| Vec::<Uuid>::new());
     let mut form_languages = use_signal(|| Vec::<Uuid>::new());
     let mut form_licenses = use_signal(|| Vec::<Uuid>::new());
-    let mut form_loading = use_signal(|| false);
-    let mut form_scraping = use_signal(|| false);
+    let form_loading = use_signal(|| false);
+    let form_scraping = use_signal(|| false);
     let mut form_error = use_signal(|| Option::<String>::None);
 
     // Delete state
-    let mut deleting_id = use_signal(|| Option::<String>::None);
+    let deleting_id = use_signal(|| Option::<String>::None);
 
     // Refresh state
-    let mut refreshing_id = use_signal(|| Option::<String>::None);
+    let refreshing_id = use_signal(|| Option::<String>::None);
 
     // Filter state
     let mut status_filter = use_signal(|| "all".to_string());

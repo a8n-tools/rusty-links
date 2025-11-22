@@ -8,7 +8,7 @@
 
 use crate::auth::{get_session, get_session_from_cookies};
 use crate::error::AppError;
-use crate::models::{Category, CreateLink, Language, License, Link, LinkSearchParams, LinkWithCategories, PaginatedLinks, Tag, UpdateLink, User};
+use crate::models::{Category, CreateLink, Language, License, Link, LinkSearchParams, LinkWithCategories, Tag, UpdateLink, User};
 use crate::scraper;
 use axum::{
     extract::{Path, Query, State},
