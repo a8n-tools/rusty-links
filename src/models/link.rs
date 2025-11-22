@@ -166,6 +166,21 @@ impl Link {
         Ok(link)
     }
 
+    /// Check if a link with the given URL exists for the user
+    pub async fn exists_by_url(pool: &PgPool, user_id: Uuid, url: &str) -> Result<bool, AppError> {
+        let exists = sqlx::query_scalar::<_, bool>(
+            r#"
+            SELECT EXISTS(SELECT 1 FROM links WHERE user_id = $1 AND url = $2)
+            "#,
+        )
+        .bind(user_id)
+        .bind(url)
+        .fetch_one(pool)
+        .await?;
+
+        Ok(exists)
+    }
+
     /// Get all links for a user
     pub async fn get_all_by_user(pool: &PgPool, user_id: Uuid) -> Result<Vec<Link>, AppError> {
         let links = sqlx::query_as::<_, Link>(

@@ -294,6 +294,122 @@ pub fn Links() -> Element {
                                 if selection_mode() { "Cancel Selection" } else { "Select Multiple" }
                             }
                             button {
+                                class: "btn btn-secondary",
+                                onclick: move |_| {
+                                    spawn(async move {
+                                        let client = reqwest::Client::new();
+                                        match client.get("/api/links/export").send().await {
+                                            Ok(resp) => {
+                                                if resp.status().is_success() {
+                                                    match resp.text().await {
+                                                        Ok(data) => {
+                                                            // Create download using web_sys
+                                                            #[cfg(target_arch = "wasm32")]
+                                                            {
+                                                                use wasm_bindgen::JsCast;
+                                                                let window = web_sys::window().expect("no window");
+                                                                let document = window.document().expect("no document");
+
+                                                                let blob_parts = js_sys::Array::new();
+                                                                blob_parts.push(&wasm_bindgen::JsValue::from_str(&data));
+
+                                                                let mut blob_options = web_sys::BlobPropertyBag::new();
+                                                                blob_options.type_("application/json");
+
+                                                                if let Ok(blob) = web_sys::Blob::new_with_str_sequence_and_options(&blob_parts, &blob_options) {
+                                                                    let url = web_sys::Url::create_object_url_with_blob(&blob).unwrap();
+
+                                                                    if let Some(link_element) = document.create_element("a").ok() {
+                                                                        let link = link_element.dyn_into::<web_sys::HtmlAnchorElement>().unwrap();
+                                                                        link.set_href(&url);
+                                                                        link.set_download("rusty-links-export.json");
+                                                                        link.click();
+
+                                                                        web_sys::Url::revoke_object_url(&url).ok();
+                                                                    }
+                                                                }
+                                                            }
+                                                        }
+                                                        Err(e) => {
+                                                            error.set(Some(format!("Failed to export: {}", e)));
+                                                        }
+                                                    }
+                                                } else {
+                                                    error.set(Some("Export failed".to_string()));
+                                                }
+                                            }
+                                            Err(e) => {
+                                                error.set(Some(format!("Network error: {}", e)));
+                                            }
+                                        }
+                                    });
+                                },
+                                "Export Links"
+                            }
+                            label {
+                                class: "btn btn-secondary file-upload-btn",
+                                r#for: "import-file",
+                                "Import Links"
+                            }
+                            input {
+                                id: "import-file",
+                                r#type: "file",
+                                accept: ".json",
+                                style: "display: none;",
+                                onchange: move |evt| {
+                                    #[cfg(target_arch = "wasm32")]
+                                    {
+                                        use wasm_bindgen::JsCast;
+                                        use wasm_bindgen_futures::JsFuture;
+
+                                        spawn(async move {
+                                            let window = web_sys::window().expect("no window");
+                                            let document = window.document().expect("no document");
+
+                                            if let Some(input) = document.get_element_by_id("import-file") {
+                                                let input: web_sys::HtmlInputElement = input.dyn_into().unwrap();
+                                                if let Some(files) = input.files() {
+                                                    if let Some(file) = files.get(0) {
+                                                        match JsFuture::from(file.text()).await {
+                                                            Ok(text_value) => {
+                                                                let text = text_value.as_string().unwrap();
+
+                                                                // Send to import endpoint
+                                                                let client = reqwest::Client::new();
+                                                                match client.post("/api/links/import")
+                                                                    .header("Content-Type", "application/json")
+                                                                    .body(text)
+                                                                    .send()
+                                                                    .await
+                                                                {
+                                                                    Ok(resp) => {
+                                                                        if resp.status().is_success() {
+                                                                            fetch_links();
+                                                                            error.set(Some("Import completed successfully!".to_string()));
+                                                                        } else {
+                                                                            error.set(Some("Import failed".to_string()));
+                                                                        }
+                                                                    }
+                                                                    Err(e) => {
+                                                                        error.set(Some(format!("Import error: {}", e)));
+                                                                    }
+                                                                }
+
+                                                                // Reset file input
+                                                                input.set_value("");
+                                                            }
+                                                            Err(_) => {
+                                                                error.set(Some("Failed to read file".to_string()));
+                                                            }
+                                                        }
+                                                    }
+                                                }
+                                            }
+                                        });
+                                    }
+                                },
+                            }
+                            button {
                                 class: "btn btn-primary",
                                 onclick: move |_| {
                                     form_url.set(String::new());
@@ -1186,6 +1302,7 @@ fn LinkCard(
         _ => "status-unknown",
     };
 
+    let link_id = link.id.clone();
     let is_selected = selected_ids().contains(&link.id);
     let card_class = if is_selected && selection_mode() {
         format!("link-card link-card-{} link-card-selected", link.status)
@@ -1205,9 +1322,9 @@ fn LinkCard(
                         onchange: move |evt| {
                             let mut ids = selected_ids();
                             if evt.checked() {
-                                ids.insert(link.id.clone());
+                                ids.insert(link_id.clone());
                             } else {
-                                ids.remove(&link.id);
+                                ids.remove(&link_id);
                             }
                             selected_ids.set(ids);
                         },

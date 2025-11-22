@@ -108,6 +108,43 @@ impl Category {
         Ok(categories)
     }
 
+    /// Get category by name, or create it if it doesn't exist
+    pub async fn get_or_create_by_name(
+        pool: &PgPool,
+        user_id: Uuid,
+        name: &str,
+    ) -> Result<Category, AppError> {
+        // Try to find existing category with this name
+        let existing = sqlx::query_as::<_, Category>(
+            "SELECT * FROM categories WHERE user_id = $1 AND name = $2"
+        )
+        .bind(user_id)
+        .bind(name)
+        .fetch_optional(pool)
+        .await?;
+
+        if let Some(category) = existing {
+            return Ok(category);
+        }
+
+        // Create new category (top-level, no parent)
+        let category = sqlx::query_as::<_, Category>(
+            r#"
+            INSERT INTO categories (user_id, name, parent_id, depth)
+            VALUES ($1, $2, NULL, 0)
+            RETURNING *
+            "#,
+        )
+        .bind(user_id)
+        .bind(name)
+        .fetch_one(pool)
+        .await?;
+
+        tracing::info!(category_id = %category.id, name = %category.name, "Category created via import");
+
+        Ok(category)
+    }
+
     /// Get categories as a hierarchical tree
     pub async fn get_tree_by_user(
         pool: &PgPool,

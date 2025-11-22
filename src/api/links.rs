@@ -18,7 +18,8 @@ use axum::{
     Json, Router,
 };
 use axum_extra::extract::CookieJar;
-use serde::Deserialize;
+use chrono::{DateTime, Utc};
+use serde::{Deserialize, Serialize};
 use sqlx::PgPool;
 use uuid::Uuid;
 
@@ -816,10 +817,247 @@ async fn bulk_tag_handler(
     Ok(StatusCode::OK)
 }
 
+/// Export data structures
+#[derive(Debug, Serialize)]
+struct ExportData {
+    exported_at: DateTime<Utc>,
+    version: String,
+    links: Vec<ExportLink>,
+    categories: Vec<Category>,
+    tags: Vec<Tag>,
+}
+
+#[derive(Debug, Serialize)]
+struct ExportLink {
+    url: String,
+    title: Option<String>,
+    description: Option<String>,
+    status: String,
+    categories: Vec<String>,  // Names, not IDs
+    tags: Vec<String>,
+    languages: Vec<String>,
+    licenses: Vec<String>,
+    created_at: DateTime<Utc>,
+    is_github_repo: bool,
+    github_stars: Option<i32>,
+}
+
+/// GET /api/export
+///
+/// Export all user data as JSON
+///
+/// # Response
+/// - 200 OK: Returns export data with all links, categories, and tags
+/// - 401 Unauthorized: No valid session
+async fn export_links_handler(
+    State(pool): State<PgPool>,
+    jar: CookieJar,
+) -> Result<Json<ExportData>, AppError> {
+    let user = get_authenticated_user(&pool, &jar).await?;
+
+    tracing::info!(user_id = %user.id, "Exporting links");
+
+    // Fetch all user data
+    let links = Link::get_all_by_user(&pool, user.id).await?;
+    let categories = Category::get_all_by_user(&pool, user.id).await?;
+    let tags = Tag::get_all_by_user(&pool, user.id).await?;
+
+    // Convert links to export format
+    let mut export_links = Vec::new();
+    for link in links {
+        // Get associated metadata
+        let link_categories = Link::get_categories(&pool, link.id, user.id).await?;
+        let link_tags = Link::get_tags(&pool, link.id, user.id).await?;
+        let link_languages = Link::get_languages(&pool, link.id, user.id).await?;
+        let link_licenses = Link::get_licenses(&pool, link.id, user.id).await?;
+
+        export_links.push(ExportLink {
+            url: link.url,
+            title: link.title,
+            description: link.description,
+            status: link.status,
+            categories: link_categories.into_iter().map(|c| c.name).collect(),
+            tags: link_tags.into_iter().map(|t| t.name).collect(),
+            languages: link_languages.into_iter().map(|l| l.name).collect(),
+            licenses: link_licenses.into_iter().map(|l| l.name).collect(),
+            created_at: link.created_at,
+            is_github_repo: link.is_github_repo,
+            github_stars: link.github_stars,
+        });
+    }
+
+    tracing::info!(
+        user_id = %user.id,
+        link_count = export_links.len(),
+        "Export completed"
+    );
+
+    Ok(Json(ExportData {
+        exported_at: Utc::now(),
+        version: "1.0".to_string(),
+        links: export_links,
+        categories,
+        tags,
+    }))
+}
+
+/// Import data structures
+#[derive(Debug, Deserialize)]
+struct ImportData {
+    links: Vec<ImportLink>,
+}
+
+#[derive(Debug, Deserialize)]
+struct ImportLink {
+    url: String,
+    title: Option<String>,
+    description: Option<String>,
+    categories: Option<Vec<String>>,
+    tags: Option<Vec<String>>,
+    languages: Option<Vec<String>>,
+    licenses: Option<Vec<String>>,
+}
+
+#[derive(Debug, Serialize)]
+struct ImportResult {
+    imported: u32,
+    skipped: u32,
+    errors: Vec<String>,
+}
+
+/// POST /api/import
+///
+/// Import links from JSON data
+///
+/// # Request Body
+/// ```json
+/// {
+///     "links": [
+///         {
+///             "url": "https://example.com",
+///             "title": "Example",
+///             "description": "...",
+///             "categories": ["Category1"],
+///             "tags": ["tag1", "tag2"]
+///         }
+///     ]
+/// }
+/// ```
+///
+/// # Response
+/// - 200 OK: Returns import results with counts and errors
+/// - 401 Unauthorized: No valid session
+async fn import_links_handler(
+    State(pool): State<PgPool>,
+    jar: CookieJar,
+    Json(data): Json<ImportData>,
+) -> Result<Json<ImportResult>, AppError> {
+    let user = get_authenticated_user(&pool, &jar).await?;
+
+    tracing::info!(
+        user_id = %user.id,
+        link_count = data.links.len(),
+        "Starting import"
+    );
+
+    let mut imported = 0;
+    let mut skipped = 0;
+    let mut errors = Vec::new();
+
+    for link_data in data.links {
+        // Check if URL already exists
+        match Link::exists_by_url(&pool, user.id, &link_data.url).await {
+            Ok(true) => {
+                skipped += 1;
+                continue;
+            }
+            Ok(false) => {}
+            Err(e) => {
+                errors.push(format!("{}: failed to check existence: {}", link_data.url, e));
+                continue;
+            }
+        }
+
+        // Create link
+        let create_link = CreateLink {
+            url: link_data.url.clone(),
+            title: link_data.title,
+            description: link_data.description,
+            logo: None,
+        };
+
+        match Link::create(&pool, user.id, create_link).await {
+            Ok(link) => {
+                // Add categories by name
+                if let Some(cats) = link_data.categories {
+                    for cat_name in cats {
+                        match Category::get_or_create_by_name(&pool, user.id, &cat_name).await {
+                            Ok(cat) => {
+                                let _ = Link::add_category(&pool, link.id, cat.id, user.id).await;
+                            }
+                            Err(e) => {
+                                tracing::warn!(
+                                    link_id = %link.id,
+                                    category = %cat_name,
+                                    error = %e,
+                                    "Failed to add category"
+                                );
+                            }
+                        }
+                    }
+                }
+
+                // Add tags by name
+                if let Some(tag_names) = link_data.tags {
+                    for tag_name in tag_names {
+                        match Tag::get_or_create_by_name(&pool, user.id, &tag_name).await {
+                            Ok(tag) => {
+                                let _ = Link::add_tag(&pool, link.id, tag.id, user.id).await;
+                            }
+                            Err(e) => {
+                                tracing::warn!(
+                                    link_id = %link.id,
+                                    tag = %tag_name,
+                                    error = %e,
+                                    "Failed to add tag"
+                                );
+                            }
+                        }
+                    }
+                }
+
+                // Note: languages and licenses would require similar get_or_create functions
+                // For now, we'll skip them in import
+
+                imported += 1;
+            }
+            Err(e) => {
+                errors.push(format!("{}: {}", link_data.url, e));
+            }
+        }
+    }
+
+    tracing::info!(
+        user_id = %user.id,
+        imported = imported,
+        skipped = skipped,
+        errors = errors.len(),
+        "Import completed"
+    );
+
+    Ok(Json(ImportResult {
+        imported,
+        skipped,
+        errors,
+    }))
+}
+
 /// Create the links router
 pub fn create_router() -> Router<PgPool> {
     Router::new()
         .route("/", post(create_link_handler).get(list_links_handler))
+        .route("/export", axum::routing::get(export_links_handler))
+        .route("/import", post(import_links_handler))
         .route("/bulk/delete", post(bulk_delete_handler))
         .route("/bulk/categories", post(bulk_category_handler))
         .route("/bulk/tags", post(bulk_tag_handler))
