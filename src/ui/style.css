@@ -582,6 +582,97 @@ body {
     cursor: not-allowed;
 }
 
+/* Bulk Operations */
+.bulk-action-bar {
+    background-color: var(--rust-primary);
+    color: white;
+    padding: 1rem 1.5rem;
+    border-radius: 8px;
+    margin: 1rem 0;
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+    flex-wrap: wrap;
+    box-shadow: 0 4px 6px rgba(183, 65, 14, 0.2);
+}
+
+.bulk-selection-count {
+    font-weight: 600;
+    margin-right: auto;
+}
+
+.btn-sm {
+    padding: 0.5rem 1rem;
+    font-size: 0.875rem;
+}
+
+.bulk-select {
+    padding: 0.5rem 0.75rem;
+    border: 1px solid white;
+    border-radius: 6px;
+    background-color: white;
+    color: var(--rust-text);
+    font-size: 0.875rem;
+    cursor: pointer;
+    transition: all 0.2s;
+    min-width: 150px;
+}
+
+.bulk-select:hover {
+    background-color: var(--rust-surface);
+}
+
+.selection-controls {
+    margin: 1rem 0;
+    padding: 0.75rem 1rem;
+    background-color: var(--rust-surface);
+    border-radius: 6px;
+    border: 2px solid var(--rust-border);
+}
+
+.select-all-label {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    font-weight: 600;
+    cursor: pointer;
+}
+
+.select-all-label input[type="checkbox"] {
+    width: 1.25rem;
+    height: 1.25rem;
+    cursor: pointer;
+}
+
+.link-card-checkbox {
+    position: absolute;
+    top: 1rem;
+    left: 1rem;
+    z-index: 10;
+}
+
+.link-card-checkbox input[type="checkbox"] {
+    width: 1.5rem;
+    height: 1.5rem;
+    cursor: pointer;
+}
+
+.link-card-selected {
+    border: 2px solid var(--rust-primary);
+    background-color: rgba(183, 65, 14, 0.05);
+    box-shadow: 0 4px 8px rgba(183, 65, 14, 0.15);
+}
+
+.link-card {
+    position: relative;
+    padding-left: 1.5rem;
+}
+
+/* Adjust link card header when in selection mode */
+.link-card-checkbox + .link-card-header {
+    margin-left: 2.5rem;
+}
+
 /* Pagination */
 .pagination-container {
     margin: 2rem 0;
@@ -689,5 +780,19 @@ body {
     .pagination-prev,
     .pagination-next {
         flex: 1;
+    }
+
+    .bulk-action-bar {
+        flex-direction: column;
+        align-items: stretch;
+    }
+
+    .bulk-selection-count {
+        margin-right: 0;
+        margin-bottom: 0.5rem;
+    }
+
+    .bulk-select {
+        width: 100%;
     }
 }

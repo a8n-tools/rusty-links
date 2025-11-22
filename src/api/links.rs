@@ -18,6 +18,7 @@ use axum::{
     Json, Router,
 };
 use axum_extra::extract::CookieJar;
+use serde::Deserialize;
 use sqlx::PgPool;
 use uuid::Uuid;
 
@@ -648,10 +649,180 @@ async fn refresh_github_handler(
     Ok(Json(updated_link))
 }
 
+/// Bulk operations request structures
+#[derive(Debug, Deserialize)]
+struct BulkDeleteRequest {
+    link_ids: Vec<Uuid>,
+}
+
+#[derive(Debug, Deserialize)]
+struct BulkCategoryRequest {
+    link_ids: Vec<Uuid>,
+    category_id: Uuid,
+    action: String, // "add" or "remove"
+}
+
+#[derive(Debug, Deserialize)]
+struct BulkTagRequest {
+    link_ids: Vec<Uuid>,
+    tag_id: Uuid,
+    action: String, // "add" or "remove"
+}
+
+/// POST /api/links/bulk/delete
+///
+/// Delete multiple links at once
+///
+/// # Request Body
+/// ```json
+/// {
+///     "link_ids": ["uuid1", "uuid2", "uuid3"]
+/// }
+/// ```
+///
+/// # Response
+/// - 204 No Content: Links deleted successfully
+/// - 401 Unauthorized: No valid session
+/// - 404 Not Found: One or more links not found or don't belong to user
+async fn bulk_delete_handler(
+    State(pool): State<PgPool>,
+    jar: CookieJar,
+    Json(req): Json<BulkDeleteRequest>,
+) -> Result<StatusCode, AppError> {
+    let user = get_authenticated_user(&pool, &jar).await?;
+
+    tracing::info!(
+        user_id = %user.id,
+        count = req.link_ids.len(),
+        "Bulk deleting links"
+    );
+
+    // Verify all links belong to user and delete
+    for link_id in req.link_ids {
+        Link::delete(&pool, link_id, user.id).await?;
+    }
+
+    tracing::info!(
+        user_id = %user.id,
+        "Bulk delete completed"
+    );
+
+    Ok(StatusCode::NO_CONTENT)
+}
+
+/// POST /api/links/bulk/categories
+///
+/// Add or remove a category from multiple links
+///
+/// # Request Body
+/// ```json
+/// {
+///     "link_ids": ["uuid1", "uuid2"],
+///     "category_id": "category-uuid",
+///     "action": "add"
+/// }
+/// ```
+///
+/// # Response
+/// - 200 OK: Category operation completed
+/// - 400 Bad Request: Invalid action (must be 'add' or 'remove')
+/// - 401 Unauthorized: No valid session
+async fn bulk_category_handler(
+    State(pool): State<PgPool>,
+    jar: CookieJar,
+    Json(req): Json<BulkCategoryRequest>,
+) -> Result<StatusCode, AppError> {
+    let user = get_authenticated_user(&pool, &jar).await?;
+
+    tracing::info!(
+        user_id = %user.id,
+        count = req.link_ids.len(),
+        category_id = %req.category_id,
+        action = %req.action,
+        "Bulk category operation"
+    );
+
+    for link_id in &req.link_ids {
+        match req.action.as_str() {
+            "add" => Link::add_category(&pool, *link_id, req.category_id, user.id).await?,
+            "remove" => Link::remove_category(&pool, *link_id, req.category_id, user.id).await?,
+            _ => {
+                return Err(AppError::validation(
+                    "action",
+                    "Must be 'add' or 'remove'",
+                ))
+            }
+        }
+    }
+
+    tracing::info!(
+        user_id = %user.id,
+        "Bulk category operation completed"
+    );
+
+    Ok(StatusCode::OK)
+}
+
+/// POST /api/links/bulk/tags
+///
+/// Add or remove a tag from multiple links
+///
+/// # Request Body
+/// ```json
+/// {
+///     "link_ids": ["uuid1", "uuid2"],
+///     "tag_id": "tag-uuid",
+///     "action": "add"
+/// }
+/// ```
+///
+/// # Response
+/// - 200 OK: Tag operation completed
+/// - 400 Bad Request: Invalid action (must be 'add' or 'remove')
+/// - 401 Unauthorized: No valid session
+async fn bulk_tag_handler(
+    State(pool): State<PgPool>,
+    jar: CookieJar,
+    Json(req): Json<BulkTagRequest>,
+) -> Result<StatusCode, AppError> {
+    let user = get_authenticated_user(&pool, &jar).await?;
+
+    tracing::info!(
+        user_id = %user.id,
+        count = req.link_ids.len(),
+        tag_id = %req.tag_id,
+        action = %req.action,
+        "Bulk tag operation"
+    );
+
+    for link_id in &req.link_ids {
+        match req.action.as_str() {
+            "add" => Link::add_tag(&pool, *link_id, req.tag_id, user.id).await?,
+            "remove" => Link::remove_tag(&pool, *link_id, req.tag_id, user.id).await?,
+            _ => {
+                return Err(AppError::validation(
+                    "action",
+                    "Must be 'add' or 'remove'",
+                ))
+            }
+        }
+    }
+
+    tracing::info!(
+        user_id = %user.id,
+        "Bulk tag operation completed"
+    );
+
+    Ok(StatusCode::OK)
+}
+
 /// Create the links router
 pub fn create_router() -> Router<PgPool> {
     Router::new()
         .route("/", post(create_link_handler).get(list_links_handler))
+        .route("/bulk/delete", post(bulk_delete_handler))
+        .route("/bulk/categories", post(bulk_category_handler))
+        .route("/bulk/tags", post(bulk_tag_handler))
         .route("/:id", put(update_link_handler).delete(delete_link_handler))
         .route("/:id/refresh", post(refresh_link_handler))
         .route("/:id/refresh-github", post(refresh_github_handler))

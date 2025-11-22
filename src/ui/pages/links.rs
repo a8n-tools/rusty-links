@@ -1,5 +1,6 @@
 use dioxus::prelude::*;
 use serde::{Deserialize, Serialize};
+use std::collections::HashSet;
 use uuid::Uuid;
 use crate::ui::components::navbar::Navbar;
 use crate::ui::components::category_select::CategorySelect;
@@ -115,6 +116,10 @@ pub fn Links() -> Element {
     let mut current_page = use_signal(|| 1u32);
     let mut total_pages = use_signal(|| 1u32);
     let mut total_links = use_signal(|| 0i64);
+
+    // Selection state
+    let mut selection_mode = use_signal(|| false);
+    let mut selected_ids = use_signal(|| HashSet::<String>::new());
 
     // Fetch links with search query and filters
     let fetch_links = move || {
@@ -277,6 +282,16 @@ pub fn Links() -> Element {
                                 option { value: "archived", "Archived" }
                                 option { value: "inaccessible", "Inaccessible" }
                                 option { value: "repo_unavailable", "Repo Unavailable" }
+                            }
+                            button {
+                                class: if selection_mode() { "btn btn-secondary" } else { "btn btn-secondary" },
+                                onclick: move |_| {
+                                    selection_mode.set(!selection_mode());
+                                    if !selection_mode() {
+                                        selected_ids.set(HashSet::new());
+                                    }
+                                },
+                                if selection_mode() { "Cancel Selection" } else { "Select Multiple" }
                             }
                             button {
                                 class: "btn btn-primary",
@@ -528,6 +543,155 @@ pub fn Links() -> Element {
                             "{links().len()} result(s) for \"{search_query()}\""
                         }
                     }
+
+                    // Bulk action bar
+                    if selection_mode() && !selected_ids().is_empty() {
+                        div { class: "bulk-action-bar",
+                            span { class: "bulk-selection-count", "{selected_ids().len()} selected" }
+
+                            button {
+                                class: "btn btn-danger btn-sm",
+                                onclick: move |_| {
+                                    let ids: Vec<String> = selected_ids().iter().cloned().collect();
+                                    spawn(async move {
+                                        let client = reqwest::Client::new();
+                                        let body = serde_json::json!({"link_ids": ids});
+                                        let response = client
+                                            .post("/api/links/bulk/delete")
+                                            .json(&body)
+                                            .send()
+                                            .await;
+
+                                        match response {
+                                            Ok(resp) => {
+                                                if resp.status().is_success() || resp.status().as_u16() == 204 {
+                                                    // Remove deleted links from list
+                                                    let mut current = links();
+                                                    let ids_set: HashSet<String> = ids.iter().cloned().collect();
+                                                    current.retain(|l| !ids_set.contains(&l.id));
+                                                    links.set(current);
+                                                    selected_ids.set(HashSet::new());
+                                                } else {
+                                                    error.set(Some("Failed to delete selected links".to_string()));
+                                                }
+                                            }
+                                            Err(e) => {
+                                                error.set(Some(format!("Network error: {}", e)));
+                                            }
+                                        }
+                                    });
+                                },
+                                "Delete Selected"
+                            }
+
+                            select {
+                                class: "bulk-select",
+                                onchange: move |evt| {
+                                    let value = evt.value();
+                                    if !value.is_empty() {
+                                        if let Ok(category_id) = value.parse::<Uuid>() {
+                                            let ids: Vec<String> = selected_ids().iter().cloned().collect();
+                                            spawn(async move {
+                                                let client = reqwest::Client::new();
+                                                let body = serde_json::json!({
+                                                    "link_ids": ids,
+                                                    "category_id": category_id,
+                                                    "action": "add"
+                                                });
+                                                let response = client
+                                                    .post("/api/links/bulk/categories")
+                                                    .json(&body)
+                                                    .send()
+                                                    .await;
+
+                                                match response {
+                                                    Ok(resp) => {
+                                                        if resp.status().is_success() {
+                                                            // Refresh links to show updated categories
+                                                            fetch_links();
+                                                        } else {
+                                                            error.set(Some("Failed to add category to selected links".to_string()));
+                                                        }
+                                                    }
+                                                    Err(e) => {
+                                                        error.set(Some(format!("Network error: {}", e)));
+                                                    }
+                                                }
+                                            });
+                                        }
+                                    }
+                                },
+                                option { value: "", "Add to category..." }
+                                for cat in categories() {
+                                    option { value: "{cat.id}", "{cat.name}" }
+                                }
+                            }
+
+                            select {
+                                class: "bulk-select",
+                                onchange: move |evt| {
+                                    let value = evt.value();
+                                    if !value.is_empty() {
+                                        if let Ok(tag_id) = value.parse::<Uuid>() {
+                                            let ids: Vec<String> = selected_ids().iter().cloned().collect();
+                                            spawn(async move {
+                                                let client = reqwest::Client::new();
+                                                let body = serde_json::json!({
+                                                    "link_ids": ids,
+                                                    "tag_id": tag_id,
+                                                    "action": "add"
+                                                });
+                                                let response = client
+                                                    .post("/api/links/bulk/tags")
+                                                    .json(&body)
+                                                    .send()
+                                                    .await;
+
+                                                match response {
+                                                    Ok(resp) => {
+                                                        if resp.status().is_success() {
+                                                            // Refresh links to show updated tags
+                                                            fetch_links();
+                                                        } else {
+                                                            error.set(Some("Failed to add tag to selected links".to_string()));
+                                                        }
+                                                    }
+                                                    Err(e) => {
+                                                        error.set(Some(format!("Network error: {}", e)));
+                                                    }
+                                                }
+                                            });
+                                        }
+                                    }
+                                },
+                                option { value: "", "Add to tag..." }
+                                for tag in tags() {
+                                    option { value: "{tag.id}", "{tag.name}" }
+                                }
+                            }
+                        }
+                    }
+
+                    // Selection controls
+                    if selection_mode() && !loading() && !links().is_empty() {
+                        div { class: "selection-controls",
+                            label { class: "select-all-label",
+                                input {
+                                    r#type: "checkbox",
+                                    checked: !links().is_empty() && selected_ids().len() == links().len(),
+                                    onchange: move |evt| {
+                                        if evt.checked() {
+                                            let all_ids: HashSet<String> = links().iter().map(|l| l.id.clone()).collect();
+                                            selected_ids.set(all_ids);
+                                        } else {
+                                            selected_ids.set(HashSet::new());
+                                        }
+                                    },
+                                }
+                                " Select All ({selected_ids().len()} selected)"
+                            }
+                        }
+                    }
                 }
 
                 div { class: "links-container",
@@ -587,6 +751,8 @@ pub fn Links() -> Element {
                                                 form_error: form_error,
                                                 editing_link_id: editing_link_id,
                                                 show_form: show_form,
+                                                selection_mode: selection_mode,
+                                                selected_ids: selected_ids,
                                             }
                                         }
                                     }
@@ -978,6 +1144,8 @@ fn LinkCard(
     mut form_error: Signal<Option<String>>,
     mut editing_link_id: Signal<Option<String>>,
     mut show_form: Signal<bool>,
+    selection_mode: Signal<bool>,
+    mut selected_ids: Signal<HashSet<String>>,
 ) -> Element {
     let display_title = link.title.clone().unwrap_or_else(|| link.url.clone());
     let description = link.description.clone().unwrap_or_default();
@@ -1018,9 +1186,34 @@ fn LinkCard(
         _ => "status-unknown",
     };
 
+    let is_selected = selected_ids().contains(&link.id);
+    let card_class = if is_selected && selection_mode() {
+        format!("link-card link-card-{} link-card-selected", link.status)
+    } else {
+        format!("link-card link-card-{}", link.status)
+    };
+
     rsx! {
         div {
-            class: "link-card link-card-{link.status}",
+            class: "{card_class}",
+            // Selection checkbox
+            if selection_mode() {
+                div { class: "link-card-checkbox",
+                    input {
+                        r#type: "checkbox",
+                        checked: is_selected,
+                        onchange: move |evt| {
+                            let mut ids = selected_ids();
+                            if evt.checked() {
+                                ids.insert(link.id.clone());
+                            } else {
+                                ids.remove(&link.id);
+                            }
+                            selected_ids.set(ids);
+                        },
+                    }
+                }
+            }
             div { class: "link-card-header",
                 h3 {
                     class: if link.status == "inaccessible" || link.status == "repo_unavailable" {
