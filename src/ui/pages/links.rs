@@ -76,11 +76,26 @@ pub fn Links() -> Element {
     // Filter state
     let mut status_filter = use_signal(|| "all".to_string());
 
-    // Fetch links on mount
-    use_effect(move || {
+    // Search state
+    let mut search_query = use_signal(|| String::new());
+
+    // Fetch links with search query
+    let fetch_links = move || {
+        let query = search_query();
         spawn(async move {
+            loading.set(true);
             let client = reqwest::Client::new();
-            let response = client.get("/api/links").send().await;
+
+            // Build URL with query parameter if search is active
+            let url = if query.is_empty() {
+                "/api/links".to_string()
+            } else {
+                // Simple URL encoding for query parameter
+                let encoded_query = query.replace(' ', "%20").replace('&', "%26");
+                format!("/api/links?query={}", encoded_query)
+            };
+
+            let response = client.get(&url).send().await;
 
             match response {
                 Ok(resp) => {
@@ -106,6 +121,11 @@ pub fn Links() -> Element {
             }
             loading.set(false);
         });
+    };
+
+    // Fetch links on mount
+    use_effect(move || {
+        fetch_links();
     });
 
     let is_editing = editing_link_id().is_some();
@@ -172,6 +192,41 @@ pub fn Links() -> Element {
                     }
                 }
 
+                // Search bar
+                if !show_form() {
+                    div { class: "search-container",
+                        input {
+                            class: "search-input",
+                            r#type: "text",
+                            placeholder: "Search links by title, description, URL...",
+                            value: "{search_query()}",
+                            oninput: move |evt| {
+                                let new_value = evt.value();
+                                search_query.set(new_value);
+                                fetch_links();
+                            },
+                        }
+                        if !search_query().is_empty() {
+                            button {
+                                class: "search-clear",
+                                onclick: move |_| {
+                                    search_query.set(String::new());
+                                    fetch_links();
+                                },
+                                title: "Clear search",
+                                "✕"
+                            }
+                        }
+                    }
+
+                    // Search results info
+                    if !search_query().is_empty() && !loading() {
+                        div { class: "search-results-info",
+                            "{links().len()} result(s) for \"{search_query()}\""
+                        }
+                    }
+                }
+
                 div { class: "links-container",
                     if loading() {
                         div { class: "loading-state",
@@ -183,8 +238,13 @@ pub fn Links() -> Element {
                         }
                     } else if links().is_empty() {
                         div { class: "empty-state",
-                            p { class: "empty-title", "No links yet" }
-                            p { class: "empty-subtitle", "Add your first link to get started!" }
+                            if !search_query().is_empty() {
+                                p { class: "empty-title", "No results found for \"{search_query()}\"" }
+                                p { class: "empty-subtitle", "Try different search terms or clear the search" }
+                            } else {
+                                p { class: "empty-title", "No links yet" }
+                                p { class: "empty-subtitle", "Add your first link to get started!" }
+                            }
                         }
                     } else {
                         {

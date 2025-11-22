@@ -291,7 +291,7 @@ Search bar in Links page.
 
 ### Prompt
 
-```text
+````text
 Add a search bar to the Links page in `src/ui/pages/links.rs`.
 
 **Part 1: Add search state**
@@ -384,7 +384,7 @@ Add CSS:
 - `.search-input` - the search input field
 - `.search-clear` - clear button
 - `.search-results-info` - "X results" text
-```
+````
 
 ### Verification
 - `cargo check` passes
