@@ -3,13 +3,16 @@
 //! This module provides a simple background task runner that executes
 //! periodic maintenance tasks such as refreshing link metadata.
 
+use crate::config::Config;
 use crate::error::AppError;
 use crate::github;
 use crate::models::Link;
 use crate::scraper;
+use rand::Rng;
 use sqlx::PgPool;
+use std::sync::Arc;
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::time::Duration;
-use tokio::time::interval;
 
 /// Background task scheduler
 ///
@@ -20,13 +23,14 @@ use tokio::time::interval;
 ///
 /// # Example
 /// ```rust
-/// let scheduler = Scheduler::new(pool.clone(), 7);
+/// let scheduler = Scheduler::new(pool.clone(), config.clone());
 /// let handle = scheduler.start();
 /// // Scheduler now runs in background
 /// ```
 pub struct Scheduler {
     pool: PgPool,
-    update_interval_days: u32,
+    config: Config,
+    shutdown: Arc<AtomicBool>,
 }
 
 impl Scheduler {
@@ -34,12 +38,18 @@ impl Scheduler {
     ///
     /// # Arguments
     /// * `pool` - Database connection pool
-    /// * `update_interval_days` - How often to refresh link metadata (in days)
-    pub fn new(pool: PgPool, update_interval_days: u32) -> Self {
+    /// * `config` - Application configuration
+    pub fn new(pool: PgPool, config: Config) -> Self {
         Self {
             pool,
-            update_interval_days,
+            config,
+            shutdown: Arc::new(AtomicBool::new(false)),
         }
+    }
+
+    /// Get a handle for graceful shutdown
+    pub fn shutdown_handle(&self) -> Arc<AtomicBool> {
+        Arc::clone(&self.shutdown)
     }
 
     /// Start the scheduler in a background task
@@ -57,29 +67,68 @@ impl Scheduler {
 
     /// Main scheduler loop
     ///
-    /// Runs scheduled tasks at regular intervals (every hour).
+    /// Runs scheduled tasks at regular intervals with random jitter.
     /// If a task fails, logs the error and continues running.
+    /// Supports graceful shutdown via shutdown signal.
     async fn run(&self) {
-        // Run tasks periodically - check every hour
-        let mut interval = interval(Duration::from_secs(3600));
-
         tracing::info!(
-            update_interval_days = self.update_interval_days,
-            check_interval_seconds = 3600,
+            update_interval_hours = self.config.update_interval_hours,
+            batch_size = self.config.batch_size,
+            jitter_percent = self.config.jitter_percent,
             "Background scheduler started"
         );
 
         loop {
-            interval.tick().await;
-
-            tracing::debug!("Running scheduled tasks...");
-
-            // Execute scheduled tasks
-            if let Err(e) = self.run_tasks().await {
-                tracing::error!(error = %e, "Scheduled task failed");
+            // Calculate interval with jitter
+            let base_interval_secs = self.config.update_interval_hours as u64 * 3600;
+            let jitter_range = (base_interval_secs * self.config.jitter_percent as u64) / 100;
+            let jitter = if jitter_range > 0 {
+                let mut rng = rand::thread_rng();
+                rng.gen_range(0..=jitter_range * 2) as i64 - jitter_range as i64
             } else {
-                tracing::debug!("Scheduled tasks completed successfully");
+                0
+            };
+            let interval_with_jitter = (base_interval_secs as i64 + jitter).max(60) as u64;
+
+            tracing::debug!(
+                base_interval_secs,
+                jitter_secs = jitter,
+                final_interval_secs = interval_with_jitter,
+                "Calculated next check interval"
+            );
+
+            // Wait for the interval or shutdown signal
+            tokio::select! {
+                _ = tokio::time::sleep(Duration::from_secs(interval_with_jitter)) => {
+                    // Check for shutdown signal before running tasks
+                    if self.shutdown.load(Ordering::Relaxed) {
+                        tracing::info!("Scheduler shutdown signal received");
+                        break;
+                    }
+
+                    tracing::debug!("Running scheduled tasks...");
+
+                    // Execute scheduled tasks
+                    if let Err(e) = self.run_tasks().await {
+                        tracing::error!(error = %e, "Scheduled task failed");
+                    } else {
+                        tracing::debug!("Scheduled tasks completed successfully");
+                    }
+                }
+                _ = self.wait_for_shutdown() => {
+                    tracing::info!("Scheduler shutting down gracefully");
+                    break;
+                }
             }
+        }
+
+        tracing::info!("Scheduler stopped");
+    }
+
+    /// Wait for shutdown signal
+    async fn wait_for_shutdown(&self) {
+        while !self.shutdown.load(Ordering::Relaxed) {
+            tokio::time::sleep(Duration::from_millis(100)).await;
         }
     }
 
@@ -98,35 +147,71 @@ impl Scheduler {
 
     /// Refresh metadata for stale links
     ///
-    /// Processes up to 10 links per cycle to avoid overloading external services.
-    /// Links are considered stale if they haven't been refreshed in `update_interval_days`.
+    /// Processes links in batches based on configuration.
+    /// Links are selected if they haven't been checked within the configured interval.
     ///
-    /// For each stale link:
+    /// For each link:
     /// - Scrapes metadata from the URL
     /// - If GitHub repo, fetches GitHub metadata
-    /// - Updates refreshed_at timestamp
+    /// - Updates last_checked timestamp
     async fn refresh_stale_links(&self) -> Result<(), AppError> {
-        // Process up to 10 links per cycle to avoid overloading
-        let stale_links = Link::get_stale_links(&self.pool, self.update_interval_days, 10).await?;
+        // Get links that need checking
+        let links_to_check = Link::get_links_needing_check(
+            &self.pool,
+            self.config.update_interval_hours,
+            self.config.batch_size as i64,
+        )
+        .await?;
 
-        if stale_links.is_empty() {
-            tracing::debug!("No stale links to refresh");
+        if links_to_check.is_empty() {
+            tracing::debug!("No links need checking");
             return Ok(());
         }
 
-        tracing::info!(count = stale_links.len(), "Refreshing stale links");
+        tracing::info!(count = links_to_check.len(), "Checking and refreshing links");
 
-        for link in stale_links {
-            if let Err(e) = self.refresh_single_link(&link).await {
-                tracing::warn!(
-                    link_id = %link.id,
-                    url = %link.url,
-                    error = %e,
-                    "Failed to refresh link"
-                );
-                // Continue with other links even if one fails
+        let mut successful = 0;
+        let mut failed = 0;
+
+        for link in links_to_check {
+            match self.refresh_single_link(&link).await {
+                Ok(()) => {
+                    successful += 1;
+                    // Mark as checked regardless of outcome
+                    if let Err(e) = Link::mark_checked(&self.pool, link.id).await {
+                        tracing::error!(
+                            link_id = %link.id,
+                            error = %e,
+                            "Failed to mark link as checked"
+                        );
+                    }
+                }
+                Err(e) => {
+                    failed += 1;
+                    tracing::warn!(
+                        link_id = %link.id,
+                        url = %link.url,
+                        error = %e,
+                        "Failed to refresh link"
+                    );
+                    // Still mark as checked to avoid repeatedly failing on the same link
+                    if let Err(mark_err) = Link::mark_checked(&self.pool, link.id).await {
+                        tracing::error!(
+                            link_id = %link.id,
+                            error = %mark_err,
+                            "Failed to mark link as checked after error"
+                        );
+                    }
+                }
             }
         }
+
+        tracing::info!(
+            successful,
+            failed,
+            total = successful + failed,
+            "Link check cycle completed"
+        );
 
         Ok(())
     }

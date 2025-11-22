@@ -108,6 +108,9 @@ async fn main() {
         database_url = %config.masked_database_url(),
         app_port = config.app_port,
         update_interval_days = config.update_interval_days,
+        update_interval_hours = config.update_interval_hours,
+        batch_size = config.batch_size,
+        jitter_percent = config.jitter_percent,
         log_level = %config.log_level,
         "Configuration loaded successfully"
     );
@@ -132,16 +135,19 @@ async fn main() {
 
     // Start background scheduler
     tracing::info!("Starting background scheduler...");
-    let scheduler = scheduler::Scheduler::new(pool.clone(), config.update_interval_days);
+    let scheduler = scheduler::Scheduler::new(pool.clone(), config.clone());
+    let scheduler_shutdown = scheduler.shutdown_handle();
     let _scheduler_handle = scheduler.start();
     tracing::info!(
-        update_interval_days = config.update_interval_days,
+        update_interval_hours = config.update_interval_hours,
+        batch_size = config.batch_size,
+        jitter_percent = config.jitter_percent,
         "Background scheduler started successfully"
     );
 
     // Create API router
     tracing::info!("Creating API router...");
-    let api_router = api::create_router(pool.clone());
+    let api_router = api::create_router(pool.clone(), scheduler_shutdown);
 
     // Build main application with API routes
     tracing::info!("Configuring application...");

@@ -7,6 +7,10 @@ pub struct Config {
     pub app_port: u16,
     pub update_interval_days: u32,
     pub log_level: String,
+    // Scheduler configuration
+    pub update_interval_hours: u32,
+    pub batch_size: usize,
+    pub jitter_percent: u8,
 }
 
 impl Config {
@@ -57,11 +61,64 @@ impl Config {
         let log_level = std::env::var("RUST_LOG")
             .unwrap_or_else(|_| "info".to_string());
 
+        // Load scheduler configuration
+        let update_interval_hours = std::env::var("UPDATE_INTERVAL_HOURS")
+            .ok()
+            .map(|v| {
+                v.parse::<u32>().map_err(|e| {
+                    AppError::Configuration(format!("Failed to parse UPDATE_INTERVAL_HOURS: {}", e))
+                })
+            })
+            .transpose()?
+            .unwrap_or(24);
+
+        let batch_size = std::env::var("BATCH_SIZE")
+            .ok()
+            .map(|v| {
+                v.parse::<usize>().map_err(|e| {
+                    AppError::Configuration(format!("Failed to parse BATCH_SIZE: {}", e))
+                })
+            })
+            .transpose()?
+            .unwrap_or(50);
+
+        let jitter_percent = std::env::var("JITTER_PERCENT")
+            .ok()
+            .map(|v| {
+                v.parse::<u8>().map_err(|e| {
+                    AppError::Configuration(format!("Failed to parse JITTER_PERCENT: {}", e))
+                })
+            })
+            .transpose()?
+            .unwrap_or(20);
+
+        // Validate scheduler configuration
+        if update_interval_hours < 1 {
+            return Err(AppError::Configuration(
+                "Invalid value for UPDATE_INTERVAL_HOURS: must be at least 1".to_string(),
+            ));
+        }
+
+        if batch_size < 1 {
+            return Err(AppError::Configuration(
+                "Invalid value for BATCH_SIZE: must be at least 1".to_string(),
+            ));
+        }
+
+        if jitter_percent > 100 {
+            return Err(AppError::Configuration(
+                "Invalid value for JITTER_PERCENT: must be between 0 and 100".to_string(),
+            ));
+        }
+
         Ok(Config {
             database_url,
             app_port,
             update_interval_days,
             log_level,
+            update_interval_hours,
+            batch_size,
+            jitter_percent,
         })
     }
 
@@ -91,6 +148,9 @@ mod tests {
             app_port: 8080,
             update_interval_days: 30,
             log_level: "info".to_string(),
+            update_interval_hours: 24,
+            batch_size: 50,
+            jitter_percent: 20,
         };
 
         let masked = config.masked_database_url();

@@ -35,6 +35,7 @@ pub struct Link {
     pub status: String,
     pub consecutive_failures: i32,
     pub refreshed_at: Option<DateTime<Utc>>,
+    pub last_checked: Option<DateTime<Utc>>,
     pub created_at: DateTime<Utc>,
     pub updated_at: DateTime<Utc>,
 }
@@ -1030,6 +1031,61 @@ impl Link {
         }
 
         Ok(result)
+    }
+
+    /// Get links that need checking by the scheduler
+    ///
+    /// Returns links where:
+    /// - last_checked is NULL (never checked), OR
+    /// - last_checked is older than the specified interval in hours
+    ///
+    /// # Arguments
+    /// * `pool` - Database connection pool
+    /// * `interval_hours` - Number of hours after which a link needs checking
+    /// * `limit` - Maximum number of links to return
+    pub async fn get_links_needing_check(
+        pool: &PgPool,
+        interval_hours: u32,
+        limit: i64,
+    ) -> Result<Vec<Link>, AppError> {
+        let check_threshold = Utc::now() - chrono::Duration::hours(interval_hours as i64);
+
+        let links = sqlx::query_as::<_, Link>(
+            r#"
+            SELECT * FROM links
+            WHERE status IN ('active', 'inaccessible', 'repo_unavailable')
+            AND (last_checked IS NULL OR last_checked < $1)
+            ORDER BY last_checked ASC NULLS FIRST
+            LIMIT $2
+            "#,
+        )
+        .bind(check_threshold)
+        .bind(limit)
+        .fetch_all(pool)
+        .await?;
+
+        Ok(links)
+    }
+
+    /// Mark a link as checked by the scheduler
+    ///
+    /// Updates the last_checked timestamp to the current time.
+    /// This is separate from mark_refreshed which is used for manual refreshes.
+    pub async fn mark_checked(pool: &PgPool, link_id: Uuid) -> Result<(), AppError> {
+        tracing::debug!(link_id = %link_id, "Marking link as checked");
+
+        sqlx::query(
+            r#"
+            UPDATE links
+            SET last_checked = NOW()
+            WHERE id = $1
+            "#,
+        )
+        .bind(link_id)
+        .execute(pool)
+        .await?;
+
+        Ok(())
     }
 }
 

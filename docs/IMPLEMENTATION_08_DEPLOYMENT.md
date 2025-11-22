@@ -37,7 +37,7 @@ Each step builds incrementally with clear integration points and testable outcom
 
 ## Step 46: Scheduled Metadata Updates - Background Job
 
-````markdown
+````text
 **Objective:** Implement a background scheduler that periodically updates link metadata (GitHub stars, availability checks, etc.) without manual intervention.
 
 **Requirements:**
@@ -117,7 +117,7 @@ curl -X POST http://localhost:8080/api/admin/trigger-update
 
 ## Step 47: Dockerfile - Multi-stage Build
 
-````markdown
+````text
 **Objective:** Create an optimized, secure Dockerfile using multi-stage builds for production deployment.
 
 **Requirements:**
@@ -253,7 +253,7 @@ curl http://localhost:8080/api/health
 
 ## Step 48: Docker Compose Configuration
 
-````markdown
+````text
 **Objective:** Create Docker Compose configuration for easy local development and production deployment with PostgreSQL.
 
 **Requirements:**
@@ -442,7 +442,7 @@ docker compose up -d
 
 ## Step 49: GitHub Container Registry Publishing
 
-````markdown
+````text
 **Objective:** Set up automated CI/CD pipeline to build and publish Docker images to GitHub Container Registry on every release.
 
 **Requirements:**
@@ -601,7 +601,7 @@ git push origin :refs/tags/v0.1.0-test
 
 ## Step 50: Comprehensive README Documentation
 
-````markdown
+````text
 **Objective:** Create a professional, comprehensive README that serves as the primary documentation entry point.
 
 **Requirements:**
@@ -840,7 +840,7 @@ docker compose up -d
 
 ## Step 51: API Documentation
 
-````markdown
+````text
 **Objective:** Create comprehensive API documentation with all endpoints, request/response formats, and examples.
 
 **Requirements:**
@@ -951,7 +951,7 @@ Create `docs/API.md` with complete API reference:
 
 ## Step 52: Database Migrations Documentation
 
-````markdown
+````text
 **Objective:** Document the database schema, migrations, and backup/restore procedures.
 
 **Requirements:**
@@ -1040,7 +1040,7 @@ docker compose exec -T postgres psql -U rustylinks rustylinks < test-backup.sql
 
 ## Step 53: Testing Documentation and Test Suite Completion
 
-````markdown
+````text
 **Objective:** Document the testing strategy and ensure comprehensive test coverage exists.
 
 **Requirements:**
@@ -1164,7 +1164,7 @@ cargo test
 
 ## Step 54: Security Hardening Checklist
 
-````markdown
+````text
 **Objective:** Document security features and provide a hardening checklist for production deployment.
 
 **Requirements:**
@@ -1270,7 +1270,7 @@ docker scout cves rusty-links:latest
 
 ## Step 55: Final Integration and Launch Preparation
 
-````markdown
+````text
 **Objective:** Final integration testing, documentation review, and preparation for production launch.
 
 **Requirements:**
