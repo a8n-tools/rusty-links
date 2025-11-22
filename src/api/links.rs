@@ -8,7 +8,7 @@
 
 use crate::auth::{get_session, get_session_from_cookies};
 use crate::error::AppError;
-use crate::models::{Category, CreateLink, Language, License, Link, LinkSearchParams, LinkWithCategories, Tag, UpdateLink, User};
+use crate::models::{Category, CreateLink, Language, License, Link, LinkSearchParams, LinkWithCategories, PaginatedLinks, Tag, UpdateLink, User};
 use crate::scraper;
 use axum::{
     extract::{Path, Query, State},
@@ -152,10 +152,20 @@ async fn create_link_handler(
     Ok((StatusCode::CREATED, Json(updated_link)))
 }
 
+/// Response structure for paginated links with metadata
+#[derive(Debug, serde::Serialize)]
+struct PaginatedResponse {
+    links: Vec<LinkWithCategories>,
+    total: i64,
+    page: u32,
+    per_page: u32,
+    total_pages: u32,
+}
+
 /// GET /api/links
 ///
-/// Returns all links for the authenticated user with their categories.
-/// Supports optional query parameters for filtering, searching, and sorting.
+/// Returns paginated links for the authenticated user with their categories.
+/// Supports optional query parameters for filtering, searching, sorting, and pagination.
 ///
 /// # Query Parameters
 /// - `query`: Optional text search across title, description, url, domain
@@ -167,24 +177,28 @@ async fn create_link_handler(
 /// - `license_id`: Optional filter by software license UUID
 /// - `sort_by`: Optional sort field (created_at, updated_at, title, github_stars, status) - default: created_at
 /// - `sort_order`: Optional sort order (asc, desc) - default: desc
+/// - `page`: Optional page number (default: 1)
+/// - `per_page`: Optional items per page (default: 20, max: 100)
 ///
 /// # Examples
-/// - GET /api/links - All links (sorted by created_at desc)
+/// - GET /api/links - All links page 1 (sorted by created_at desc)
+/// - GET /api/links?page=2 - Page 2 of links
+/// - GET /api/links?per_page=50 - 50 links per page
 /// - GET /api/links?query=rust - Search for "rust"
 /// - GET /api/links?status=active - Only active links
 /// - GET /api/links?is_github=true - Only GitHub repos
 /// - GET /api/links?sort_by=title&sort_order=asc - Sort by title A-Z
 /// - GET /api/links?sort_by=github_stars&sort_order=desc - Sort by stars (highest first)
-/// - GET /api/links?query=rust&status=active&sort_by=updated_at - Combined filters and sorting
+/// - GET /api/links?query=rust&status=active&page=2 - Combined filters and pagination
 ///
 /// # Response
-/// - 200 OK: Returns array of links with categories
+/// - 200 OK: Returns paginated links with metadata (total, page, per_page, total_pages)
 /// - 401 Unauthorized: No valid session
 async fn list_links_handler(
     State(pool): State<PgPool>,
     jar: CookieJar,
     Query(params): Query<LinkSearchParams>,
-) -> Result<Json<Vec<LinkWithCategories>>, AppError> {
+) -> Result<Json<PaginatedResponse>, AppError> {
     let user = get_authenticated_user(&pool, &jar).await?;
 
     tracing::debug!(
@@ -198,17 +212,26 @@ async fn list_links_handler(
         license_id = ?params.license_id,
         sort_by = ?params.sort_by,
         sort_order = ?params.sort_order,
+        page = ?params.page,
+        per_page = ?params.per_page,
         "Fetching links with search params"
     );
 
-    // Use search function which handles all filtering
-    let links = Link::search(&pool, user.id, &params).await?;
+    // Use search_paginated function which handles all filtering and pagination
+    let paginated = Link::search_paginated(&pool, user.id, &params).await?;
 
-    tracing::debug!(user_id = %user.id, count = links.len(), "Links fetched");
+    tracing::debug!(
+        user_id = %user.id,
+        count = paginated.links.len(),
+        total = paginated.total,
+        page = paginated.page,
+        total_pages = paginated.total_pages,
+        "Links fetched"
+    );
 
     // Enrich links with categories, tags, languages, and licenses
-    let mut links_with_metadata = Vec::with_capacity(links.len());
-    for link in links {
+    let mut links_with_metadata = Vec::with_capacity(paginated.links.len());
+    for link in paginated.links {
         let categories = Link::get_categories(&pool, link.id, user.id).await?;
         let tags = Link::get_tags(&pool, link.id, user.id).await?;
         let languages = Link::get_languages(&pool, link.id, user.id).await?;
@@ -223,7 +246,13 @@ async fn list_links_handler(
         });
     }
 
-    Ok(Json(links_with_metadata))
+    Ok(Json(PaginatedResponse {
+        links: links_with_metadata,
+        total: paginated.total,
+        page: paginated.page,
+        per_page: paginated.per_page,
+        total_pages: paginated.total_pages,
+    }))
 }
 
 /// PUT /api/links/:id

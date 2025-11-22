@@ -128,7 +128,7 @@ Paginate link results for performance.
 
 ### Prompt
 
-```text
+````text
 Add pagination to the links API and UI for the Rusty Links application.
 
 **Part 1: Extend LinkSearchParams**
@@ -302,7 +302,7 @@ Add CSS:
 - `.pagination-btn`, `.pagination-btn.active` - page buttons
 - `.pagination-ellipsis` - ellipsis between page ranges
 - `.pagination-info` - "Page X of Y" text
-```
+````
 
 ### Verification
 - `cargo check` passes
@@ -318,7 +318,7 @@ Select multiple links for bulk delete/categorize.
 
 ### Prompt
 
-```text
+````text
 Add bulk operations to the Links page for the Rusty Links application.
 
 **Part 1: Add bulk delete endpoint**
@@ -471,7 +471,7 @@ if selection_mode() && !selected_ids().is_empty() {
 Add CSS:
 - `.bulk-action-bar` - floating/sticky action bar
 - `.link-card.selected` - highlight selected links
-```
+````
 
 ### Verification
 - `cargo check` passes
@@ -488,7 +488,7 @@ Export links to JSON, import from JSON/bookmarks.
 
 ### Prompt
 
-```text
+````text
 Add import/export functionality for the Rusty Links application.
 
 **Part 1: Export endpoint**
@@ -655,7 +655,7 @@ In Category model:
 ```rust
 pub async fn get_or_create_by_name(pool: &PgPool, user_id: Uuid, name: &str) -> Result<Category, AppError>
 ```
-```
+````
 
 ### Verification
 - `cargo check` passes
@@ -672,7 +672,7 @@ Loading states, error handling, responsive design.
 
 ### Prompt
 
-```text
+````text
 Add final polish to the Rusty Links UI.
 
 **Part 1: Loading states**
@@ -898,7 +898,7 @@ Add to `assets/style.css`:
     transform: translateY(-2px);
 }
 ```
-```
+````
 
 ### Verification
 - `cargo check` passes

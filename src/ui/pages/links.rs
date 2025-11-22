@@ -7,6 +7,7 @@ use crate::ui::components::tag_select::TagSelect;
 use crate::ui::components::language_select::LanguageSelect;
 use crate::ui::components::license_select::LicenseSelect;
 use crate::ui::components::metadata_badges::{MetadataBadges, CategoryInfo, TagInfo, LanguageInfo, LicenseInfo};
+use crate::ui::components::pagination::Pagination;
 
 #[derive(Debug, Clone, Deserialize, PartialEq)]
 struct Link {
@@ -30,6 +31,15 @@ struct Link {
     languages: Vec<LanguageInfo>,
     #[serde(default)]
     licenses: Vec<LicenseInfo>,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+struct PaginatedResponse {
+    links: Vec<Link>,
+    total: i64,
+    page: u32,
+    per_page: u32,
+    total_pages: u32,
 }
 
 #[derive(Debug, Serialize)]
@@ -101,12 +111,18 @@ pub fn Links() -> Element {
     let mut sort_by = use_signal(|| "created_at".to_string());
     let mut sort_order = use_signal(|| "desc".to_string());
 
+    // Pagination state
+    let mut current_page = use_signal(|| 1u32);
+    let mut total_pages = use_signal(|| 1u32);
+    let mut total_links = use_signal(|| 0i64);
+
     // Fetch links with search query and filters
     let fetch_links = move || {
         let query = search_query();
         let current_filters = filters();
         let current_sort_by = sort_by();
         let current_sort_order = sort_order();
+        let page = current_page();
         spawn(async move {
             loading.set(true);
             let client = reqwest::Client::new();
@@ -151,6 +167,11 @@ pub fn Links() -> Element {
                 params.push(format!("sort_order={}", current_sort_order));
             }
 
+            // Add pagination parameter
+            if page > 1 {
+                params.push(format!("page={}", page));
+            }
+
             let url = if params.is_empty() {
                 "/api/links".to_string()
             } else {
@@ -162,9 +183,11 @@ pub fn Links() -> Element {
             match response {
                 Ok(resp) => {
                     if resp.status().is_success() {
-                        match resp.json::<Vec<Link>>().await {
+                        match resp.json::<PaginatedResponse>().await {
                             Ok(data) => {
-                                links.set(data);
+                                links.set(data.links);
+                                total_pages.set(data.total_pages);
+                                total_links.set(data.total);
                                 error.set(None);
                             }
                             Err(e) => {
@@ -308,6 +331,7 @@ pub fn Links() -> Element {
                             oninput: move |evt| {
                                 let new_value = evt.value();
                                 search_query.set(new_value);
+                                current_page.set(1);
                                 fetch_links();
                             },
                         }
@@ -316,6 +340,7 @@ pub fn Links() -> Element {
                                 class: "search-clear",
                                 onclick: move |_| {
                                     search_query.set(String::new());
+                                    current_page.set(1);
                                     fetch_links();
                                 },
                                 title: "Clear search",
@@ -344,6 +369,7 @@ pub fn Links() -> Element {
                                             let value = evt.value();
                                             f.status = if value.is_empty() { None } else { Some(value) };
                                             filters.set(f);
+                                            current_page.set(1);
                                             fetch_links();
                                         },
                                         option { value: "", "All statuses" }
@@ -364,6 +390,7 @@ pub fn Links() -> Element {
                                             let value = evt.value();
                                             f.category_id = if value.is_empty() { None } else { value.parse().ok() };
                                             filters.set(f);
+                                            current_page.set(1);
                                             fetch_links();
                                         },
                                         option { value: "", "All categories" }
@@ -383,6 +410,7 @@ pub fn Links() -> Element {
                                             let value = evt.value();
                                             f.tag_id = if value.is_empty() { None } else { value.parse().ok() };
                                             filters.set(f);
+                                            current_page.set(1);
                                             fetch_links();
                                         },
                                         option { value: "", "All tags" }
@@ -402,6 +430,7 @@ pub fn Links() -> Element {
                                             let value = evt.value();
                                             f.language_id = if value.is_empty() { None } else { value.parse().ok() };
                                             filters.set(f);
+                                            current_page.set(1);
                                             fetch_links();
                                         },
                                         option { value: "", "All languages" }
@@ -421,6 +450,7 @@ pub fn Links() -> Element {
                                             let value = evt.value();
                                             f.license_id = if value.is_empty() { None } else { value.parse().ok() };
                                             filters.set(f);
+                                            current_page.set(1);
                                             fetch_links();
                                         },
                                         option { value: "", "All licenses" }
@@ -440,6 +470,7 @@ pub fn Links() -> Element {
                                                 let mut f = filters();
                                                 f.is_github = if evt.checked() { Some(true) } else { None };
                                                 filters.set(f);
+                                                current_page.set(1);
                                                 fetch_links();
                                             },
                                         }
@@ -452,6 +483,7 @@ pub fn Links() -> Element {
                                     class: "btn btn-secondary",
                                     onclick: move |_| {
                                         filters.set(Filters::default());
+                                        current_page.set(1);
                                         fetch_links();
                                     },
                                     "Clear All Filters"
@@ -468,6 +500,7 @@ pub fn Links() -> Element {
                             value: "{sort_by()}",
                             onchange: move |evt| {
                                 sort_by.set(evt.value());
+                                current_page.set(1);
                                 fetch_links();
                             },
                             option { value: "created_at", "Date Added" }
@@ -482,6 +515,7 @@ pub fn Links() -> Element {
                             onclick: move |_| {
                                 let new_order = if sort_order() == "desc" { "asc" } else { "desc" };
                                 sort_order.set(new_order.to_string());
+                                current_page.set(1);
                                 fetch_links();
                             },
                             if sort_order() == "desc" { "↓" } else { "↑" }
@@ -558,6 +592,18 @@ pub fn Links() -> Element {
                                     }
                                 }
                             }
+                        }
+                    }
+
+                    // Pagination
+                    if !loading() && !links().is_empty() && total_pages() > 1 {
+                        Pagination {
+                            current_page: current_page(),
+                            total_pages: total_pages(),
+                            on_page_change: move |page| {
+                                current_page.set(page);
+                                fetch_links();
+                            },
                         }
                     }
                 }

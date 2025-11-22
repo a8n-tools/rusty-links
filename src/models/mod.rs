@@ -26,6 +26,6 @@ pub mod user;
 pub use category::{Category, CategoryWithChildren, CreateCategory};
 pub use language::Language;
 pub use license::License;
-pub use link::{CreateLink, Link, LinkSearchParams, LinkWithCategories, UpdateLink};
+pub use link::{CreateLink, Link, LinkSearchParams, LinkWithCategories, PaginatedLinks, UpdateLink};
 pub use tag::{CreateTag, Tag};
 pub use user::{check_user_exists, create_user, find_user_by_email, verify_password, CreateUser, User};

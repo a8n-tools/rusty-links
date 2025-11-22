@@ -69,6 +69,18 @@ pub struct LinkSearchParams {
     pub license_id: Option<Uuid>,     // Filter by software license
     pub sort_by: Option<String>,      // Sort field: created_at, title, github_stars, status, updated_at
     pub sort_order: Option<String>,   // Sort order: asc, desc (default: desc)
+    pub page: Option<u32>,            // Page number (1-indexed)
+    pub per_page: Option<u32>,        // Items per page (default: 20, max: 100)
+}
+
+/// Paginated links response
+#[derive(Debug, Serialize)]
+pub struct PaginatedLinks {
+    pub links: Vec<Link>,
+    pub total: i64,
+    pub page: u32,
+    pub per_page: u32,
+    pub total_pages: u32,
 }
 
 impl Link {
@@ -244,6 +256,136 @@ impl Link {
             .await?;
 
         Ok(links)
+    }
+
+    /// Search links with pagination support
+    ///
+    /// Similar to search() but returns paginated results with metadata.
+    ///
+    /// # Arguments
+    /// * `pool` - Database connection pool
+    /// * `user_id` - User ID to scope the search
+    /// * `params` - Search parameters including pagination (page, per_page)
+    ///
+    /// # Returns
+    /// PaginatedLinks with links for the current page and pagination metadata
+    pub async fn search_paginated(
+        pool: &PgPool,
+        user_id: Uuid,
+        params: &LinkSearchParams,
+    ) -> Result<PaginatedLinks, AppError> {
+        let query_pattern = params.query
+            .as_ref()
+            .map(|q| format!("%{}%", q.to_lowercase()));
+
+        // Pagination parameters
+        let page = params.page.unwrap_or(1).max(1);
+        let per_page = params.per_page.unwrap_or(20).min(100);
+        let offset = ((page - 1) * per_page) as i64;
+
+        // Build WHERE clause for count query
+        let count_query = r#"
+            SELECT COUNT(DISTINCT l.id) as count
+            FROM links l
+            LEFT JOIN link_categories lc ON l.id = lc.link_id
+            LEFT JOIN link_tags lt ON l.id = lt.link_id
+            LEFT JOIN link_languages ll ON l.id = ll.link_id
+            LEFT JOIN link_licenses lli ON l.id = lli.link_id
+            WHERE l.user_id = $1
+            AND ($2::text IS NULL OR
+                LOWER(l.title) LIKE $2 OR
+                LOWER(l.description) LIKE $2 OR
+                LOWER(l.url) LIKE $2 OR
+                LOWER(l.domain) LIKE $2)
+            AND ($3::text IS NULL OR l.status = $3)
+            AND ($4::bool IS NULL OR l.is_github_repo = $4)
+            AND ($5::uuid IS NULL OR lc.category_id = $5)
+            AND ($6::uuid IS NULL OR lt.tag_id = $6)
+            AND ($7::uuid IS NULL OR ll.language_id = $7)
+            AND ($8::uuid IS NULL OR lli.license_id = $8)
+        "#;
+
+        let count_result: (i64,) = sqlx::query_as(count_query)
+            .bind(user_id)
+            .bind(&query_pattern)
+            .bind(&params.status)
+            .bind(params.is_github)
+            .bind(params.category_id)
+            .bind(params.tag_id)
+            .bind(params.language_id)
+            .bind(params.license_id)
+            .fetch_one(pool)
+            .await?;
+
+        let total = count_result.0;
+
+        // Validate and build sort clause
+        let sort_field = match params.sort_by.as_deref() {
+            Some("title") => "LOWER(l.title)",
+            Some("github_stars") => "l.github_stars",
+            Some("status") => "l.status",
+            Some("updated_at") => "l.updated_at",
+            _ => "l.created_at",
+        };
+
+        let sort_order = match params.sort_order.as_deref() {
+            Some("asc") => "ASC",
+            _ => "DESC",
+        };
+
+        // Build query with pagination
+        let query_str = format!(
+            r#"
+            SELECT DISTINCT l.* FROM links l
+            LEFT JOIN link_categories lc ON l.id = lc.link_id
+            LEFT JOIN link_tags lt ON l.id = lt.link_id
+            LEFT JOIN link_languages ll ON l.id = ll.link_id
+            LEFT JOIN link_licenses lli ON l.id = lli.link_id
+            WHERE l.user_id = $1
+            AND ($2::text IS NULL OR
+                LOWER(l.title) LIKE $2 OR
+                LOWER(l.description) LIKE $2 OR
+                LOWER(l.url) LIKE $2 OR
+                LOWER(l.domain) LIKE $2)
+            AND ($3::text IS NULL OR l.status = $3)
+            AND ($4::bool IS NULL OR l.is_github_repo = $4)
+            AND ($5::uuid IS NULL OR lc.category_id = $5)
+            AND ($6::uuid IS NULL OR lt.tag_id = $6)
+            AND ($7::uuid IS NULL OR ll.language_id = $7)
+            AND ($8::uuid IS NULL OR lli.license_id = $8)
+            ORDER BY {} {} NULLS LAST
+            LIMIT $9 OFFSET $10
+            "#,
+            sort_field, sort_order
+        );
+
+        let links = sqlx::query_as::<_, Link>(&query_str)
+            .bind(user_id)
+            .bind(&query_pattern)
+            .bind(&params.status)
+            .bind(params.is_github)
+            .bind(params.category_id)
+            .bind(params.tag_id)
+            .bind(params.language_id)
+            .bind(params.license_id)
+            .bind(per_page as i64)
+            .bind(offset)
+            .fetch_all(pool)
+            .await?;
+
+        let total_pages = if total == 0 {
+            1
+        } else {
+            ((total as f64) / (per_page as f64)).ceil() as u32
+        };
+
+        Ok(PaginatedLinks {
+            links,
+            total,
+            page,
+            per_page,
+            total_pages,
+        })
     }
 
     /// Get links that need refresh (not refreshed in the last N days)
