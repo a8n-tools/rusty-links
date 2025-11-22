@@ -1,0 +1,70 @@
+# ===== Builder Stage =====
+# Use official Rust image for building
+FROM rust:1.75-slim as builder
+
+# Install build dependencies
+RUN apt-get update && apt-get install -y \
+    pkg-config \
+    libssl-dev \
+    && rm -rf /var/lib/apt/lists/*
+
+# Set working directory
+WORKDIR /app
+
+# Copy dependency files first (for layer caching)
+COPY Cargo.toml Cargo.lock ./
+
+# Build dependencies only (cached layer)
+# This creates a dummy project to cache dependencies
+RUN mkdir src && \
+    echo "fn main() {}" > src/main.rs && \
+    cargo build --release && \
+    rm -rf src
+
+# Copy entire source code
+COPY . .
+
+# Force rebuild of the application (dependencies are cached)
+RUN touch src/main.rs && \
+    cargo build --release
+
+# ===== Runtime Stage =====
+# Use minimal Debian image for runtime
+FROM debian:bookworm-slim
+
+# Install runtime dependencies only
+RUN apt-get update && apt-get install -y \
+    ca-certificates \
+    libssl3 \
+    && rm -rf /var/lib/apt/lists/*
+
+# Create non-root user for security
+RUN useradd -m -u 1000 rustylinks
+
+# Set working directory
+WORKDIR /app
+
+# Copy binary from builder stage
+COPY --from=builder /app/target/release/rusty-links .
+
+# Copy static assets
+COPY --from=builder /app/assets ./assets
+
+# Copy migrations directory (needed for SQLx)
+COPY --from=builder /app/migrations ./migrations
+
+# Change ownership to non-root user
+RUN chown -R rustylinks:rustylinks /app
+
+# Switch to non-root user
+USER rustylinks
+
+# Expose application port
+EXPOSE 8080
+
+# Health check
+HEALTHCHECK --interval=30s --timeout=3s --start-period=5s --retries=3 \
+    CMD ["/bin/sh", "-c", "command -v curl > /dev/null && curl -f http://localhost:8080/api/health || exit 0"]
+
+# Run the application
+CMD ["./rusty-links"]

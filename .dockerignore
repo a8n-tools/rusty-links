@@ -1,0 +1,46 @@
+# Build artifacts
+target/
+**/*.rs.bk
+
+# Environment files
+.env
+.env.*
+!.env.example
+
+# Git
+.git/
+.gitignore
+
+# Documentation
+*.md
+README.md
+LICENSE
+
+# Docker files
+Dockerfile
+.dockerignore
+docker-compose.yml
+.dockerignore
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+
+# Development container
+.devcontainer/
+
+# Logs
+*.log
+
+# Database
+*.db
+*.sqlite
+
+# Testing
+coverage/
+
+# Misc
+.DS_Store
