@@ -163,6 +163,8 @@ async fn create_link_handler(
 /// - `is_github`: Optional filter for GitHub repositories only (true/false)
 /// - `category_id`: Optional filter by category UUID
 /// - `tag_id`: Optional filter by tag UUID
+/// - `language_id`: Optional filter by programming language UUID
+/// - `license_id`: Optional filter by software license UUID
 ///
 /// # Examples
 /// - GET /api/links - All links
@@ -171,7 +173,9 @@ async fn create_link_handler(
 /// - GET /api/links?is_github=true - Only GitHub repos
 /// - GET /api/links?category_id=<uuid> - Links in specific category
 /// - GET /api/links?tag_id=<uuid> - Links with specific tag
-/// - GET /api/links?query=rust&status=active&category_id=<uuid> - Combined filters
+/// - GET /api/links?language_id=<uuid> - Links using specific language
+/// - GET /api/links?license_id=<uuid> - Links with specific license
+/// - GET /api/links?query=rust&status=active&language_id=<uuid> - Combined filters
 ///
 /// # Response
 /// - 200 OK: Returns array of links with categories
@@ -190,6 +194,8 @@ async fn list_links_handler(
         is_github = ?params.is_github,
         category_id = ?params.category_id,
         tag_id = ?params.tag_id,
+        language_id = ?params.language_id,
+        license_id = ?params.license_id,
         "Fetching links with search params"
     );
 

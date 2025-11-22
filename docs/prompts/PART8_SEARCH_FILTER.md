@@ -198,7 +198,7 @@ API filtering by language and license.
 
 ### Prompt
 
-```text
+````text
 Add language and license filtering to the links API for the Rusty Links application.
 
 **Part 1: Extend LinkSearchParams**
@@ -276,7 +276,7 @@ Full filtering capability:
 - `GET /api/links?license_id=uuid` - links with license
 - `GET /api/links?language_id=uuid&license_id=uuid` - combined
 - `GET /api/links?query=rust&language_id=uuid&status=active` - full combo
-```
+````
 
 ### Verification
 - `cargo check` passes

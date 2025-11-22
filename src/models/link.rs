@@ -65,6 +65,8 @@ pub struct LinkSearchParams {
     pub is_github: Option<bool>,      // Filter GitHub repos only
     pub category_id: Option<Uuid>,    // Filter by category
     pub tag_id: Option<Uuid>,         // Filter by tag
+    pub language_id: Option<Uuid>,    // Filter by programming language
+    pub license_id: Option<Uuid>,     // Filter by software license
 }
 
 impl Link {
@@ -169,12 +171,12 @@ impl Link {
     /// Search links with text query and filters
     ///
     /// Searches across title, description, url, and domain fields.
-    /// Also supports filtering by status, GitHub repository flag, category, and tag.
+    /// Also supports filtering by status, GitHub repository flag, category, tag, language, and license.
     ///
     /// # Arguments
     /// * `pool` - Database connection pool
     /// * `user_id` - User ID to scope the search
-    /// * `params` - Search parameters (query, status, is_github, category_id, tag_id)
+    /// * `params` - Search parameters (query, status, is_github, category_id, tag_id, language_id, license_id)
     ///
     /// # Returns
     /// Vector of links matching the search criteria, ordered by creation date (newest first)
@@ -192,6 +194,8 @@ impl Link {
             SELECT DISTINCT l.* FROM links l
             LEFT JOIN link_categories lc ON l.id = lc.link_id
             LEFT JOIN link_tags lt ON l.id = lt.link_id
+            LEFT JOIN link_languages ll ON l.id = ll.link_id
+            LEFT JOIN link_licenses lli ON l.id = lli.link_id
             WHERE l.user_id = $1
             AND ($2::text IS NULL OR
                 LOWER(l.title) LIKE $2 OR
@@ -202,6 +206,8 @@ impl Link {
             AND ($4::bool IS NULL OR l.is_github_repo = $4)
             AND ($5::uuid IS NULL OR lc.category_id = $5)
             AND ($6::uuid IS NULL OR lt.tag_id = $6)
+            AND ($7::uuid IS NULL OR ll.language_id = $7)
+            AND ($8::uuid IS NULL OR lli.license_id = $8)
             ORDER BY l.created_at DESC
             "#,
         )
@@ -211,6 +217,8 @@ impl Link {
         .bind(params.is_github)
         .bind(params.category_id)
         .bind(params.tag_id)
+        .bind(params.language_id)
+        .bind(params.license_id)
         .fetch_all(pool)
         .await?;
 
