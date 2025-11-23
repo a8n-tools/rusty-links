@@ -9,50 +9,66 @@ dioxus = { version = "0.7.1", features = ["fullstack", "router"] }
 dioxus-web = { version = "0.7.1", optional = true }
 axum = { version = "0.8.7", features = ["tokio"], optional = true }
 axum-extra = { version = "0.12.2", features = ["cookie"], optional = true }
-tower = { version = "0.4", features = ["util"], optional = true }
-tower-http = { version = "0.5", features = ["cors", "trace"], optional = true }
+tower = { version = "0.5.2", features = ["util"], optional = true }
+tower-http = { version = "0.6.6", features = ["cors", "trace"], optional = true }
 
 # Database
-sqlx = { version = "0.7", features = ["postgres", "runtime-tokio-native-tls", "migrate", "uuid", "chrono"], optional = true }
+sqlx = { version = "0.8.6", features = ["postgres", "runtime-tokio-native-tls", "migrate", "uuid", "chrono"], optional = true }
 
 # Async runtime
-tokio = { version = "1", features = ["full"], optional = true }
+tokio = { version = "1.48.0", features = ["full"], optional = true }
 
 # Serialization
-serde = { version = "1.0", features = ["derive"] }
-serde_json = "1.0"
+serde = { version = "1.0.228", features = ["derive"] }
+serde_json = "1.0.145"
 
 # HTTP client (for frontend API calls and scraping)
-reqwest = { version = "0.11", features = ["json", "cookies"] }
+reqwest = { version = "0.12.24", features = ["json", "cookies"] }
 
 # HTML parsing
-scraper = "0.18"
+scraper = "0.24.0"
 
 # Configuration
-dotenvy = "0.15"
+dotenvy = "0.15.7"
 
 # Logging
-tracing = "0.1"
-tracing-subscriber = { version = "0.3", features = ["json", "env-filter"] }
+tracing = "0.1.41"
+tracing-subscriber = { version = "0.3.20", features = ["json", "env-filter"] }
 
 # Utilities
-uuid = { version = "1.18", features = ["serde", "v4"] }
-url = "2.5"
-chrono = { version = "0.4", features = ["serde"] }
-regex = "1.12"
+uuid = { version = "1.18.1", features = ["serde", "v4", "js"] }
+url = "2.5.7"
+chrono = { version = "0.4.42", features = ["serde"] }
+regex = "1.12.2"
 
 # Password hashing
-argon2 = "0.5"
+argon2 = "0.5.3"
 
 # Session management
-rand = "0.8"
-hex = "0.4"
+rand = "0.9.2"
+hex = "0.4.3"
 
 # WASM compatibility - must be in main dependencies to propagate to all transitive deps
-getrandom = "0.3"
+getrandom = "0.3.4"
 
 [target.'cfg(target_arch = "wasm32")'.dependencies]
-getrandom = { version = "0.3", features = ["wasm_js"] }
+getrandom = { version = "0.3.4", features = ["wasm_js"] }
+wasm-bindgen = "0.2"
+wasm-bindgen-futures = "0.4"
+js-sys = "0.3"
+web-sys = { version = "0.3", features = [
+    "Window",
+    "Document",
+    "Element",
+    "HtmlElement",
+    "HtmlInputElement",
+    "HtmlAnchorElement",
+    "Navigator",
+    "Clipboard",
+    "Blob",
+    "BlobPropertyBag",
+    "Url",
+] }
 
 [features]
 default = []

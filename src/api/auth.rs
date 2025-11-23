@@ -15,7 +15,6 @@ use crate::error::AppError;
 use crate::models::{check_user_exists, create_user, find_user_by_email, verify_password, CreateUser, User};
 use axum::{
     extract::State,
-    http::StatusCode,
     response::IntoResponse,
     Json,
 };
@@ -99,7 +98,9 @@ pub async fn setup_handler(
     );
 
     // Return user info with session cookie
-    Ok((StatusCode::CREATED, jar.add(cookie), Json(user)))
+    // Note: Using (CookieJar, Json) returns 200 OK by default
+    // For 201 CREATED, we'd need to use Response::builder()
+    Ok((jar.add(cookie), Json(user)))
 }
 
 /// POST /api/auth/login

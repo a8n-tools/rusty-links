@@ -18,7 +18,7 @@ COPY Cargo.toml Cargo.lock ./
 # This creates a dummy project to cache dependencies
 RUN mkdir src && \
     echo "fn main() {}" > src/main.rs && \
-    cargo build --release && \
+    cargo build --release --features server && \
     rm -rf src
 
 # Copy entire source code
@@ -26,7 +26,7 @@ COPY . .
 
 # Force rebuild of the application (dependencies are cached)
 RUN touch src/main.rs && \
-    cargo build --release
+    cargo build --release --features server
 
 # ===== Runtime Stage =====
 # Use minimal Debian image for runtime

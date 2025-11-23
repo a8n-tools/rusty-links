@@ -342,3 +342,7 @@ Sources:
 - https://github.com/rust-random/rand/issues/1110
 
 The typical solution is to use Cargo's dependency resolution features to force all dependencies to use a single getrandom version with the correct features enabled.
+
+- ✅ Server feature compiles successfully (cargo check --features server)
+- ✅ Web feature compiles successfully for WASM (cargo check --features web --target wasm32-unknown-unknown)
+

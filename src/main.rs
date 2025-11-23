@@ -1,23 +1,9 @@
+// Import modules from the library
 #[cfg(feature = "server")]
-mod api;
-#[cfg(feature = "server")]
-mod auth;
-#[cfg(feature = "server")]
-mod config;
-#[cfg(feature = "server")]
-mod error;
-#[cfg(feature = "server")]
-mod github;
-#[cfg(feature = "server")]
-mod models;
-#[cfg(feature = "server")]
-mod scheduler;
-#[cfg(feature = "server")]
-mod scraper;
-mod ui;
+use rusty_links::{api, config, error, scheduler};
 
 #[cfg(feature = "server")]
-use crate::error::AppError;
+use error::AppError;
 #[cfg(feature = "server")]
 use axum::{response::IntoResponse, routing::get, Router};
 #[cfg(feature = "server")]
@@ -234,5 +220,6 @@ async fn main() {
 // Web client entry point
 #[cfg(feature = "web")]
 fn main() {
-    dioxus_web::launch(ui::app::App);
+    use rusty_links::ui::app::App;
+    dioxus::launch(App);
 }
