@@ -2,29 +2,44 @@
 # App name
 name = "rusty-links"
 
-# The Dioxus platform to default to
+# Dioxus App Default Platform
 default_platform = "fullstack"
 
-# Assets directory
+# `build` & `serve` dist path
+out_dir = "dist"
+
+# resource (assets) file folder
 asset_dir = "assets"
 
-# HTML file to use for web builds
-index_on_404 = true
-
 [web.app]
+# HTML title tag content
+title = "Rusty Links"
+
 # Base path for the app
 base_path = "/"
 
 [web.watcher]
-# Watch for changes in these paths
+# when watcher trigger, regenerate the `index.html`
+reload_html = true
+
+# which files or dirs will be watcher monitoring
 watch_path = ["src", "assets"]
 
+# include `assets` in web platform
 [web.resource]
 # Public directory to serve static files from
 public_dir = "assets"
 
-# Output directory for compiled assets
-out_dir = "dist"
+# CSS style file
+style = []
+
+# Javascript code file
+script = []
+
+[web.resource.dev]
+# Javascript code file
+# serve: [dev-server] only
+script = []
 
 [bundle]
 identifier = "com.rustylinks.app"

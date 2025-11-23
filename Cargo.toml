@@ -5,18 +5,18 @@ edition = "2021"
 
 [dependencies]
 # Web framework
-dioxus = { version = "0.5", features = ["fullstack", "router"] }
-dioxus-web = "0.5"
-axum = { version = "0.7", features = ["tokio"] }
-axum-extra = { version = "0.9", features = ["cookie"] }
-tower = { version = "0.4", features = ["util"] }
-tower-http = { version = "0.5", features = ["cors", "trace"] }
+dioxus = { version = "0.7.1", features = ["fullstack", "router"] }
+dioxus-web = { version = "0.7.1", optional = true }
+axum = { version = "0.8.7", features = ["tokio"], optional = true }
+axum-extra = { version = "0.12.2", features = ["cookie"], optional = true }
+tower = { version = "0.4", features = ["util"], optional = true }
+tower-http = { version = "0.5", features = ["cors", "trace"], optional = true }
 
 # Database
-sqlx = { version = "0.7", features = ["postgres", "runtime-tokio-native-tls", "migrate", "uuid", "chrono"] }
+sqlx = { version = "0.7", features = ["postgres", "runtime-tokio-native-tls", "migrate", "uuid", "chrono"], optional = true }
 
 # Async runtime
-tokio = { version = "1", features = ["full"] }
+tokio = { version = "1", features = ["full"], optional = true }
 
 # Serialization
 serde = { version = "1.0", features = ["derive"] }
@@ -36,10 +36,10 @@ tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["json", "env-filter"] }
 
 # Utilities
-uuid = { version = "1.6", features = ["serde", "v4"] }
+uuid = { version = "1.18", features = ["serde", "v4"] }
 url = "2.5"
 chrono = { version = "0.4", features = ["serde"] }
-regex = "1.10"
+regex = "1.12"
 
 # Password hashing
 argon2 = "0.5"
@@ -47,5 +47,27 @@ argon2 = "0.5"
 # Session management
 rand = "0.8"
 hex = "0.4"
+
+# WASM compatibility - must be in main dependencies to propagate to all transitive deps
+getrandom = "0.3"
+
+[target.'cfg(target_arch = "wasm32")'.dependencies]
+getrandom = { version = "0.3", features = ["wasm_js"] }
+
+[features]
+default = []
+server = [
+    "dioxus/server",
+    "dep:axum",
+    "dep:axum-extra",
+    "dep:tower",
+    "dep:tower-http",
+    "dep:tokio",
+    "dep:sqlx",
+]
+web = [
+    "dioxus/web",
+    "dep:dioxus-web",
+]
 
 [dev-dependencies]

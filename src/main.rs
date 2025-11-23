@@ -1,25 +1,41 @@
+#[cfg(feature = "server")]
 mod api;
+#[cfg(feature = "server")]
 mod auth;
+#[cfg(feature = "server")]
 mod config;
+#[cfg(feature = "server")]
 mod error;
+#[cfg(feature = "server")]
 mod github;
+#[cfg(feature = "server")]
 mod models;
+#[cfg(feature = "server")]
 mod scheduler;
+#[cfg(feature = "server")]
 mod scraper;
 mod ui;
 
+#[cfg(feature = "server")]
 use crate::error::AppError;
-use axum::{http::StatusCode, response::IntoResponse, routing::get, Router};
+#[cfg(feature = "server")]
+use axum::{response::IntoResponse, routing::get, Router};
+#[cfg(feature = "server")]
 use sqlx::{postgres::PgPoolOptions, PgPool};
+#[cfg(feature = "server")]
 use std::time::Duration;
+#[cfg(feature = "server")]
 use tower_http::{cors::CorsLayer, trace::TraceLayer};
+#[cfg(feature = "server")]
 use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
 
+#[cfg(feature = "server")]
 /// Serve the index.html page
 async fn serve_index() -> impl IntoResponse {
     axum::response::Html(include_str!("../assets/index.html"))
 }
 
+#[cfg(feature = "server")]
 /// Serve the CSS file
 async fn serve_css() -> impl IntoResponse {
     (
@@ -28,6 +44,7 @@ async fn serve_css() -> impl IntoResponse {
     )
 }
 
+#[cfg(feature = "server")]
 /// Initialize the database connection pool and run migrations.
 ///
 /// This function:
@@ -91,6 +108,7 @@ async fn initialize_database(database_url: &str) -> Result<PgPool, AppError> {
     Ok(pool)
 }
 
+#[cfg(feature = "server")]
 #[tokio::main]
 async fn main() {
     // Initialize tracing with JSON formatting
@@ -211,4 +229,10 @@ async fn main() {
             eprintln!("Server error: {}", e);
             std::process::exit(1);
         });
+}
+
+// Web client entry point
+#[cfg(feature = "web")]
+fn main() {
+    dioxus_web::launch(ui::app::App);
 }
