@@ -6,7 +6,7 @@
 
 mod common;
 
-use rusty_links::models::{create_user, User};
+use rusty_links::models::create_user;
 
 /// Example: Test creating a user
 ///

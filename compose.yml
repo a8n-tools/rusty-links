@@ -1,5 +1,8 @@
 ---
 
+# Project name
+name: rusty-links
+
 services:
 
   app:
@@ -46,16 +49,23 @@ services:
       POSTGRES_PASSWORD: ${DB_PASSWORD:-changeme}
       POSTGRES_DB: ${DB_NAME:-rustylinks}
     volumes:
-      - rusty-links-db-data:/var/lib/postgresql/data
+      - ./data/db/:/var/lib/postgresql/data
+      # Use this with the volume below change the location of the database.
+      #- rusty-links-db-data:/var/lib/postgresql/data
     ports:
       - "5432:5432"
     networks:
       - rusty-links-private
 
-volumes:
-  rusty-links-db-data:
-    driver: local
+#volumes:
+#  rusty-links-db-data:
+#    name: rusty-links-db-data
+#    driver_opts:
+#      type: none
+#      o: bind
+#      device: /full/path/to/rusty-link/db/data
 
 networks:
   rusty-links-private:
+    name: rusty-links-private
     driver: bridge

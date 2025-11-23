@@ -324,24 +324,7 @@ Part 8: Deployment & Documentation (Steps 46-55)
 >
 > Make sure and separate each prompt section. Use markdown. Each prompt should be tagged as text using code tags using quadruple (4) backticks. The goal is to output prompts, but context, etc is important as well. The inner code tags should use triple (3) backticks. Save the prompts in the `docs/` directory.
 
-## Incompatibilities
-
-The main issue is that projects often have both getrandom 0.2 and 0.3 as transitive dependencies, which causes build failures for wasm32-unknown-unknown targets because:
-
-- getrandom 0.2 expects the js feature
-- getrandom 0.3 requires the wasm_js feature and has different cfg requirements
-
-The dx CLI is automatically setting --cfg getrandom_backend="wasm_js" for wasm builds, but this cfg format is incompatible with getrandom 0.2, causing the compilation errors you're seeing.
-
-Sources:
-- https://github.com/bevyengine/bevy/issues/17699
-- https://github.com/uuid-rs/uuid/issues/827
-- https://users.rust-lang.org/t/getrandom-version-conflict-error-building-a-wasm/132355
-- https://users.rust-lang.org/t/getrandom-0-3-2-wasm-js-feature-issue/127584
-- https://stackoverflow.com/questions/79714237/wasm-pack-build-failed-getrandom-version-conflict-with-libsignal-protocol-crate
-- https://github.com/rust-random/rand/issues/1110
-
-The typical solution is to use Cargo's dependency resolution features to force all dependencies to use a single getrandom version with the correct features enabled.
+## Notes
 
 - ✅ Server feature compiles successfully (cargo check --features server)
 - ✅ Web feature compiles successfully for WASM (cargo check --features web --target wasm32-unknown-unknown)

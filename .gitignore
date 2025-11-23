@@ -1,3 +1,12 @@
+# Created by https://www.toptal.com/developers/gitignore/api/dotenv
+# Edit at https://www.toptal.com/developers/gitignore?templates=dotenv
+
+### dotenv ###
+.env
+
+# End of https://www.toptal.com/developers/gitignore/api/dotenv
+
+
 # Created by https://www.toptal.com/developers/gitignore/api/rust
 # Edit at https://www.toptal.com/developers/gitignore?templates=rust
 
@@ -162,3 +171,6 @@ fabric.properties
 .idea/**/azureSettings.xml
 
 # End of https://www.toptal.com/developers/gitignore/api/jetbrains
+
+# Database data directory (bind mount)
+data/
