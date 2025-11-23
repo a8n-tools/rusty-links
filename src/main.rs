@@ -9,11 +9,24 @@ mod scraper;
 mod ui;
 
 use crate::error::AppError;
-use axum::Router;
+use axum::{http::StatusCode, response::IntoResponse, routing::get, Router};
 use sqlx::{postgres::PgPoolOptions, PgPool};
 use std::time::Duration;
 use tower_http::{cors::CorsLayer, trace::TraceLayer};
 use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
+
+/// Serve the index.html page
+async fn serve_index() -> impl IntoResponse {
+    axum::response::Html(include_str!("../assets/index.html"))
+}
+
+/// Serve the CSS file
+async fn serve_css() -> impl IntoResponse {
+    (
+        [(axum::http::header::CONTENT_TYPE, "text/css")],
+        include_str!("../assets/style.css"),
+    )
+}
 
 /// Initialize the database connection pool and run migrations.
 ///
@@ -149,14 +162,16 @@ async fn main() {
     tracing::info!("Creating API router...");
     let api_router = api::create_router(pool.clone(), scheduler_shutdown);
 
-    // Build main application with API routes
+    // Build main application with API routes and frontend
     tracing::info!("Configuring application...");
     let app = Router::new()
+        .route("/", get(serve_index))
+        .route("/assets/style.css", get(serve_css))
         .nest("/api", api_router)
         .layer(CorsLayer::permissive())
         .layer(TraceLayer::new_for_http());
 
-    tracing::info!("Application configured with API routes, CORS and tracing middleware");
+    tracing::info!("Application configured with frontend, API routes, CORS and tracing middleware");
 
     // Bind to configured port
     let addr = format!("0.0.0.0:{}", config.app_port);
@@ -178,6 +193,8 @@ async fn main() {
         config.app_port
     );
     eprintln!("🚀 Server listening on http://{}", addr);
+    eprintln!("\nFrontend:");
+    eprintln!("  GET    /                     - Main application");
     eprintln!("\nAPI Endpoints:");
     eprintln!("  POST   /api/auth/setup       - Create first user");
     eprintln!("  POST   /api/auth/login       - Login with email/password");
