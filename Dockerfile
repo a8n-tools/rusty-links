@@ -1,6 +1,6 @@
 # ===== Builder Stage =====
 # Use official Rust image for building
-FROM rust:1.75-slim as builder
+FROM docker.io/rust:1.91-slim AS builder
 
 # Install build dependencies
 RUN apt-get update && apt-get install -y \

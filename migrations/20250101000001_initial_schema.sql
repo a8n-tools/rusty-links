@@ -52,25 +52,25 @@ CREATE TABLE categories (
     parent_id UUID REFERENCES categories(id) ON DELETE CASCADE,
     depth INTEGER NOT NULL CHECK (depth >= 0 AND depth <= 2),
     sort_order INTEGER,
-    created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW(),
-    CONSTRAINT uq_categories_user_name UNIQUE (user_id, lower(name))
+    created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW()
 );
 
 -- Add indexes on categories table
 CREATE INDEX idx_categories_user_id ON categories(user_id);
 CREATE INDEX idx_categories_parent_id ON categories(parent_id);
+CREATE UNIQUE INDEX uq_categories_user_name ON categories(user_id, lower(name));
 
 -- Languages table
 CREATE TABLE languages (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     user_id UUID REFERENCES users(id) ON DELETE CASCADE,
     name TEXT NOT NULL,
-    created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW(),
-    CONSTRAINT uq_languages_user_name UNIQUE (user_id, lower(name))
+    created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW()
 );
 
 -- Add index on languages table
 CREATE INDEX idx_languages_user_id ON languages(user_id);
+CREATE UNIQUE INDEX uq_languages_user_name ON languages(user_id, lower(name));
 
 -- Licenses table
 CREATE TABLE licenses (
@@ -78,24 +78,24 @@ CREATE TABLE licenses (
     user_id UUID REFERENCES users(id) ON DELETE CASCADE,
     name TEXT NOT NULL, -- Acronym (e.g., "MIT", "Apache-2.0")
     full_name TEXT NOT NULL,
-    created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW(),
-    CONSTRAINT uq_licenses_user_name UNIQUE (user_id, lower(name))
+    created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW()
 );
 
 -- Add index on licenses table
 CREATE INDEX idx_licenses_user_id ON licenses(user_id);
+CREATE UNIQUE INDEX uq_licenses_user_name ON licenses(user_id, lower(name));
 
 -- Tags table
 CREATE TABLE tags (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     user_id UUID REFERENCES users(id) ON DELETE CASCADE,
     name TEXT NOT NULL,
-    created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW(),
-    CONSTRAINT uq_tags_user_name UNIQUE (user_id, lower(name))
+    created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW()
 );
 
 -- Add index on tags table
 CREATE INDEX idx_tags_user_id ON tags(user_id);
+CREATE UNIQUE INDEX uq_tags_user_name ON tags(user_id, lower(name));
 
 -- Junction table: Link-Category associations
 CREATE TABLE link_categories (

@@ -6,8 +6,7 @@
   // Use a Dockerfile or Docker Compose file: https://containers.dev/guide/dockerfile
   // Use an image: https://github.com/devcontainers/images/blob/main/src/base-debian/history/1.0.9.md
   // Custom image based on openSUSE Leap 15.6: https://github.com/niceguyit/oci-images/pkgs/container/opensuse-base
-  //"image": "ghcr.io/niceguyit/opensuse-base:v0.2.0-leap-15.6",
-  "image": "opensuse-base:v0.2.0-leap-15.6",
+  "image": "ghcr.io/niceguyit/opensuse-base:v0.3.5-leap-15.6",
   // Use 'postCreateCommand' to run commands after the container is created.
   "postCreateCommand": {
     // FIXME: It seems JetBrains does not run postCreateCommand as the user.
@@ -16,9 +15,9 @@
       "/usr/bin/su",
       "--login",
       "--command",
-      "${containerWorkspaceFolder}/.scripts/config-devcontainer.sh",
+      "${containerWorkspaceFolder}/.devcontainer/config-devcontainer.sh",
       "dev"
-    ]
+    ],
   },
   // Configure tool-specific properties.
   "customizations": {
@@ -27,8 +26,16 @@
         "com.intellij:app:EditorSettings.soft_wrap_file_masks": "*.md; *.txt; *.rst; *.adoc",
         "org.jetbrains.plugins.terminal:app:TerminalOptionsProvider.myHighlightHyperlinks": false
       },
-      "plugins": ["com.jetbrains.sh", "co.anbora.labs.nushell.community"],
-      "backend": "WebStorm"
+      "plugins": [
+        "com.jetbrains.sh",
+        "co.anbora.labs.nushell.community",
+        // The reviews indicate the plugin just calls the CLI.
+        // https://plugins.jetbrains.com/plugin/27310-claude-code-beta-/reviews
+        "com.anthropic.code.plugin",
+        "Docker",
+        "ru.adelf.idea.dotenv",
+      ],
+      "backend": "RustRover"
     },
     "vscode": {
       "extensions": [
@@ -46,8 +53,12 @@
   },
   // Docker-from-docker uses the host's docker socket to gain access to Docker.
   // https://github.com/microsoft/vscode-dev-containers/tree/main/containers/docker-from-docker
-  "runArgs": ["--init"],
-  "mounts": ["source=/var/run/docker.sock,target=/var/run/docker.sock,type=bind"]
+  "runArgs": [
+    "--init"
+  ],
+  "mounts": [
+    "source=/var/run/docker.sock,target=/var/run/docker.sock,type=bind"
+  ]
   // Docker-in-Docker runs Docker inside the container without connecting to the host.
   // https://github.com/microsoft/vscode-dev-containers/tree/main/containers/docker-in-docker
   // Running "Docker in Docker" requires the parent container to be run as --privileged. This definition
