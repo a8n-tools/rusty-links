@@ -1,3 +1,4 @@
+pub mod add_link_button;
 pub mod category_select;
 pub mod empty_state;
 pub mod language_select;

@@ -9,7 +9,8 @@ use crate::ui::components::pagination::Pagination;
 use crate::ui::components::loading::LoadingSpinner;
 use crate::ui::components::empty_state::EmptyState;
 use crate::ui::components::search_filter::{SearchBar, FiltersContainer, FilterOption};
-use crate::ui::components::modal::LinkDetailsModal;
+use crate::ui::components::modal::{LinkDetailsModal, AddLinkDialog};
+use crate::ui::components::add_link_button::AddLinkButton;
 
 #[derive(Debug, Clone, Deserialize)]
 struct PaginatedLinksResponse {
@@ -197,6 +198,10 @@ pub fn LinksListPage() -> Element {
     let mut show_modal = use_signal(|| false);
     let mut selected_link_id = use_signal(|| Option::<Uuid>::None);
 
+    // Add link via paste state
+    let mut show_paste_dialog = use_signal(|| false);
+    let paste_url = use_signal(|| String::new());
+
     // Fetch filter options on mount
     use_effect(move || {
         spawn(async move {
@@ -327,6 +332,21 @@ pub fn LinksListPage() -> Element {
         current_page.set(1);
     };
 
+    // Handle link created from paste
+    let handle_paste_link_created = move |link: Link| {
+        show_paste_dialog.set(false);
+        selected_link_id.set(Some(link.id));
+        show_modal.set(true);
+        fetch();
+    };
+
+    // Handle duplicate from paste
+    let handle_paste_duplicate = move |link: Link| {
+        show_paste_dialog.set(false);
+        selected_link_id.set(Some(link.id));
+        show_modal.set(true);
+    };
+
     rsx! {
         div { class: "page-container",
             Navbar {}
@@ -334,6 +354,12 @@ pub fn LinksListPage() -> Element {
             div { class: "content-container",
                 div { class: "page-header",
                     h1 { "Links" }
+                    AddLinkButton {
+                        on_add: move |_| {
+                            // Refresh links list after adding
+                            fetch();
+                        }
+                    }
                 }
 
                 // Search bar
@@ -422,6 +448,16 @@ pub fn LinksListPage() -> Element {
                         // Re-fetch links after save
                         fetch();
                     }
+                }
+            }
+
+            // Add Link Dialog (from paste)
+            if show_paste_dialog() {
+                AddLinkDialog {
+                    initial_url: paste_url(),
+                    on_close: move |_| show_paste_dialog.set(false),
+                    on_success: handle_paste_link_created,
+                    on_duplicate: handle_paste_duplicate
                 }
             }
         }
