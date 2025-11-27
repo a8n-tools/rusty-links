@@ -4,6 +4,7 @@ pub mod empty_state;
 pub mod language_select;
 pub mod license_select;
 pub mod loading;
+pub mod management;
 pub mod metadata_badges;
 pub mod modal;
 pub mod navbar;

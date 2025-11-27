@@ -1,4 +1,4 @@
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 use crate::ui::components::table::links_table::Link;
 
 #[derive(Serialize)]
@@ -69,4 +69,174 @@ pub async fn fetch_link_details(link_id: &str) -> Result<Link, String> {
     } else {
         Err(format!("Server error: {}", response.status()))
     }
+}
+
+// ==================== Category Management ====================
+
+#[derive(Debug, Clone, PartialEq, Deserialize, Serialize)]
+pub struct CategoryNode {
+    pub id: String,
+    pub name: String,
+    pub parent_id: Option<String>,
+    pub depth: i32,
+    pub link_count: i64,
+    #[serde(default)]
+    pub children: Vec<CategoryNode>,
+}
+
+/// Fetch all categories as a tree structure
+pub async fn fetch_categories() -> Result<Vec<CategoryNode>, String> {
+    let client = reqwest::Client::new();
+    let response = client.get("/api/categories")
+        .send()
+        .await
+        .map_err(|e| format!("Network error: {}", e))?;
+
+    if response.status().is_success() {
+        let categories: Vec<CategoryNode> = response.json().await
+            .map_err(|e| format!("Parse error: {}", e))?;
+        Ok(build_category_tree(categories))
+    } else {
+        Err(format!("Server error: {}", response.status()))
+    }
+}
+
+/// Fetch a single category by ID
+pub async fn fetch_category(id: &str) -> Result<CategoryNode, String> {
+    let client = reqwest::Client::new();
+    let url = format!("/api/categories/{}", id);
+
+    let response = client.get(&url)
+        .send()
+        .await
+        .map_err(|e| format!("Network error: {}", e))?;
+
+    if response.status().is_success() {
+        response.json().await
+            .map_err(|e| format!("Parse error: {}", e))
+    } else {
+        Err(format!("Server error: {}", response.status()))
+    }
+}
+
+/// Create a new category
+pub async fn create_category(name: &str, parent_id: Option<String>) -> Result<CategoryNode, String> {
+    let client = reqwest::Client::new();
+    let body = serde_json::json!({
+        "name": name,
+        "parent_id": parent_id,
+    });
+
+    let response = client.post("/api/categories")
+        .json(&body)
+        .send()
+        .await
+        .map_err(|e| format!("Network error: {}", e))?;
+
+    if response.status().is_success() {
+        response.json().await
+            .map_err(|e| format!("Parse error: {}", e))
+    } else {
+        let error_text = response.text().await.unwrap_or_default();
+        Err(format!("Failed to create category: {}", error_text))
+    }
+}
+
+/// Update a category's name
+pub async fn update_category(id: &str, name: &str) -> Result<CategoryNode, String> {
+    let client = reqwest::Client::new();
+    let url = format!("/api/categories/{}", id);
+    let body = serde_json::json!({ "name": name });
+
+    let response = client.put(&url)
+        .json(&body)
+        .send()
+        .await
+        .map_err(|e| format!("Network error: {}", e))?;
+
+    if response.status().is_success() {
+        response.json().await
+            .map_err(|e| format!("Parse error: {}", e))
+    } else {
+        let error_text = response.text().await.unwrap_or_default();
+        Err(format!("Failed to update category: {}", error_text))
+    }
+}
+
+/// Delete a category
+pub async fn delete_category(id: &str) -> Result<(), String> {
+    let client = reqwest::Client::new();
+    let url = format!("/api/categories/{}", id);
+
+    let response = client.delete(&url)
+        .send()
+        .await
+        .map_err(|e| format!("Network error: {}", e))?;
+
+    if response.status().is_success() {
+        Ok(())
+    } else {
+        let error_text = response.text().await.unwrap_or_default();
+        Err(format!("Failed to delete category: {}", error_text))
+    }
+}
+
+/// Move a category to a new parent
+pub async fn move_category(id: &str, new_parent_id: Option<String>) -> Result<CategoryNode, String> {
+    let client = reqwest::Client::new();
+    let url = format!("/api/categories/{}/move", id);
+    let body = serde_json::json!({ "parent_id": new_parent_id });
+
+    let response = client.put(&url)
+        .json(&body)
+        .send()
+        .await
+        .map_err(|e| format!("Network error: {}", e))?;
+
+    if response.status().is_success() {
+        response.json().await
+            .map_err(|e| format!("Parse error: {}", e))
+    } else {
+        let error_text = response.text().await.unwrap_or_default();
+        Err(format!("Failed to move category: {}", error_text))
+    }
+}
+
+/// Build a tree structure from flat list of categories
+fn build_category_tree(mut categories: Vec<CategoryNode>) -> Vec<CategoryNode> {
+    use std::collections::HashMap;
+
+    // Create a map for quick lookup
+    let mut map: HashMap<String, CategoryNode> = HashMap::new();
+    for cat in categories.drain(..) {
+        map.insert(cat.id.clone(), cat);
+    }
+
+    // Build tree
+    let mut roots = Vec::new();
+    let keys: Vec<String> = map.keys().cloned().collect();
+
+    for id in keys {
+        if let Some(cat) = map.remove(&id) {
+            if let Some(parent_id) = &cat.parent_id {
+                // Add to parent's children
+                if let Some(parent) = map.get_mut(parent_id) {
+                    parent.children.push(cat);
+                } else {
+                    // Parent doesn't exist, treat as root
+                    roots.push(cat);
+                }
+            } else {
+                // No parent, it's a root
+                roots.push(cat);
+            }
+        }
+    }
+
+    // Collect remaining nodes from map (these are parents)
+    for (_, cat) in map {
+        roots.push(cat);
+    }
+
+    roots
 }

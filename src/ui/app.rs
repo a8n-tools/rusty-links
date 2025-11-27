@@ -1,7 +1,7 @@
 use dioxus::prelude::*;
 use dioxus_router::Navigator;
 use serde::Deserialize;
-use crate::ui::pages::{setup::Setup, login::Login, links::Links, links_list::LinksListPage};
+use crate::ui::pages::{setup::Setup, login::Login, links::Links, links_list::LinksListPage, categories::CategoriesPage};
 
 #[derive(Debug, Deserialize)]
 #[allow(dead_code)]
@@ -37,6 +37,8 @@ enum Route {
     Links {},
     #[route("/links-table")]
     LinksTable {},
+    #[route("/categories")]
+    Categories {},
 }
 
 #[component]
@@ -112,4 +114,9 @@ async fn check_auth_and_redirect(nav: &Navigator) {
 #[component]
 fn LinksTable() -> Element {
     rsx! { LinksListPage {} }
+}
+
+#[component]
+fn Categories() -> Element {
+    rsx! { CategoriesPage {} }
 }

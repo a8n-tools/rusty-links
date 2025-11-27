@@ -1699,3 +1699,240 @@ body {
     }
 }
 
+/* =================================================================
+   Step 37: Category Management Styles
+   ================================================================= */
+
+/* Category Tree */
+.category-tree {
+    background: white;
+    border: 1px solid var(--rust-border);
+    border-radius: 8px;
+    padding: 16px;
+    margin-bottom: 24px;
+}
+
+.tree-node {
+    margin-bottom: 4px;
+}
+
+.tree-node-content {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 12px;
+    border-radius: 6px;
+    transition: background 0.2s;
+}
+
+.tree-node-content:hover {
+    background: var(--rust-bg);
+}
+
+.drag-handle {
+    cursor: grab;
+    color: var(--rust-text-secondary);
+    font-weight: bold;
+    font-size: 16px;
+}
+
+.drag-handle:active {
+    cursor: grabbing;
+}
+
+.category-name {
+    flex: 1;
+    cursor: pointer;
+    padding: 6px 12px;
+    border-radius: 4px;
+    transition: background 0.2s;
+}
+
+.category-name:hover {
+    background: var(--rust-light);
+}
+
+.usage-count {
+    font-size: 0.875rem;
+    color: var(--rust-text-secondary);
+    min-width: 80px;
+}
+
+.tree-node-actions {
+    display: flex;
+    gap: 4px;
+}
+
+.tree-children {
+    margin-left: 24px;
+}
+
+/* Inline Edit */
+.inline-edit {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex: 1;
+}
+
+.inline-edit-input {
+    flex: 1;
+    padding: 6px 12px;
+    border: 2px solid var(--rust-primary);
+    border-radius: 4px;
+    font-size: 1rem;
+    box-shadow: 0 0 0 3px rgba(183, 65, 14, 0.1);
+}
+
+.inline-edit-input:focus {
+    outline: none;
+}
+
+/* Icon Buttons */
+.btn-icon {
+    width: 32px;
+    height: 32px;
+    padding: 0;
+    border: none;
+    border-radius: 4px;
+    cursor: pointer;
+    font-size: 18px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: all 0.2s;
+}
+
+.btn-icon:hover {
+    transform: scale(1.1);
+}
+
+.btn-save {
+    background: var(--rust-success);
+    color: white;
+}
+
+.btn-save:hover {
+    background: #2f855a;
+}
+
+.btn-cancel {
+    background: var(--rust-text-secondary);
+    color: white;
+}
+
+.btn-cancel:hover {
+    background: #4a5568;
+}
+
+.btn-delete {
+    background: transparent;
+    color: var(--rust-error);
+    border: 1px solid transparent;
+}
+
+.btn-delete:hover {
+    background: #FFEBEE;
+    border-color: var(--rust-error);
+}
+
+.btn-add {
+    background: transparent;
+    color: var(--rust-primary);
+    border: 1px solid transparent;
+    font-size: 20px;
+    font-weight: bold;
+}
+
+.btn-add:hover {
+    background: #FFF3E0;
+    border-color: var(--rust-primary);
+}
+
+/* Add Category Input */
+.add-category-input {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 16px;
+    background: var(--rust-bg);
+    border: 2px solid var(--rust-primary);
+    border-radius: 8px;
+    margin-bottom: 16px;
+}
+
+.add-category-input input {
+    flex: 1;
+    padding: 8px 12px;
+    border: 1px solid var(--rust-border);
+    border-radius: 4px;
+}
+
+.add-category-input input:focus {
+    outline: none;
+    border-color: var(--rust-primary);
+    box-shadow: 0 0 0 3px rgba(183, 65, 14, 0.1);
+}
+
+.btn-sm {
+    padding: 6px 16px;
+    font-size: 0.875rem;
+}
+
+/* Empty State for Categories */
+.empty-state {
+    text-align: center;
+    padding: 60px 20px;
+    background: var(--rust-surface);
+    border: 1px solid var(--rust-border);
+    border-radius: 8px;
+}
+
+.empty-icon {
+    font-size: 64px;
+    margin-bottom: 16px;
+}
+
+.empty-title {
+    font-size: 1.5rem;
+    font-weight: 600;
+    color: var(--rust-text);
+    margin-bottom: 8px;
+}
+
+.empty-description {
+    font-size: 1rem;
+    color: var(--rust-text-secondary);
+}
+
+/* Navbar spacing */
+.navbar-menu {
+    display: flex;
+    gap: 12px;
+    align-items: center;
+}
+
+.navbar-menu a {
+    text-decoration: none;
+}
+
+/* Responsive Design for Categories */
+@media (max-width: 640px) {
+    .tree-node-content {
+        flex-wrap: wrap;
+    }
+
+    .tree-children {
+        margin-left: 12px;
+    }
+
+    .add-category-input {
+        flex-direction: column;
+        align-items: stretch;
+    }
+
+    .add-category-input button {
+        width: 100%;
+    }
+}
+

@@ -40,6 +40,12 @@ pub fn Navbar() -> Element {
                     " Rusty Links"
                 }
                 div { class: "navbar-menu",
+                    a { class: "btn btn-secondary", href: "/links-table",
+                        "Links"
+                    }
+                    a { class: "btn btn-secondary", href: "/categories",
+                        "Categories"
+                    }
                     button {
                         class: "btn btn-secondary",
                         disabled: loading(),
