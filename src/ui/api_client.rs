@@ -240,3 +240,316 @@ fn build_category_tree(mut categories: Vec<CategoryNode>) -> Vec<CategoryNode> {
 
     roots
 }
+
+// ==================== Language Management ====================
+
+#[derive(Debug, Clone, PartialEq, Deserialize, Serialize)]
+pub struct LanguageItem {
+    pub id: String,
+    pub name: String,
+    pub link_count: i64,
+}
+
+/// Fetch all languages
+pub async fn fetch_languages() -> Result<Vec<LanguageItem>, String> {
+    let client = reqwest::Client::new();
+    let response = client.get("/api/languages")
+        .send()
+        .await
+        .map_err(|e| format!("Network error: {}", e))?;
+
+    if response.status().is_success() {
+        response.json().await
+            .map_err(|e| format!("Parse error: {}", e))
+    } else {
+        Err(format!("Server error: {}", response.status()))
+    }
+}
+
+/// Fetch a single language by ID
+pub async fn fetch_language(id: &str) -> Result<LanguageItem, String> {
+    let client = reqwest::Client::new();
+    let url = format!("/api/languages/{}", id);
+
+    let response = client.get(&url)
+        .send()
+        .await
+        .map_err(|e| format!("Network error: {}", e))?;
+
+    if response.status().is_success() {
+        response.json().await
+            .map_err(|e| format!("Parse error: {}", e))
+    } else {
+        Err(format!("Server error: {}", response.status()))
+    }
+}
+
+/// Create a new language
+pub async fn create_language(name: &str) -> Result<LanguageItem, String> {
+    let client = reqwest::Client::new();
+    let body = serde_json::json!({ "name": name });
+
+    let response = client.post("/api/languages")
+        .json(&body)
+        .send()
+        .await
+        .map_err(|e| format!("Network error: {}", e))?;
+
+    if response.status().is_success() {
+        response.json().await
+            .map_err(|e| format!("Parse error: {}", e))
+    } else {
+        let error_text = response.text().await.unwrap_or_default();
+        Err(format!("Failed to create language: {}", error_text))
+    }
+}
+
+/// Update a language's name
+pub async fn update_language(id: &str, name: &str) -> Result<LanguageItem, String> {
+    let client = reqwest::Client::new();
+    let url = format!("/api/languages/{}", id);
+    let body = serde_json::json!({ "name": name });
+
+    let response = client.put(&url)
+        .json(&body)
+        .send()
+        .await
+        .map_err(|e| format!("Network error: {}", e))?;
+
+    if response.status().is_success() {
+        response.json().await
+            .map_err(|e| format!("Parse error: {}", e))
+    } else {
+        let error_text = response.text().await.unwrap_or_default();
+        Err(format!("Failed to update language: {}", error_text))
+    }
+}
+
+/// Delete a language
+pub async fn delete_language(id: &str) -> Result<(), String> {
+    let client = reqwest::Client::new();
+    let url = format!("/api/languages/{}", id);
+
+    let response = client.delete(&url)
+        .send()
+        .await
+        .map_err(|e| format!("Network error: {}", e))?;
+
+    if response.status().is_success() {
+        Ok(())
+    } else {
+        let error_text = response.text().await.unwrap_or_default();
+        Err(format!("Failed to delete language: {}", error_text))
+    }
+}
+
+// ==================== License Management ====================
+
+#[derive(Debug, Clone, PartialEq, Deserialize, Serialize)]
+pub struct LicenseItem {
+    pub id: String,
+    pub name: String,
+    pub acronym: Option<String>,
+    pub link_count: i64,
+}
+
+/// Fetch all licenses
+pub async fn fetch_licenses() -> Result<Vec<LicenseItem>, String> {
+    let client = reqwest::Client::new();
+    let response = client.get("/api/licenses")
+        .send()
+        .await
+        .map_err(|e| format!("Network error: {}", e))?;
+
+    if response.status().is_success() {
+        response.json().await
+            .map_err(|e| format!("Parse error: {}", e))
+    } else {
+        Err(format!("Server error: {}", response.status()))
+    }
+}
+
+/// Fetch a single license by ID
+pub async fn fetch_license(id: &str) -> Result<LicenseItem, String> {
+    let client = reqwest::Client::new();
+    let url = format!("/api/licenses/{}", id);
+
+    let response = client.get(&url)
+        .send()
+        .await
+        .map_err(|e| format!("Network error: {}", e))?;
+
+    if response.status().is_success() {
+        response.json().await
+            .map_err(|e| format!("Parse error: {}", e))
+    } else {
+        Err(format!("Server error: {}", response.status()))
+    }
+}
+
+/// Create a new license
+pub async fn create_license(name: &str, acronym: Option<String>) -> Result<LicenseItem, String> {
+    let client = reqwest::Client::new();
+    let body = serde_json::json!({
+        "name": name,
+        "acronym": acronym,
+    });
+
+    let response = client.post("/api/licenses")
+        .json(&body)
+        .send()
+        .await
+        .map_err(|e| format!("Network error: {}", e))?;
+
+    if response.status().is_success() {
+        response.json().await
+            .map_err(|e| format!("Parse error: {}", e))
+    } else {
+        let error_text = response.text().await.unwrap_or_default();
+        Err(format!("Failed to create license: {}", error_text))
+    }
+}
+
+/// Update a license
+pub async fn update_license(id: &str, name: &str, acronym: Option<String>) -> Result<LicenseItem, String> {
+    let client = reqwest::Client::new();
+    let url = format!("/api/licenses/{}", id);
+    let body = serde_json::json!({
+        "name": name,
+        "acronym": acronym,
+    });
+
+    let response = client.put(&url)
+        .json(&body)
+        .send()
+        .await
+        .map_err(|e| format!("Network error: {}", e))?;
+
+    if response.status().is_success() {
+        response.json().await
+            .map_err(|e| format!("Parse error: {}", e))
+    } else {
+        let error_text = response.text().await.unwrap_or_default();
+        Err(format!("Failed to update license: {}", error_text))
+    }
+}
+
+/// Delete a license
+pub async fn delete_license(id: &str) -> Result<(), String> {
+    let client = reqwest::Client::new();
+    let url = format!("/api/licenses/{}", id);
+
+    let response = client.delete(&url)
+        .send()
+        .await
+        .map_err(|e| format!("Network error: {}", e))?;
+
+    if response.status().is_success() {
+        Ok(())
+    } else {
+        let error_text = response.text().await.unwrap_or_default();
+        Err(format!("Failed to delete license: {}", error_text))
+    }
+}
+
+// ==================== Tag Management ====================
+
+#[derive(Debug, Clone, PartialEq, Deserialize, Serialize)]
+pub struct TagItem {
+    pub id: String,
+    pub name: String,
+    pub link_count: i64,
+}
+
+/// Fetch all tags
+pub async fn fetch_tags() -> Result<Vec<TagItem>, String> {
+    let client = reqwest::Client::new();
+    let response = client.get("/api/tags")
+        .send()
+        .await
+        .map_err(|e| format!("Network error: {}", e))?;
+
+    if response.status().is_success() {
+        response.json().await
+            .map_err(|e| format!("Parse error: {}", e))
+    } else {
+        Err(format!("Server error: {}", response.status()))
+    }
+}
+
+/// Fetch a single tag by ID
+pub async fn fetch_tag(id: &str) -> Result<TagItem, String> {
+    let client = reqwest::Client::new();
+    let url = format!("/api/tags/{}", id);
+
+    let response = client.get(&url)
+        .send()
+        .await
+        .map_err(|e| format!("Network error: {}", e))?;
+
+    if response.status().is_success() {
+        response.json().await
+            .map_err(|e| format!("Parse error: {}", e))
+    } else {
+        Err(format!("Server error: {}", response.status()))
+    }
+}
+
+/// Create a new tag
+pub async fn create_tag(name: &str) -> Result<TagItem, String> {
+    let client = reqwest::Client::new();
+    let body = serde_json::json!({ "name": name });
+
+    let response = client.post("/api/tags")
+        .json(&body)
+        .send()
+        .await
+        .map_err(|e| format!("Network error: {}", e))?;
+
+    if response.status().is_success() {
+        response.json().await
+            .map_err(|e| format!("Parse error: {}", e))
+    } else {
+        let error_text = response.text().await.unwrap_or_default();
+        Err(format!("Failed to create tag: {}", error_text))
+    }
+}
+
+/// Update a tag's name
+pub async fn update_tag(id: &str, name: &str) -> Result<TagItem, String> {
+    let client = reqwest::Client::new();
+    let url = format!("/api/tags/{}", id);
+    let body = serde_json::json!({ "name": name });
+
+    let response = client.put(&url)
+        .json(&body)
+        .send()
+        .await
+        .map_err(|e| format!("Network error: {}", e))?;
+
+    if response.status().is_success() {
+        response.json().await
+            .map_err(|e| format!("Parse error: {}", e))
+    } else {
+        let error_text = response.text().await.unwrap_or_default();
+        Err(format!("Failed to update tag: {}", error_text))
+    }
+}
+
+/// Delete a tag
+pub async fn delete_tag(id: &str) -> Result<(), String> {
+    let client = reqwest::Client::new();
+    let url = format!("/api/tags/{}", id);
+
+    let response = client.delete(&url)
+        .send()
+        .await
+        .map_err(|e| format!("Network error: {}", e))?;
+
+    if response.status().is_success() {
+        Ok(())
+    } else {
+        let error_text = response.text().await.unwrap_or_default();
+        Err(format!("Failed to delete tag: {}", error_text))
+    }
+}

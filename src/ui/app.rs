@@ -1,7 +1,11 @@
 use dioxus::prelude::*;
 use dioxus_router::Navigator;
 use serde::Deserialize;
-use crate::ui::pages::{setup::Setup, login::Login, links::Links, links_list::LinksListPage, categories::CategoriesPage};
+use crate::ui::pages::{
+    setup::Setup, login::Login, links::Links, links_list::LinksListPage,
+    categories::CategoriesPage, languages::LanguagesPage, licenses::LicensesPage,
+    tags::TagsPage
+};
 
 #[derive(Debug, Deserialize)]
 #[allow(dead_code)]
@@ -39,6 +43,12 @@ enum Route {
     LinksTable {},
     #[route("/categories")]
     Categories {},
+    #[route("/languages")]
+    Languages {},
+    #[route("/licenses")]
+    Licenses {},
+    #[route("/tags")]
+    Tags {},
 }
 
 #[component]
@@ -119,4 +129,19 @@ fn LinksTable() -> Element {
 #[component]
 fn Categories() -> Element {
     rsx! { CategoriesPage {} }
+}
+
+#[component]
+fn Languages() -> Element {
+    rsx! { LanguagesPage {} }
+}
+
+#[component]
+fn Licenses() -> Element {
+    rsx! { LicensesPage {} }
+}
+
+#[component]
+fn Tags() -> Element {
+    rsx! { TagsPage {} }
 }

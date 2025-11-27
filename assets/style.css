@@ -1936,3 +1936,124 @@ body {
     }
 }
 
+/* =================================================================
+   Steps 38-40: Flat List Management Styles
+   ================================================================= */
+
+/* Flat List Container */
+.flat-list {
+    background: white;
+    border: 1px solid var(--rust-border);
+    border-radius: 8px;
+    padding: 8px;
+    margin-bottom: 24px;
+}
+
+/* Flat List Item */
+.flat-list-item {
+    margin-bottom: 4px;
+}
+
+.flat-list-item-content {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 12px;
+    border-radius: 6px;
+    transition: background 0.2s;
+}
+
+.flat-list-item-content:hover {
+    background: var(--rust-bg);
+}
+
+/* Item Info */
+.item-info {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+}
+
+.item-name {
+    cursor: pointer;
+    padding: 6px 12px;
+    border-radius: 4px;
+    transition: background 0.2s;
+    font-weight: 500;
+}
+
+.item-name:hover {
+    background: var(--rust-light);
+}
+
+.item-secondary {
+    font-size: 0.875rem;
+    color: var(--rust-text-secondary);
+    padding-left: 12px;
+}
+
+/* Add Item Input */
+.add-item-input {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 16px;
+    background: var(--rust-bg);
+    border: 2px solid var(--rust-primary);
+    border-radius: 8px;
+    margin-bottom: 16px;
+}
+
+.add-item-input input {
+    flex: 1;
+    padding: 8px 12px;
+    border: 1px solid var(--rust-border);
+    border-radius: 4px;
+}
+
+.add-item-input input:focus {
+    outline: none;
+    border-color: var(--rust-primary);
+    box-shadow: 0 0 0 3px rgba(183, 65, 14, 0.1);
+}
+
+/* Special layout for license input with two fields */
+.add-license-input-special {
+    display: grid;
+    grid-template-columns: 2fr 1fr auto auto;
+    gap: 12px;
+}
+
+.add-license-input-special input {
+    flex: unset;
+}
+
+/* Responsive Design for Flat Lists */
+@media (max-width: 640px) {
+    .flat-list-item-content {
+        flex-wrap: wrap;
+    }
+
+    .item-info {
+        flex-basis: 100%;
+    }
+
+    .add-item-input {
+        flex-direction: column;
+        align-items: stretch;
+    }
+
+    .add-item-input button {
+        width: 100%;
+    }
+
+    .add-license-input-special {
+        grid-template-columns: 1fr;
+    }
+
+    .add-license-input-special button {
+        width: 100%;
+    }
+}
+

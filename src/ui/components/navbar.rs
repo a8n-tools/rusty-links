@@ -46,6 +46,15 @@ pub fn Navbar() -> Element {
                     a { class: "btn btn-secondary", href: "/categories",
                         "Categories"
                     }
+                    a { class: "btn btn-secondary", href: "/languages",
+                        "Languages"
+                    }
+                    a { class: "btn btn-secondary", href: "/licenses",
+                        "Licenses"
+                    }
+                    a { class: "btn btn-secondary", href: "/tags",
+                        "Tags"
+                    }
                     button {
                         class: "btn btn-secondary",
                         disabled: loading(),
