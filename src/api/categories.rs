@@ -104,5 +104,5 @@ pub fn create_router() -> Router<PgPool> {
     Router::new()
         .route("/", post(create_category).get(list_categories))
         .route("/tree", get(get_category_tree))
-        .route("/:id", get(get_category).put(update_category).delete(delete_category))
+        .route("/{id}", get(get_category).put(update_category).delete(delete_category))
 }

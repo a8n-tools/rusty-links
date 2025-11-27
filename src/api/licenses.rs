@@ -101,5 +101,5 @@ async fn delete_license(
 pub fn create_router() -> Router<PgPool> {
     Router::new()
         .route("/", get(list_licenses).post(create_license))
-        .route("/:id", axum::routing::delete(delete_license))
+        .route("/{id}", axum::routing::delete(delete_license))
 }

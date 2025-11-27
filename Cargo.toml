@@ -71,7 +71,7 @@ web-sys = { version = "0.3", features = [
 ] }
 
 [features]
-default = []
+default = ["server"]
 server = [
     "dioxus/server",
     "dep:axum",

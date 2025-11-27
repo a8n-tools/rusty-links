@@ -101,5 +101,5 @@ async fn delete_language(
 pub fn create_router() -> Router<PgPool> {
     Router::new()
         .route("/", get(list_languages).post(create_language))
-        .route("/:id", axum::routing::delete(delete_language))
+        .route("/{id}", axum::routing::delete(delete_language))
 }

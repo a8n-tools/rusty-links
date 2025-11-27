@@ -70,5 +70,5 @@ async fn delete_tag(
 pub fn create_router() -> Router<PgPool> {
     Router::new()
         .route("/", post(create_tag).get(list_tags))
-        .route("/:id", axum::routing::delete(delete_tag))
+        .route("/{id}", axum::routing::delete(delete_tag))
 }
