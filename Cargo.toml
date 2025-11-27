@@ -38,6 +38,7 @@ tracing-subscriber = { version = "0.3.20", features = ["json", "env-filter"] }
 # Utilities
 uuid = { version = "1.18.1", features = ["serde", "v4", "js"] }
 url = "2.5.7"
+urlencoding = "2.1"
 chrono = { version = "0.4.42", features = ["serde"] }
 regex = "1.12.2"
 

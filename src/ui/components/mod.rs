@@ -6,6 +6,7 @@ pub mod loading;
 pub mod metadata_badges;
 pub mod navbar;
 pub mod pagination;
+pub mod search_filter;
 pub mod table;
 pub mod tag_select;
 pub mod toast;

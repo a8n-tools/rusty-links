@@ -892,3 +892,233 @@ body {
         gap: 12px;
     }
 }
+
+/* =================================================================
+   Step 34: Search and Filter Components Styles
+   ================================================================= */
+
+/* Search Bar */
+.search-bar {
+    position: relative;
+    margin-bottom: 16px;
+}
+
+.search-icon {
+    position: absolute;
+    left: 12px;
+    top: 50%;
+    transform: translateY(-50%);
+    width: 20px;
+    height: 20px;
+    color: var(--rust-text-secondary);
+    pointer-events: none;
+}
+
+.search-input {
+    width: 100%;
+    padding: 12px 40px 12px 44px;
+    border: 2px solid var(--rust-border);
+    border-radius: 8px;
+    font-size: 1rem;
+    background-color: white;
+    transition: all 0.2s;
+}
+
+.search-input:focus {
+    outline: none;
+    border-color: var(--rust-primary);
+    box-shadow: 0 0 0 3px rgba(183, 65, 14, 0.1);
+}
+
+.search-input::placeholder {
+    color: var(--rust-text-secondary);
+}
+
+.search-clear {
+    position: absolute;
+    right: 12px;
+    top: 50%;
+    transform: translateY(-50%);
+    background: none;
+    border: none;
+    font-size: 24px;
+    color: var(--rust-text-secondary);
+    cursor: pointer;
+    padding: 4px 8px;
+    border-radius: 4px;
+    transition: all 0.2s;
+    line-height: 1;
+}
+
+.search-clear:hover {
+    background-color: #f3f4f6;
+    color: var(--rust-primary);
+}
+
+/* Filters Container */
+.filters-container {
+    display: flex;
+    gap: 12px;
+    margin-bottom: 24px;
+    flex-wrap: wrap;
+    align-items: center;
+}
+
+/* Filter Dropdown */
+.filter-dropdown {
+    position: relative;
+}
+
+.filter-button {
+    padding: 8px 16px;
+    border: 1px solid var(--rust-border);
+    border-radius: 6px;
+    background: white;
+    cursor: pointer;
+    font-size: 0.875rem;
+    color: var(--rust-text);
+    transition: all 0.2s;
+    font-weight: 500;
+}
+
+.filter-button:hover {
+    background: var(--rust-bg);
+    border-color: var(--rust-primary);
+}
+
+/* Filter Menu (Dropdown) */
+.filter-menu {
+    position: absolute;
+    top: 100%;
+    left: 0;
+    margin-top: 4px;
+    background: white;
+    border: 1px solid var(--rust-border);
+    border-radius: 8px;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+    min-width: 280px;
+    max-height: 400px;
+    overflow-y: auto;
+    z-index: 100;
+}
+
+/* Filter Chips (Selected Items) */
+.filter-chips {
+    padding: 12px;
+    border-bottom: 1px solid var(--rust-border);
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+}
+
+.filter-chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    padding: 4px 8px;
+    background: var(--rust-primary);
+    color: white;
+    border-radius: 4px;
+    font-size: 0.875rem;
+}
+
+.filter-chip button {
+    background: none;
+    border: none;
+    color: white;
+    font-size: 18px;
+    cursor: pointer;
+    padding: 0;
+    line-height: 1;
+    margin-left: 4px;
+}
+
+.filter-chip button:hover {
+    opacity: 0.8;
+}
+
+/* Filter Search (Within Dropdown) */
+.filter-search {
+    width: calc(100% - 16px);
+    margin: 8px;
+    padding: 8px 12px;
+    border: 1px solid var(--rust-border);
+    border-radius: 4px;
+    font-size: 0.875rem;
+}
+
+.filter-search:focus {
+    outline: none;
+    border-color: var(--rust-primary);
+    box-shadow: 0 0 0 3px rgba(183, 65, 14, 0.1);
+}
+
+/* Filter Options List */
+.filter-options {
+    padding: 8px;
+    max-height: 300px;
+    overflow-y: auto;
+}
+
+.filter-option {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 8px;
+    cursor: pointer;
+    border-radius: 4px;
+    transition: background 0.15s;
+}
+
+.filter-option:hover {
+    background: var(--rust-bg);
+}
+
+.filter-option input[type="checkbox"] {
+    width: 16px;
+    height: 16px;
+    cursor: pointer;
+}
+
+/* Reset Filters Button */
+.reset-filters {
+    padding: 8px 16px;
+    background: var(--rust-text-secondary);
+    color: white;
+    border: none;
+    border-radius: 6px;
+    cursor: pointer;
+    font-size: 0.875rem;
+    font-weight: 500;
+    transition: all 0.2s;
+}
+
+.reset-filters:hover {
+    background: var(--rust-primary-dark);
+    transform: translateY(-1px);
+}
+
+.reset-filters:active {
+    transform: translateY(0);
+}
+
+/* Responsive Design for Filters */
+@media (max-width: 768px) {
+    .filters-container {
+        flex-direction: column;
+        align-items: stretch;
+    }
+    
+    .filter-dropdown {
+        width: 100%;
+    }
+    
+    .filter-button {
+        width: 100%;
+        text-align: left;
+    }
+    
+    .filter-menu {
+        width: 100%;
+    }
+}
