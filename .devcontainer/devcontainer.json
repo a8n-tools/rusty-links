@@ -2,12 +2,11 @@
 // For config options, see the README at: https://github.com/devcontainers/templates/tree/main/src/universal
 {
   // A name for the dev container displayed in the UI.
-  "name": "openSUSE Leap 15.6",
+  "name": "openSUSE Leap 16.0",
   // Use a Dockerfile or Docker Compose file: https://containers.dev/guide/dockerfile
   // Use an image: https://github.com/devcontainers/images/blob/main/src/base-debian/history/1.0.9.md
   // Custom image based on openSUSE Leap 15.6: https://github.com/niceguyit/oci-images/pkgs/container/opensuse-base
-  "image": "ghcr.io/niceguyit/opensuse-base:v0.5.0-leap-16.0",
-  // "image": "opensuse-base:v0.4.0-leap-16.0",
+  "image": "ghcr.io/niceguyit/opensuse-dev:v0.5.0-leap-16.0",
   // Use 'postCreateCommand' to run commands after the container is created.
   "postCreateCommand": {
     // FIXME: It seems JetBrains does not run postCreateCommand as the user.

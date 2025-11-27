@@ -606,3 +606,289 @@ body {
         width: 100%;
     }
 }
+
+/* =================================================================
+   Step 33: Links Table Component Styles
+   ================================================================= */
+
+/* Content Container */
+.content-container {
+    max-width: 1600px;
+    margin: 0 auto;
+    padding: 24px;
+}
+
+.page-header {
+    margin-bottom: 24px;
+}
+
+.page-header h1 {
+    font-size: 2rem;
+    font-weight: 700;
+    color: var(--rust-primary);
+}
+
+/* Search Filters Placeholder */
+.search-filters-placeholder {
+    margin-bottom: 16px;
+    padding: 12px;
+    background-color: #f9fafb;
+    border-radius: 6px;
+    border: 1px dashed var(--rust-border);
+}
+
+/* Table Container */
+.table-container {
+    background: var(--rust-surface);
+    border: 1px solid var(--rust-border);
+    border-radius: 8px;
+    overflow-x: auto;
+    margin-bottom: 24px;
+}
+
+/* Links Table */
+.links-table {
+    width: 100%;
+    border-collapse: collapse;
+    background: var(--rust-surface);
+}
+
+.links-table th {
+    background: #f5f1ed;
+    padding: 12px;
+    text-align: left;
+    font-weight: 600;
+    border-bottom: 2px solid var(--rust-border);
+    user-select: none;
+    color: var(--rust-text);
+    white-space: nowrap;
+}
+
+.links-table th.sortable {
+    cursor: pointer;
+}
+
+.links-table th.sortable:hover {
+    background: #ebe7e3;
+}
+
+.links-table td {
+    padding: 12px;
+    border-bottom: 1px solid var(--rust-border);
+    color: var(--rust-text);
+}
+
+.links-table tr.link-row {
+    cursor: pointer;
+    transition: background-color 0.15s;
+}
+
+.links-table tr.link-row:hover {
+    background: var(--rust-bg);
+}
+
+.links-table tbody tr:nth-child(even) {
+    background: #FAFAFA;
+}
+
+.links-table tbody tr:nth-child(even):hover {
+    background: var(--rust-bg);
+}
+
+/* Table Cells */
+.cell-logo {
+    width: 48px;
+    text-align: center;
+}
+
+.link-logo {
+    width: 48px;
+    height: 48px;
+    object-fit: contain;
+    border-radius: 4px;
+}
+
+.link-logo-placeholder {
+    width: 48px;
+    height: 48px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 24px;
+    background: #f3f4f6;
+    border-radius: 4px;
+}
+
+.cell-title {
+    max-width: 300px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    font-weight: 500;
+}
+
+.cell-domain {
+    color: var(--rust-text-secondary);
+    font-size: 0.875rem;
+    max-width: 250px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.cell-description {
+    max-width: 400px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    color: var(--rust-text-secondary);
+    font-size: 0.875rem;
+}
+
+.cell-tags,
+.cell-categories,
+.cell-languages,
+.cell-licenses {
+    font-size: 0.875rem;
+    color: var(--rust-text-secondary);
+    max-width: 200px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.cell-status {
+    text-align: center;
+}
+
+.status-badge {
+    display: inline-block;
+    padding: 4px 8px;
+    border-radius: 4px;
+    font-size: 0.75rem;
+    font-weight: 500;
+    text-transform: capitalize;
+}
+
+.cell-stars {
+    text-align: center;
+    font-weight: 500;
+}
+
+.cell-date {
+    font-size: 0.875rem;
+    color: var(--rust-text-secondary);
+    white-space: nowrap;
+}
+
+/* Pagination Container */
+.pagination-container {
+    margin-top: 24px;
+}
+
+.pagination {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    padding: 16px;
+    background: var(--rust-surface);
+    border: 1px solid var(--rust-border);
+    border-radius: 8px;
+}
+
+.pagination-pages {
+    display: flex;
+    gap: 4px;
+    align-items: center;
+}
+
+.pagination-btn {
+    padding: 8px 12px;
+    border: 1px solid var(--rust-border);
+    border-radius: 4px;
+    background: white;
+    cursor: pointer;
+    font-size: 0.875rem;
+    color: var(--rust-text);
+    transition: all 0.2s;
+}
+
+.pagination-btn:hover:not(:disabled) {
+    background: #f5f1ed;
+    border-color: var(--rust-primary);
+}
+
+.pagination-btn:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+}
+
+.pagination-page-active {
+    background: var(--rust-primary);
+    color: white;
+    border-color: var(--rust-primary);
+}
+
+.pagination-page-active:hover {
+    background: var(--rust-primary-dark);
+}
+
+.pagination-ellipsis {
+    padding: 8px 4px;
+    color: var(--rust-text-secondary);
+}
+
+.pagination-info {
+    text-align: center;
+    margin-top: 8px;
+    font-size: 0.875rem;
+    color: var(--rust-text-secondary);
+}
+
+/* Results Info */
+.results-info {
+    text-align: center;
+    margin-top: 8px;
+    font-size: 0.875rem;
+    color: var(--rust-text-secondary);
+    padding: 8px;
+}
+
+/* Error Message */
+.error-message {
+    padding: 16px;
+    background-color: #fee2e2;
+    color: #991b1b;
+    border: 1px solid #fca5a5;
+    border-radius: 6px;
+    margin: 16px 0;
+}
+
+/* Responsive Table */
+@media (max-width: 1400px) {
+    .cell-description {
+        max-width: 250px;
+    }
+}
+
+@media (max-width: 1024px) {
+    .table-container {
+        overflow-x: scroll;
+    }
+    
+    .links-table {
+        min-width: 1200px;
+    }
+}
+
+@media (max-width: 640px) {
+    .content-container {
+        padding: 12px;
+    }
+    
+    .pagination {
+        flex-direction: column;
+        gap: 12px;
+    }
+}
