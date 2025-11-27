@@ -9,6 +9,7 @@ use crate::ui::components::pagination::Pagination;
 use crate::ui::components::loading::LoadingSpinner;
 use crate::ui::components::empty_state::EmptyState;
 use crate::ui::components::search_filter::{SearchBar, FiltersContainer, FilterOption};
+use crate::ui::components::modal::LinkDetailsModal;
 
 #[derive(Debug, Clone, Deserialize)]
 struct PaginatedLinksResponse {
@@ -191,6 +192,10 @@ pub fn LinksListPage() -> Element {
     let mut licenses = use_signal(|| Vec::<FilterOption>::new());
     let mut categories = use_signal(|| Vec::<FilterOption>::new());
     let mut tags = use_signal(|| Vec::<FilterOption>::new());
+
+    // Modal state
+    let mut show_modal = use_signal(|| false);
+    let mut selected_link_id = use_signal(|| Option::<Uuid>::None);
 
     // Fetch filter options on mount
     use_effect(move || {
@@ -381,8 +386,8 @@ pub fn LinksListPage() -> Element {
                         sort_order: sort_order(),
                         on_sort: handle_sort,
                         on_row_click: move |link_id: Uuid| {
-                            // Placeholder for Step 35 - will open modal
-                            tracing::info!("Clicked link: {}", link_id);
+                            selected_link_id.set(Some(link_id));
+                            show_modal.set(true);
                         }
                     }
 
@@ -400,6 +405,22 @@ pub fn LinksListPage() -> Element {
                             let end = (current_page() * per_page()).min(total_links() as u32);
                             format!("Showing {} - {} of {} links", start, end, total_links())
                         }
+                    }
+                }
+            }
+
+            // Link Details Modal
+            if let Some(link_id) = selected_link_id() {
+                LinkDetailsModal {
+                    link_id: link_id,
+                    is_open: show_modal(),
+                    on_close: move |_| {
+                        show_modal.set(false);
+                        selected_link_id.set(None);
+                    },
+                    on_save: move |_| {
+                        // Re-fetch links after save
+                        fetch();
                     }
                 }
             }
