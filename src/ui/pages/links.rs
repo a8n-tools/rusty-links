@@ -1584,6 +1584,18 @@ fn LinkCard(
                                 disabled: is_deleting || is_refreshing,
                                 onclick: move |_| {
                                     let id = link.id.clone();
+
+                                    // Optimistic UI update - immediately update status
+                                    let mut current = links();
+                                    let original_status = if let Some(pos) = current.iter().position(|l| l.id == id) {
+                                        let old_status = current[pos].status.clone();
+                                        current[pos].status = "active".to_string();
+                                        links.set(current);
+                                        old_status
+                                    } else {
+                                        return;
+                                    };
+
                                     spawn(async move {
                                         let client = reqwest::Client::new();
                                         let body = serde_json::json!({"status": "active"});
@@ -1606,14 +1618,32 @@ fn LinkCard(
                                                             }
                                                         }
                                                         Err(e) => {
+                                                            // Rollback optimistic update on parse error
+                                                            let mut current = links();
+                                                            if let Some(pos) = current.iter().position(|l| l.id == id) {
+                                                                current[pos].status = original_status.clone();
+                                                                links.set(current);
+                                                            }
                                                             error.set(Some(format!("Failed to parse updated link: {}", e)));
                                                         }
                                                     }
                                                 } else {
+                                                    // Rollback optimistic update on API error
+                                                    let mut current = links();
+                                                    if let Some(pos) = current.iter().position(|l| l.id == id) {
+                                                        current[pos].status = original_status;
+                                                        links.set(current);
+                                                    }
                                                     error.set(Some("Failed to update link status".to_string()));
                                                 }
                                             }
                                             Err(e) => {
+                                                // Rollback optimistic update on network error
+                                                let mut current = links();
+                                                if let Some(pos) = current.iter().position(|l| l.id == id) {
+                                                    current[pos].status = original_status;
+                                                    links.set(current);
+                                                }
                                                 error.set(Some(format!("Network error: {}", e)));
                                             }
                                         }
@@ -1630,6 +1660,12 @@ fn LinkCard(
                                 let id = link_id_for_delete.clone();
                                 deleting_id.set(Some(id.clone()));
 
+                                // Optimistic UI update - immediately remove from list
+                                let mut current = links();
+                                let deleted_link = current.iter().find(|l| l.id == id).cloned();
+                                current.retain(|l| l.id != id);
+                                links.set(current);
+
                                 spawn(async move {
                                     let client = reqwest::Client::new();
                                     let response = client.delete(&format!("/api/links/{}", id)).send().await;
@@ -1639,14 +1675,24 @@ fn LinkCard(
                                     match response {
                                         Ok(resp) => {
                                             if resp.status().is_success() || resp.status().as_u16() == 204 {
-                                                let mut current = links();
-                                                current.retain(|l| l.id != id);
-                                                links.set(current);
+                                                // Success - link already removed optimistically
                                             } else {
+                                                // Rollback - restore deleted link
+                                                if let Some(link) = deleted_link {
+                                                    let mut current = links();
+                                                    current.push(link);
+                                                    links.set(current);
+                                                }
                                                 error.set(Some("Failed to delete link".to_string()));
                                             }
                                         }
                                         Err(e) => {
+                                            // Rollback - restore deleted link
+                                            if let Some(link) = deleted_link {
+                                                let mut current = links();
+                                                current.push(link);
+                                                links.set(current);
+                                            }
                                             error.set(Some(format!("Network error: {}", e)));
                                         }
                                     }

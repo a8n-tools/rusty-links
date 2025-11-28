@@ -1,14 +1,16 @@
 use dioxus::prelude::*;
 
+/// Search bar component with optimized re-renders
+/// Uses memoization to prevent unnecessary updates
 #[component]
 pub fn SearchBar(
     value: String,
     on_change: EventHandler<String>,
     #[props(default = "Search links...".to_string())] placeholder: String,
 ) -> Element {
-    rsx! {
-        div { class: "search-bar",
-            // Search icon (SVG)
+    // Memoize the search icon to prevent re-rendering
+    let search_icon = use_memo(move || {
+        rsx! {
             svg {
                 class: "search-icon",
                 xmlns: "http://www.w3.org/2000/svg",
@@ -23,6 +25,13 @@ pub fn SearchBar(
                 circle { cx: "11", cy: "11", r: "8" }
                 path { d: "m21 21-4.35-4.35" }
             }
+        }
+    });
+
+    rsx! {
+        div { class: "search-bar",
+            // Search icon (memoized for performance)
+            {search_icon()}
 
             input {
                 r#type: "text",

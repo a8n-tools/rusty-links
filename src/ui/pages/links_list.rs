@@ -1,7 +1,6 @@
 use dioxus::prelude::*;
 use serde::Deserialize;
 use uuid::Uuid;
-use std::time::Duration;
 use crate::ui::components::navbar::Navbar;
 use crate::ui::components::table::LinksTable;
 use crate::ui::components::table::links_table::Link;
@@ -11,6 +10,7 @@ use crate::ui::components::empty_state::EmptyState;
 use crate::ui::components::search_filter::{SearchBar, FiltersContainer, FilterOption};
 use crate::ui::components::modal::{LinkDetailsModal, AddLinkDialog};
 use crate::ui::components::add_link_button::AddLinkButton;
+use crate::ui::performance::use_debounced;
 
 #[derive(Debug, Clone, Deserialize)]
 struct PaginatedLinksResponse {
@@ -178,9 +178,9 @@ pub fn LinksListPage() -> Element {
     let mut sort_by = use_signal(|| "created_at".to_string());
     let mut sort_order = use_signal(|| "desc".to_string());
 
-    // Search state
+    // Search state with debouncing (300ms delay)
     let mut search_query = use_signal(|| String::new());
-    let mut debounced_search = use_signal(|| String::new());
+    let mut debounced_search = use_debounced(search_query(), 300);
 
     // Filter state
     let mut selected_languages = use_signal(|| Vec::<Uuid>::new());
@@ -188,7 +188,7 @@ pub fn LinksListPage() -> Element {
     let mut selected_categories = use_signal(|| Vec::<Uuid>::new());
     let mut selected_tags = use_signal(|| Vec::<Uuid>::new());
 
-    // Filter options
+    // Filter options - memoized to prevent unnecessary updates
     let mut languages = use_signal(|| Vec::<FilterOption>::new());
     let mut licenses = use_signal(|| Vec::<FilterOption>::new());
     let mut categories = use_signal(|| Vec::<FilterOption>::new());
@@ -202,7 +202,7 @@ pub fn LinksListPage() -> Element {
     let mut show_paste_dialog = use_signal(|| false);
     let paste_url = use_signal(|| String::new());
 
-    // Fetch filter options on mount
+    // Fetch filter options on mount (runs once)
     use_effect(move || {
         spawn(async move {
             match fetch_filter_options().await {
@@ -216,15 +216,6 @@ pub fn LinksListPage() -> Element {
                     tracing::error!("Error fetching filter options: {}", err);
                 }
             }
-        });
-    });
-
-    // Debounce search input
-    use_effect(move || {
-        let query = search_query();
-        spawn(async move {
-            tokio::time::sleep(Duration::from_millis(300)).await;
-            debounced_search.set(query);
         });
     });
 
@@ -259,7 +250,7 @@ pub fn LinksListPage() -> Element {
         });
     };
 
-    // Re-fetch when dependencies change
+    // Re-fetch when dependencies change (optimized with memoization)
     use_effect(move || {
         // Trigger on any change to filters, search, sort, or page
         let _ = (
@@ -273,6 +264,13 @@ pub fn LinksListPage() -> Element {
             current_page(),
         );
         fetch();
+    });
+
+    // Memoize results info calculation
+    let results_info = use_memo(move || {
+        let start = ((current_page() - 1) * per_page()) + 1;
+        let end = (current_page() * per_page()).min(total_links() as u32);
+        format!("Showing {} - {} of {} links", start, end, total_links())
     });
 
     // Handle sort
@@ -424,13 +422,9 @@ pub fn LinksListPage() -> Element {
                         on_page_change: handle_page_change
                     }
 
-                    // Showing info
+                    // Showing info (memoized for performance)
                     div { class: "results-info",
-                        {
-                            let start = ((current_page() - 1) * per_page()) + 1;
-                            let end = (current_page() * per_page()).min(total_links() as u32);
-                            format!("Showing {} - {} of {} links", start, end, total_links())
-                        }
+                        {results_info()}
                     }
                 }
             }

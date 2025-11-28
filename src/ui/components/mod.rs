@@ -16,3 +16,4 @@ pub mod skip_link;
 pub mod table;
 pub mod tag_select;
 pub mod toast;
+pub mod virtual_scroll;
