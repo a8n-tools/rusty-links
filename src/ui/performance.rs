@@ -14,9 +14,16 @@ async fn sleep_ms(ms: u64) {
     let _ = JsFuture::from(promise).await;
 }
 
-#[cfg(not(target_arch = "wasm32"))]
+#[cfg(all(not(target_arch = "wasm32"), feature = "server"))]
 async fn sleep_ms(ms: u64) {
     tokio::time::sleep(std::time::Duration::from_millis(ms)).await;
+}
+
+// Fallback for non-WASM, non-server builds (e.g., cargo check --features web on x86_64)
+#[cfg(all(not(target_arch = "wasm32"), not(feature = "server")))]
+async fn sleep_ms(_ms: u64) {
+    // No-op: this code path only exists for compilation purposes
+    // The actual runtime will use either WASM or server implementations
 }
 
 /// Debounce a signal value with a configurable delay

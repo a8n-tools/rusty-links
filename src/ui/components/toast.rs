@@ -101,7 +101,7 @@ fn ToastItem(
                 gloo_timers::future::TimeoutFuture::new(duration as u32).await;
             }
 
-            #[cfg(not(target_arch = "wasm32"))]
+            #[cfg(all(not(target_arch = "wasm32"), feature = "server"))]
             {
                 tokio::time::sleep(std::time::Duration::from_millis(duration)).await;
             }

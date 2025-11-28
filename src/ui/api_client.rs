@@ -39,7 +39,7 @@ where
                     gloo_timers::future::TimeoutFuture::new(delay as u32).await;
                 }
 
-                #[cfg(not(target_arch = "wasm32"))]
+                #[cfg(all(not(target_arch = "wasm32"), feature = "server"))]
                 {
                     tokio::time::sleep(std::time::Duration::from_millis(delay)).await;
                 }

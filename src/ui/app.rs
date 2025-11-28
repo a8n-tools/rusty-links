@@ -1,137 +1,88 @@
 use dioxus::prelude::*;
-use dioxus_router::Navigator;
-use serde::Deserialize;
-use crate::ui::pages::{
-    setup::Setup, login::Login, links::Links, links_list::LinksListPage,
-    categories::CategoriesPage, languages::LanguagesPage, licenses::LicensesPage,
-    tags::TagsPage
-};
+use dioxus_router::RouterConfig;
 
-#[derive(Debug, Deserialize)]
-#[allow(dead_code)]
-struct CheckSetupResponse {
-    setup_required: bool,
-}
+use crate::ui::pages::setup::Setup;
+use crate::ui::pages::login::Login;
+use crate::ui::pages::links::Links;
+use crate::ui::pages::links_list::LinksListPage;
+use crate::ui::pages::categories::CategoriesPage;
+use crate::ui::pages::tags::TagsPage;
+use crate::ui::pages::languages::LanguagesPage;
+use crate::ui::pages::licenses::LicensesPage;
 
-#[derive(Debug, Deserialize)]
-#[allow(dead_code)]
-struct User {
-    id: String,
-    email: String,
-}
+// Include the CSS at compile time
+const STYLES: &str = include_str!("../../assets/style.css");
 
 #[component]
 pub fn App() -> Element {
     rsx! {
-        meta { name: "viewport", content: "width=device-width, initial-scale=1.0, maximum-scale=5.0, user-scalable=yes" }
-        meta { name: "mobile-web-app-capable", content: "yes" }
-        meta { name: "apple-mobile-web-app-capable", content: "yes" }
-        link { rel: "stylesheet", href: "/assets/style.css" }
-        Router::<Route> {}
+        style { {STYLES} }
+        Router::<Route> {
+            config: || RouterConfig::default().on_update(|_| None)
+        }
     }
 }
 
 #[derive(Clone, Routable, Debug, PartialEq)]
-#[rustfmt::skip]
 enum Route {
     #[route("/")]
     Home {},
     #[route("/setup")]
-    Setup {},
+    SetupPage {},
     #[route("/login")]
-    Login {},
+    LoginPage {},
     #[route("/links")]
-    Links {},
-    #[route("/links-table")]
-    LinksTable {},
+    LinksPage {},
+    #[route("/links/list")]
+    LinksList {},
     #[route("/categories")]
     Categories {},
+    #[route("/tags")]
+    Tags {},
     #[route("/languages")]
     Languages {},
     #[route("/licenses")]
     Licenses {},
-    #[route("/tags")]
-    Tags {},
 }
 
 #[component]
 fn Home() -> Element {
-    let mut setup_status = use_signal(|| Option::<bool>::None);
-    let nav = navigator();
-
-    // Check setup status on mount
-    use_effect(move || {
-        spawn(async move {
-            let client = reqwest::Client::new();
-            let response = client
-                .get("/api/auth/check-setup")
-                .send()
-                .await;
-
-            match response {
-                Ok(resp) => {
-                    if let Ok(data) = resp.json::<CheckSetupResponse>().await {
-                        setup_status.set(Some(data.setup_required));
-
-                        // Redirect based on setup status
-                        if data.setup_required {
-                            nav.push("/setup");
-                        } else {
-                            // Check if user is already logged in
-                            check_auth_and_redirect(&nav).await;
-                        }
-                    }
-                }
-                Err(_) => {
-                    // On error, assume we need to check login
-                    nav.push("/login");
-                }
-            }
-        });
-    });
-
     rsx! {
-        div { class: "auth-container",
-            div { class: "auth-card",
-                h1 { class: "auth-title", "Rusty Links" }
-                p { class: "auth-subtitle", "Loading..." }
-            }
-        }
-    }
-}
-
-async fn check_auth_and_redirect(nav: &Navigator) {
-    let client = reqwest::Client::new();
-    let response = client
-        .get("/api/auth/me")
-        .send()
-        .await;
-
-    match response {
-        Ok(resp) => {
-            if resp.status().is_success() {
-                // User is logged in, go to links page
-                nav.push("/links");
-            } else {
-                // Not logged in, go to login page
-                nav.push("/login");
-            }
-        }
-        Err(_) => {
-            // Error checking auth, go to login
-            nav.push("/login");
+        div {
+            h1 { "Hello, Rusty Links!" }
+            p { "Router is working!" }
         }
     }
 }
 
 #[component]
-fn LinksTable() -> Element {
+fn SetupPage() -> Element {
+    rsx! { Setup {} }
+}
+
+#[component]
+fn LoginPage() -> Element {
+    rsx! { Login {} }
+}
+
+#[component]
+fn LinksPage() -> Element {
+    rsx! { Links {} }
+}
+
+#[component]
+fn LinksList() -> Element {
     rsx! { LinksListPage {} }
 }
 
 #[component]
 fn Categories() -> Element {
     rsx! { CategoriesPage {} }
+}
+
+#[component]
+fn Tags() -> Element {
+    rsx! { TagsPage {} }
 }
 
 #[component]
@@ -142,9 +93,4 @@ fn Languages() -> Element {
 #[component]
 fn Licenses() -> Element {
     rsx! { LicensesPage {} }
-}
-
-#[component]
-fn Tags() -> Element {
-    rsx! { TagsPage {} }
 }

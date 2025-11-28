@@ -50,18 +50,36 @@ fn main() {
             "Configuration loaded"
         );
 
-        // Start async runtime for database initialization
+        // Start async runtime for database initialization and background tasks
         let rt = tokio::runtime::Runtime::new().unwrap();
+        let _rt_guard = rt.enter();
+
         let pool = rt.block_on(async {
-            initialize_database(&config.database_url)
-                .await
-                .expect("Failed to initialize database")
+            initialize_database(&config.database_url).await
         });
+
+        let pool = match pool {
+            Ok(pool) => pool,
+            Err(e) => {
+                tracing::error!("Failed to connect to database");
+                tracing::error!("");
+                tracing::error!("Error: {}", e);
+                tracing::error!("");
+                tracing::error!("Please check:");
+                tracing::error!("  1. PostgreSQL is running");
+                tracing::error!("  2. DATABASE_URL in .env is correct: {}", config.masked_database_url());
+                tracing::error!("  3. The database exists and is accessible");
+                tracing::error!("");
+                tracing::error!("To create the database, run:");
+                tracing::error!("  createdb rusty_links");
+                std::process::exit(1);
+            }
+        };
 
         // Initialize global database pool for server functions
         rusty_links::server_functions::auth::set_db_pool(pool.clone());
 
-        // Start background scheduler
+        // Start background scheduler (runs on the tokio runtime we created)
         let scheduler = scheduler::Scheduler::new(pool.clone(), config.clone());
         let _scheduler_handle = scheduler.start();
 
