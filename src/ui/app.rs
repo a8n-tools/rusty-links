@@ -1,6 +1,7 @@
 use dioxus::prelude::*;
 use dioxus_router::RouterConfig;
 
+use crate::server_functions::auth::check_setup;
 use crate::ui::pages::setup::Setup;
 use crate::ui::pages::login::Login;
 use crate::ui::pages::links::Links;
@@ -47,10 +48,50 @@ enum Route {
 
 #[component]
 fn Home() -> Element {
-    rsx! {
-        div {
-            h1 { "Hello, Rusty Links!" }
-            p { "Router is working!" }
+    let nav = navigator();
+    let setup_check = use_resource(|| async { check_setup().await });
+
+    // Clone the result to avoid borrow issues
+    let result = setup_check.read().clone();
+
+    match result {
+        Some(Ok(needs_setup)) => {
+            if needs_setup {
+                // No users exist, redirect to setup
+                nav.push(Route::SetupPage {});
+            } else {
+                // Users exist, redirect to login
+                nav.push(Route::LoginPage {});
+            }
+            rsx! {
+                div { class: "auth-container",
+                    div { class: "loading-container",
+                        div { class: "spinner spinner-medium" }
+                        p { class: "loading-message", "Redirecting..." }
+                    }
+                }
+            }
+        }
+        Some(Err(e)) => {
+            let error_msg = e.to_string();
+            rsx! {
+                div { class: "auth-container",
+                    div { class: "auth-card",
+                        h1 { class: "auth-title", "Error" }
+                        p { class: "message message-error", "Failed to check setup status: {error_msg}" }
+                    }
+                }
+            }
+        }
+        None => {
+            rsx! {
+                div { class: "auth-container",
+                    div { class: "loading-container",
+                        div { class: "spinner spinner-medium" }
+                        p { class: "loading-message", "Loading..." }
+                    }
+                }
+            }
         }
     }
 }
