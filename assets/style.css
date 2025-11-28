@@ -2443,3 +2443,496 @@ body {
     }
 }
 
+/* ==================== Step 43: Responsive Design and Mobile Optimization ==================== */
+
+/* Responsive Typography and Spacing */
+@media (max-width: 1023px) {
+    /* Tablet adjustments */
+    body {
+        font-size: 15px;
+    }
+
+    h1 {
+        font-size: 28px;
+    }
+
+    h2 {
+        font-size: 22px;
+    }
+
+    h3 {
+        font-size: 18px;
+    }
+
+    .page-container {
+        padding: 0;
+    }
+
+    .content-container {
+        padding: 16px;
+    }
+
+    .page-header {
+        gap: 12px;
+    }
+}
+
+@media (max-width: 767px) {
+    /* Mobile typography */
+    body {
+        font-size: 14px;
+    }
+
+    h1 {
+        font-size: 24px;
+    }
+
+    h2 {
+        font-size: 20px;
+    }
+
+    h3 {
+        font-size: 16px;
+    }
+
+    .content-container {
+        padding: 12px;
+    }
+
+    .page-header {
+        flex-direction: column;
+        align-items: stretch;
+        gap: 12px;
+    }
+
+    .page-header h1 {
+        font-size: 22px;
+    }
+
+    .page-header button,
+    .page-header .btn-primary {
+        width: 100%;
+    }
+}
+
+/* Navbar Responsive Design */
+@media (max-width: 1023px) {
+    .navbar {
+        padding: 12px 16px;
+    }
+
+    .navbar-content {
+        flex-wrap: wrap;
+        gap: 12px;
+    }
+
+    .navbar-menu {
+        gap: 8px;
+    }
+
+    .navbar-menu a,
+    .navbar-menu button {
+        padding: 8px 12px;
+        font-size: 13px;
+    }
+}
+
+@media (max-width: 767px) {
+    .navbar {
+        padding: 10px 12px;
+    }
+
+    .navbar-brand {
+        font-size: 18px;
+    }
+
+    .navbar-menu {
+        width: 100%;
+        flex-wrap: wrap;
+        justify-content: flex-start;
+    }
+
+    .navbar-menu a,
+    .navbar-menu button {
+        flex: 1 1 auto;
+        min-width: calc(50% - 4px);
+        text-align: center;
+        padding: 10px 8px;
+        font-size: 12px;
+    }
+}
+
+/* Touch-Friendly Interactions */
+@media (max-width: 767px) {
+    /* Larger touch targets */
+    button,
+    .btn,
+    .btn-primary,
+    .btn-secondary,
+    .btn-danger,
+    a.btn {
+        min-height: 44px;
+        padding: 12px 16px;
+        font-size: 14px;
+    }
+
+    .btn-icon {
+        min-width: 44px;
+        min-height: 44px;
+        padding: 12px;
+    }
+
+    /* Form inputs */
+    input[type="text"],
+    input[type="email"],
+    input[type="password"],
+    input[type="url"],
+    textarea,
+    select {
+        min-height: 44px;
+        padding: 12px;
+        font-size: 16px; /* Prevents iOS zoom on focus */
+    }
+
+    /* Checkboxes and radio buttons */
+    input[type="checkbox"],
+    input[type="radio"] {
+        min-width: 20px;
+        min-height: 20px;
+    }
+}
+
+/* Responsive Tables */
+@media (max-width: 1023px) {
+    .table-container {
+        overflow-x: auto;
+        -webkit-overflow-scrolling: touch;
+        border-radius: 8px;
+        border: 1px solid var(--rust-border);
+    }
+
+    table {
+        min-width: 800px;
+    }
+
+    th,
+    td {
+        padding: 10px;
+        font-size: 13px;
+    }
+}
+
+@media (max-width: 767px) {
+    .table-container {
+        margin: 0 -12px;
+        border-radius: 0;
+        border-left: none;
+        border-right: none;
+    }
+
+    table {
+        min-width: 600px;
+    }
+
+    th,
+    td {
+        padding: 8px;
+        font-size: 12px;
+    }
+
+    /* Horizontal scroll hint */
+    .table-container::after {
+        content: "→ Scroll to see more";
+        display: block;
+        text-align: center;
+        padding: 8px;
+        background: var(--rust-bg);
+        color: var(--rust-muted);
+        font-size: 11px;
+        border-top: 1px solid var(--rust-border);
+    }
+}
+
+/* Modal Responsive Design */
+@media (max-width: 767px) {
+    .modal {
+        padding: 10px;
+    }
+
+    .modal-content {
+        max-width: 100%;
+        margin: 20px 0;
+        border-radius: 12px;
+    }
+
+    .modal-header {
+        padding: 16px;
+    }
+
+    .modal-body {
+        padding: 16px;
+        max-height: calc(100vh - 200px);
+    }
+
+    .modal-footer {
+        padding: 16px;
+        gap: 8px;
+    }
+
+    .modal-footer button {
+        flex: 1;
+    }
+}
+
+/* Dialog and Confirm Modal */
+@media (max-width: 767px) {
+    .confirm-dialog,
+    .add-link-dialog {
+        max-width: 100%;
+        margin: 20px 10px;
+    }
+
+    .dialog-actions,
+    .confirm-actions {
+        flex-direction: column;
+    }
+
+    .dialog-actions button,
+    .confirm-actions button {
+        width: 100%;
+    }
+}
+
+/* Card and List Responsive Design */
+@media (max-width: 1023px) {
+    .link-card {
+        padding: 14px;
+    }
+
+    .link-grid {
+        grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+        gap: 14px;
+    }
+}
+
+@media (max-width: 767px) {
+    .link-card {
+        padding: 12px;
+    }
+
+    .link-grid {
+        grid-template-columns: 1fr;
+        gap: 12px;
+    }
+
+    .link-header {
+        flex-wrap: wrap;
+    }
+
+    .link-title {
+        font-size: 15px;
+    }
+
+    .link-url {
+        font-size: 11px;
+    }
+
+    .metadata-badges {
+        flex-wrap: wrap;
+        gap: 4px;
+    }
+
+    .badge {
+        font-size: 10px;
+        padding: 3px 6px;
+    }
+}
+
+/* Management Pages Responsive */
+@media (max-width: 767px) {
+    .category-tree,
+    .flat-list {
+        margin: 0 -12px;
+    }
+
+    .tree-node-content,
+    .flat-list-item-content {
+        padding: 12px;
+        font-size: 14px;
+    }
+
+    .tree-node-actions,
+    .flat-list-item-actions {
+        gap: 6px;
+    }
+
+    .inline-edit input,
+    .inline-edit-input {
+        font-size: 14px;
+        padding: 10px;
+    }
+
+    .add-category-input,
+    .add-item-input {
+        padding: 12px;
+        gap: 8px;
+    }
+
+    .add-category-input input,
+    .add-item-input input {
+        font-size: 14px;
+        padding: 10px;
+    }
+}
+
+/* Search and Filter Responsive */
+@media (max-width: 767px) {
+    .search-filter-container {
+        flex-direction: column;
+        gap: 12px;
+    }
+
+    .search-input-wrapper,
+    .filter-controls {
+        width: 100%;
+    }
+
+    .filter-controls {
+        flex-wrap: wrap;
+    }
+
+    .filter-controls select,
+    .filter-controls button {
+        flex: 1 1 calc(50% - 6px);
+        min-width: 120px;
+    }
+}
+
+/* Pagination Responsive */
+@media (max-width: 767px) {
+    .pagination {
+        gap: 4px;
+    }
+
+    .pagination button {
+        padding: 8px 12px;
+        font-size: 13px;
+        min-width: 40px;
+    }
+
+    .pagination .page-info {
+        font-size: 12px;
+        padding: 0 8px;
+    }
+}
+
+/* Landscape Mode Optimizations for Mobile */
+@media (max-width: 767px) and (orientation: landscape) {
+    .navbar-menu {
+        flex-wrap: nowrap;
+        overflow-x: auto;
+        -webkit-overflow-scrolling: touch;
+    }
+
+    .navbar-menu a,
+    .navbar-menu button {
+        white-space: nowrap;
+        flex: 0 0 auto;
+        min-width: auto;
+    }
+
+    .modal-body {
+        max-height: calc(100vh - 120px);
+    }
+
+    .page-header {
+        flex-direction: row;
+        flex-wrap: wrap;
+    }
+
+    .page-header button {
+        width: auto;
+        flex: 0 0 auto;
+    }
+
+    .table-container {
+        max-height: 60vh;
+        overflow-y: auto;
+    }
+}
+
+/* Tablet Specific Optimizations */
+@media (min-width: 768px) and (max-width: 1023px) {
+    .link-grid {
+        grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+    }
+
+    .navbar-menu {
+        gap: 10px;
+    }
+
+    .content-container {
+        max-width: 100%;
+        padding: 20px;
+    }
+
+    .modal-content {
+        max-width: 600px;
+    }
+}
+
+/* Desktop Optimizations */
+@media (min-width: 1024px) {
+    .content-container {
+        max-width: 1200px;
+        margin: 0 auto;
+    }
+
+    .link-grid {
+        grid-template-columns: repeat(auto-fill, minmax(350px, 1fr));
+    }
+
+    /* Hover effects for desktop */
+    .link-card:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+    }
+
+    .btn:hover,
+    button:hover:not(:disabled) {
+        transform: translateY(-1px);
+        box-shadow: 0 2px 8px rgba(183, 65, 14, 0.2);
+    }
+
+    .tree-node-content:hover,
+    .flat-list-item-content:hover {
+        background: rgba(183, 65, 14, 0.02);
+    }
+}
+
+/* Print Styles */
+@media print {
+    .navbar,
+    .page-header button,
+    .btn,
+    .modal,
+    .toast-container {
+        display: none !important;
+    }
+
+    .content-container {
+        padding: 0;
+    }
+
+    .link-card,
+    .tree-node,
+    .flat-list-item {
+        break-inside: avoid;
+    }
+
+    body {
+        font-size: 12pt;
+        color: black;
+    }
+}
+
