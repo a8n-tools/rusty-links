@@ -1,41 +1,36 @@
 use dioxus::prelude::*;
-use serde::{Deserialize, Serialize};
-
-#[derive(Debug, Serialize, Deserialize)]
-#[allow(dead_code)]
-struct SetupRequest {
-    email: String,
-    password: String,
-}
-
-#[derive(Debug, Deserialize)]
-#[allow(dead_code)]
-struct User {
-    id: String,
-    email: String,
-}
+use crate::server_functions::auth::{setup, SetupRequest};
+use crate::ui::app::Route;
 
 #[component]
 pub fn Setup() -> Element {
     let mut email = use_signal(|| String::new());
     let mut password = use_signal(|| String::new());
+    let mut name = use_signal(|| String::new());
     let mut loading = use_signal(|| false);
     let mut error = use_signal(|| Option::<String>::None);
     let nav = navigator();
 
-    let on_submit = move |_evt: FormEvent| {
+    let on_submit = move |evt: FormEvent| {
+        evt.prevent_default();
 
         let email_val = email();
         let password_val = password();
+        let name_val = name();
 
         // Basic validation
-        if email_val.is_empty() || password_val.is_empty() {
+        if email_val.is_empty() || password_val.is_empty() || name_val.is_empty() {
             error.set(Some("Please fill in all fields".to_string()));
             return;
         }
 
         if !email_val.contains('@') {
             error.set(Some("Please enter a valid email address".to_string()));
+            return;
+        }
+
+        if password_val.len() < 8 {
+            error.set(Some("Password must be at least 8 characters".to_string()));
             return;
         }
 
@@ -46,31 +41,20 @@ pub fn Setup() -> Element {
             let request = SetupRequest {
                 email: email_val.clone(),
                 password: password_val.clone(),
+                name: name_val.clone(),
             };
 
-            let client = reqwest::Client::new();
-            let response = client
-                .post("/api/auth/setup")
-                .json(&request)
-                .send()
-                .await;
-
-            loading.set(false);
-
-            match response {
-                Ok(resp) => {
-                    if resp.status().is_success() {
-                        // Setup successful, redirect to login
-                        nav.push("/login");
-                    } else {
-                        let error_text = resp.text().await.unwrap_or_else(|_| "Setup failed".to_string());
-                        error.set(Some(format!("Setup failed: {}", error_text)));
-                    }
+            match setup(request).await {
+                Ok(_user) => {
+                    // Setup successful, redirect to links page
+                    nav.push(Route::LinksPage {});
                 }
                 Err(e) => {
-                    error.set(Some(format!("Network error: {}", e)));
+                    error.set(Some(format!("Setup failed: {}", e)));
                 }
             }
+
+            loading.set(false);
         });
     };
 
@@ -85,6 +69,19 @@ pub fn Setup() -> Element {
                 }
 
                 form { class: "form", onsubmit: on_submit,
+                    div { class: "form-group",
+                        label { class: "form-label", r#for: "name", "Name" }
+                        input {
+                            class: "form-input",
+                            r#type: "text",
+                            id: "name",
+                            placeholder: "Your name",
+                            value: "{name}",
+                            disabled: loading(),
+                            oninput: move |evt| name.set(evt.value()),
+                        }
+                    }
+
                     div { class: "form-group",
                         label { class: "form-label", r#for: "email", "Email Address" }
                         input {
@@ -105,7 +102,7 @@ pub fn Setup() -> Element {
                             class: "form-input",
                             r#type: "password",
                             id: "password",
-                            placeholder: "Enter a secure password",
+                            placeholder: "Enter a secure password (min. 8 characters)",
                             value: "{password}",
                             disabled: loading(),
                             oninput: move |evt| password.set(evt.value()),

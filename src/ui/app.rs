@@ -25,7 +25,7 @@ pub fn App() -> Element {
 }
 
 #[derive(Clone, Routable, Debug, PartialEq)]
-enum Route {
+pub enum Route {
     #[route("/")]
     Home {},
     #[route("/setup")]

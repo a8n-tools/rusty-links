@@ -154,13 +154,14 @@ pub async fn create_user(pool: &PgPool, create_user: CreateUser) -> Result<User,
     // Insert user into database
     let user = sqlx::query_as::<_, User>(
         r#"
-        INSERT INTO users (email, password_hash)
-        VALUES ($1, $2)
-        RETURNING id, email, password_hash, created_at
+        INSERT INTO users (email, password_hash, name)
+        VALUES ($1, $2, $3)
+        RETURNING id, email, password_hash, name, created_at
         "#,
     )
     .bind(&create_user.email)
     .bind(&password_hash)
+    .bind("")  // Default empty name for legacy function
     .fetch_one(pool)
     .await?; // Automatic conversion: unique violation → AppError::Duplicate
 
@@ -203,7 +204,7 @@ pub async fn find_user_by_email(pool: &PgPool, email: &str) -> Result<Option<Use
 
     let user = sqlx::query_as::<_, User>(
         r#"
-        SELECT id, email, password_hash, created_at
+        SELECT id, email, password_hash, name, created_at
         FROM users
         WHERE LOWER(email) = LOWER($1)
         "#,

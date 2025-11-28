@@ -1,19 +1,6 @@
 use dioxus::prelude::*;
-use serde::{Deserialize, Serialize};
-
-#[derive(Debug, Serialize, Deserialize)]
-#[allow(dead_code)]
-struct LoginRequest {
-    email: String,
-    password: String,
-}
-
-#[derive(Debug, Deserialize)]
-#[allow(dead_code)]
-struct User {
-    id: String,
-    email: String,
-}
+use crate::server_functions::auth::{login, LoginRequest};
+use crate::ui::app::Route;
 
 #[component]
 pub fn Login() -> Element {
@@ -23,7 +10,8 @@ pub fn Login() -> Element {
     let mut error = use_signal(|| Option::<String>::None);
     let nav = navigator();
 
-    let on_submit = move |_evt: FormEvent| {
+    let on_submit = move |evt: FormEvent| {
+        evt.prevent_default();
 
         let email_val = email();
         let password_val = password();
@@ -43,29 +31,23 @@ pub fn Login() -> Element {
                 password: password_val.clone(),
             };
 
-            let client = reqwest::Client::new();
-            let response = client
-                .post("/api/auth/login")
-                .json(&request)
-                .send()
-                .await;
-
-            loading.set(false);
-
-            match response {
-                Ok(resp) => {
-                    if resp.status().is_success() {
-                        // Login successful, redirect to links page
-                        nav.push("/links");
-                    } else {
-                        // Show generic error to prevent email enumeration
-                        error.set(Some("Invalid credentials".to_string()));
-                    }
+            match login(request).await {
+                Ok(_user) => {
+                    // Login successful, redirect to links page
+                    nav.push(Route::LinksPage {});
                 }
                 Err(e) => {
-                    error.set(Some(format!("Network error: {}", e)));
+                    // Show generic error to prevent email enumeration
+                    let error_msg = e.to_string();
+                    if error_msg.contains("Invalid credentials") {
+                        error.set(Some("Invalid credentials".to_string()));
+                    } else {
+                        error.set(Some(format!("Login failed: {}", error_msg)));
+                    }
                 }
             }
+
+            loading.set(false);
         });
     };
 
