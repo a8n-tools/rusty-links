@@ -486,7 +486,7 @@ impl Link {
         Ok(link)
     }
 
-    /// Delete a link
+    /// Delete a link (requires user_id for verification)
     pub async fn delete(pool: &PgPool, id: Uuid, user_id: Uuid) -> Result<(), AppError> {
         let result = sqlx::query(
             r#"
@@ -506,6 +506,11 @@ impl Link {
         tracing::info!(link_id = %id, "Link deleted");
 
         Ok(())
+    }
+
+    /// Mark a link as active (sets status to "active")
+    pub async fn mark_as_active(pool: &PgPool, id: Uuid) -> Result<(), AppError> {
+        Self::update_status(pool, id, "active").await
     }
 
     /// Add a category to a link

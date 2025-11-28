@@ -95,7 +95,7 @@ async fn fetch_filter_options() -> Result<
     let client = reqwest::Client::new();
 
     // Fetch all filter options in parallel
-    let (languages_res, licenses_res, categories_res, tags_res) = tokio::join!(
+    let (languages_res, licenses_res, categories_res, tags_res) = futures::join!(
         client.get("/api/languages").send(),
         client.get("/api/licenses").send(),
         client.get("/api/categories").send(),

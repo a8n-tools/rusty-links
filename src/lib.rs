@@ -19,4 +19,8 @@ pub mod models;
 pub mod scheduler;
 #[cfg(feature = "server")]
 pub mod scraper;
+
+// Server functions (available on both client and server)
+pub mod server_functions;
+
 pub mod ui;

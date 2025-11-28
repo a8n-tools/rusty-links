@@ -1,5 +1,23 @@
 use dioxus::prelude::*;
-use std::time::Duration;
+
+#[cfg(target_arch = "wasm32")]
+async fn sleep_ms(ms: u64) {
+    use wasm_bindgen_futures::JsFuture;
+    use web_sys::js_sys;
+
+    let promise = js_sys::Promise::new(&mut |resolve, _| {
+        web_sys::window()
+            .unwrap()
+            .set_timeout_with_callback_and_timeout_and_arguments_0(&resolve, ms as i32)
+            .unwrap();
+    });
+    let _ = JsFuture::from(promise).await;
+}
+
+#[cfg(not(target_arch = "wasm32"))]
+async fn sleep_ms(ms: u64) {
+    tokio::time::sleep(std::time::Duration::from_millis(ms)).await;
+}
 
 /// Debounce a signal value with a configurable delay
 /// Returns a debounced signal that updates after the delay period
@@ -12,7 +30,7 @@ pub fn use_debounced<T: Clone + PartialEq + 'static>(
     use_effect(move || {
         let current_value = value.clone();
         spawn(async move {
-            tokio::time::sleep(Duration::from_millis(delay_ms)).await;
+            sleep_ms(delay_ms).await;
             debounced.set(current_value);
         });
     });

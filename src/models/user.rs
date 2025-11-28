@@ -39,8 +39,55 @@ pub struct User {
     /// Argon2 password hash (never send to frontend)
     #[serde(skip_serializing)]
     pub password_hash: String,
+    /// User's display name
+    pub name: String,
     /// Timestamp when user was created
     pub created_at: DateTime<Utc>,
+}
+
+impl User {
+    /// Create a new user (associated function wrapper)
+    pub async fn create(pool: &PgPool, email: &str, password: &str, name: &str) -> Result<Self, AppError> {
+        // Validate email format
+        validate_email(email)?;
+
+        tracing::info!(email = %email, "Creating new user");
+
+        // Hash password using Argon2
+        let password_hash = hash_password(password)?;
+
+        // Insert user into database
+        let user = sqlx::query_as::<_, User>(
+            r#"
+            INSERT INTO users (email, password_hash, name)
+            VALUES ($1, $2, $3)
+            RETURNING id, email, password_hash, name, created_at
+            "#,
+        )
+        .bind(email)
+        .bind(&password_hash)
+        .bind(name)
+        .fetch_one(pool)
+        .await?;
+
+        tracing::info!(
+            user_id = %user.id,
+            email = %user.email,
+            "User created successfully"
+        );
+
+        Ok(user)
+    }
+
+    /// Find a user by email (associated function wrapper)
+    pub async fn find_by_email(pool: &PgPool, email: &str) -> Result<Option<Self>, AppError> {
+        find_user_by_email(pool, email).await
+    }
+
+    /// Verify password against this user's hash
+    pub fn verify_password(&self, password: &str) -> bool {
+        verify_password(password, &self.password_hash).unwrap_or(false)
+    }
 }
 
 /// Data for creating a new user

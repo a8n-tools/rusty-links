@@ -1,3 +1,6 @@
+# Configure Dioxus
+# https://dioxuslabs.com/learn/0.7/guides/tools/configure
+
 [application]
 # App name
 name = "rusty-links"

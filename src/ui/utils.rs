@@ -24,18 +24,14 @@ pub async fn read_clipboard() -> Result<String, String> {
     let navigator = window.navigator();
     let clipboard = navigator.clipboard();
 
-    if let Some(clipboard) = clipboard {
-        let promise = clipboard.read_text();
-        let result = JsFuture::from(promise).await
-            .map_err(|_| "Failed to read clipboard")?;
+    let promise = clipboard.read_text();
+    let result = JsFuture::from(promise).await
+        .map_err(|_| "Failed to read clipboard")?;
 
-        let text = result.as_string()
-            .ok_or("Clipboard content is not a string")?;
+    let text = result.as_string()
+        .ok_or("Clipboard content is not a string")?;
 
-        Ok(text)
-    } else {
-        Err("Clipboard API not available".to_string())
-    }
+    Ok(text)
 }
 
 /// Fallback for non-browser environments
