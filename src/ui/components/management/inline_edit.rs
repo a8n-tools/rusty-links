@@ -9,12 +9,17 @@ pub fn InlineEditInput(
     let mut input_value = use_signal(|| value.clone());
 
     rsx! {
-        div { class: "inline-edit",
+        div {
+            class: "inline-edit",
+            role: "group",
+            "aria-label": "Inline edit mode",
             input {
                 r#type: "text",
                 class: "inline-edit-input",
                 value: "{input_value()}",
                 autofocus: true,
+                "aria-label": "Edit item name",
+                "aria-describedby": "edit-hint",
                 oninput: move |evt| input_value.set(evt.value()),
                 onkeydown: move |evt| {
                     if evt.key() == Key::Enter {
@@ -25,15 +30,24 @@ pub fn InlineEditInput(
                 },
                 onblur: move |_| on_save.call(input_value())
             }
+            span {
+                id: "edit-hint",
+                class: "sr-only",
+                "Press Enter to save, Escape to cancel"
+            }
             button {
                 class: "btn-icon btn-save",
                 onclick: move |_| on_save.call(input_value()),
-                "✓"
+                "aria-label": "Save changes",
+                title: "Save (Enter)",
+                span { "aria-hidden": "true", "✓" }
             }
             button {
                 class: "btn-icon btn-cancel",
                 onclick: move |_| on_cancel.call(()),
-                "×"
+                "aria-label": "Cancel editing",
+                title: "Cancel (Escape)",
+                span { "aria-hidden": "true", "×" }
             }
         }
     }

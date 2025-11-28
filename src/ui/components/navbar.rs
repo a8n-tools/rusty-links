@@ -33,34 +33,66 @@ pub fn Navbar() -> Element {
     };
 
     rsx! {
-        nav { class: "navbar",
+        nav {
+            class: "navbar",
+            role: "navigation",
+            "aria-label": "Main navigation",
             div { class: "navbar-content",
-                a { class: "navbar-brand", href: "/links",
-                    span { "\u{1F517}" } // Link emoji
+                a {
+                    class: "navbar-brand",
+                    href: "/links",
+                    "aria-label": "Rusty Links home",
+                    span { "aria-hidden": "true", "\u{1F517}" } // Link emoji
                     " Rusty Links"
                 }
-                div { class: "navbar-menu",
-                    a { class: "btn btn-secondary", href: "/links-table",
+                div {
+                    class: "navbar-menu",
+                    role: "menubar",
+                    "aria-label": "Site navigation",
+                    a {
+                        class: "btn btn-secondary",
+                        href: "/links-table",
+                        role: "menuitem",
+                        "aria-label": "View links",
                         "Links"
                     }
-                    a { class: "btn btn-secondary", href: "/categories",
+                    a {
+                        class: "btn btn-secondary",
+                        href: "/categories",
+                        role: "menuitem",
+                        "aria-label": "Manage categories",
                         "Categories"
                     }
-                    a { class: "btn btn-secondary", href: "/languages",
+                    a {
+                        class: "btn btn-secondary",
+                        href: "/languages",
+                        role: "menuitem",
+                        "aria-label": "Manage programming languages",
                         "Languages"
                     }
-                    a { class: "btn btn-secondary", href: "/licenses",
+                    a {
+                        class: "btn btn-secondary",
+                        href: "/licenses",
+                        role: "menuitem",
+                        "aria-label": "Manage licenses",
                         "Licenses"
                     }
-                    a { class: "btn btn-secondary", href: "/tags",
+                    a {
+                        class: "btn btn-secondary",
+                        href: "/tags",
+                        role: "menuitem",
+                        "aria-label": "Manage tags",
                         "Tags"
                     }
                     button {
                         class: "btn btn-secondary",
+                        role: "menuitem",
                         disabled: loading(),
                         onclick: on_logout,
+                        "aria-label": if loading() { "Logging out, please wait" } else { "Logout from application" },
+                        "aria-busy": if loading() { "true" } else { "false" },
                         if loading() {
-                            span { class: "loading" }
+                            span { class: "loading", "aria-hidden": "true" }
                             "Logging out..."
                         } else {
                             "Logout"

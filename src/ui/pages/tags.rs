@@ -1,5 +1,6 @@
 use dioxus::prelude::*;
 use crate::ui::components::navbar::Navbar;
+use crate::ui::components::skip_link::SkipLink;
 use crate::ui::components::loading::{LoadingSpinner, SpinnerSize};
 use crate::ui::components::management::{FlatListItem, AddItemInput};
 use crate::ui::components::modal::ConfirmDialog;
@@ -133,9 +134,14 @@ pub fn TagsPage() -> Element {
 
     rsx! {
         div { class: "page-container",
+            SkipLink {}
             Navbar {}
 
-            div { class: "content-container",
+            main {
+                id: "main-content",
+                class: "content-container",
+                role: "main",
+                "aria-label": "Tags management",
                 div { class: "page-header",
                     h1 { "Tags" }
                     button {
