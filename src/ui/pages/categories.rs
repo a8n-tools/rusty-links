@@ -1,6 +1,6 @@
 use dioxus::prelude::*;
 use crate::ui::components::navbar::Navbar;
-use crate::ui::components::loading::LoadingSpinner;
+use crate::ui::components::loading::{LoadingSpinner, SpinnerSize};
 use crate::ui::components::management::{CategoryTreeNode, AddCategoryInput};
 use crate::ui::components::modal::ConfirmDialog;
 use crate::ui::api_client::{
@@ -165,7 +165,10 @@ pub fn CategoriesPage() -> Element {
 
                 // Loading state
                 if loading() {
-                    LoadingSpinner {}
+                    LoadingSpinner {
+                        size: SpinnerSize::Medium,
+                        message: "Loading categories...".to_string()
+                    }
                 }
                 else {
                     // Add input (if shown)

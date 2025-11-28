@@ -1,6 +1,6 @@
 use dioxus::prelude::*;
 use crate::ui::components::navbar::Navbar;
-use crate::ui::components::loading::LoadingSpinner;
+use crate::ui::components::loading::{LoadingSpinner, SpinnerSize};
 use crate::ui::components::management::FlatListItem;
 use crate::ui::components::modal::ConfirmDialog;
 use crate::ui::api_client::{
@@ -162,7 +162,10 @@ pub fn LicensesPage() -> Element {
 
                 // Loading state
                 if loading() {
-                    LoadingSpinner {}
+                    LoadingSpinner {
+                        size: SpinnerSize::Medium,
+                        message: "Loading licenses...".to_string()
+                    }
                 }
                 else {
                     // Add input (if shown)

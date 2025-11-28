@@ -1,9 +1,51 @@
 use serde::{Deserialize, Serialize};
 use crate::ui::components::table::links_table::Link;
+use std::future::Future;
 
 #[derive(Serialize)]
 pub struct CreateLinkRequest {
     pub url: String,
+}
+
+/// Retry configuration
+const MAX_RETRIES: u32 = 3;
+const RETRY_DELAY_MS: u64 = 1000;
+
+/// Retry a future with exponential backoff
+pub async fn retry_with_backoff<F, Fut, T>(mut f: F) -> Result<T, String>
+where
+    F: FnMut() -> Fut,
+    Fut: Future<Output = Result<T, String>>,
+{
+    let mut attempts = 0;
+    loop {
+        match f().await {
+            Ok(result) => return Ok(result),
+            Err(e) => {
+                attempts += 1;
+                if attempts >= MAX_RETRIES {
+                    return Err(format!("Failed after {} attempts: {}", MAX_RETRIES, e));
+                }
+
+                // Only retry on network errors, not client/server errors
+                if !e.contains("Network error") {
+                    return Err(e);
+                }
+
+                let delay = RETRY_DELAY_MS * 2u64.pow(attempts - 1);
+
+                #[cfg(target_arch = "wasm32")]
+                {
+                    gloo_timers::future::TimeoutFuture::new(delay as u32).await;
+                }
+
+                #[cfg(not(target_arch = "wasm32"))]
+                {
+                    tokio::time::sleep(std::time::Duration::from_millis(delay)).await;
+                }
+            }
+        }
+    }
 }
 
 /// Check if a URL already exists in the database
