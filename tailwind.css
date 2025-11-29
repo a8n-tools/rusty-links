@@ -33,8 +33,8 @@
 
     /* Text colors */
     --color-text-primary: #2c2418;
-    --color-text-secondary: #5c5347;
-    --color-text-muted: #9e9e9e;
+    --color-text-secondary: #4a4541;
+    --color-text-muted: #6b6560;
     --color-text-contrast: #1a1a1a;
 
     /* Semantic colors */
@@ -1341,7 +1341,7 @@
     }
 
     .cell-domain {
-        color: var(--color-text-secondary);
+        color: var(--color-text-primary);
         font-size: 0.875rem;
         max-width: 250px;
         overflow: hidden;
@@ -1354,7 +1354,7 @@
         overflow: hidden;
         text-overflow: ellipsis;
         white-space: nowrap;
-        color: var(--color-text-secondary);
+        color: var(--color-text-primary);
         font-size: 0.875rem;
     }
 
@@ -1363,7 +1363,7 @@
     .cell-languages,
     .cell-licenses {
         font-size: 0.875rem;
-        color: var(--color-text-secondary);
+        color: var(--color-text-primary);
         max-width: 200px;
         overflow: hidden;
         text-overflow: ellipsis;
@@ -1381,7 +1381,7 @@
 
     .cell-date {
         font-size: 0.875rem;
-        color: var(--color-text-secondary);
+        color: var(--color-text-primary);
         white-space: nowrap;
     }
 
@@ -1953,7 +1953,7 @@
 
     .usage-count {
         font-size: 0.875rem;
-        color: var(--color-text-secondary);
+        color: var(--color-text-primary);
         min-width: 80px;
     }
 
@@ -2062,7 +2062,7 @@
 
     .item-secondary {
         font-size: 0.875rem;
-        color: var(--color-text-secondary);
+        color: var(--color-text-primary);
         padding-left: 12px;
     }
 
@@ -2849,23 +2849,265 @@
 
 @media (prefers-color-scheme: dark) {
     @theme {
-        --color-surface-50: #2d2d2d;
-        --color-surface-100: #252525;
-        --color-surface-200: #1e1e1e;
-        --color-surface-300: #181818;
-        --color-surface-400: #404040;
-        --color-text-primary: #e0e0e0;
-        --color-text-secondary: #b0b0b0;
-        --color-text-contrast: #f5f5f5;
-        --color-text-muted: #9e9e9e;
-        --color-border: #404040;
-        --color-primary-500: #ff7043;
-        --color-accent-500: #ff5722;
+        /* Dark surfaces - darker backgrounds */
+        --color-surface-50: #1a1a1a;
+        --color-surface-100: #242424;
+        --color-surface-200: #2d2d2d;
+        --color-surface-300: #383838;
+        --color-surface-400: #484848;
+
+        /* Light text for dark mode - high contrast */
+        --color-text-primary: #f0f0f0;
+        --color-text-secondary: #d0d0d0;
+        --color-text-contrast: #ffffff;
+        --color-text-muted: #a0a0a0;
+
+        /* Borders visible on dark */
+        --color-border: #505050;
+
+        /* Brighter accent colors for dark mode */
+        --color-primary-500: #ff8a65;
+        --color-primary-600: #ff7043;
+        --color-primary-700: #f4511e;
+        --color-accent-500: #ff7043;
+        --color-accent-600: #f4511e;
+
+        /* Semantic colors adjusted for dark mode */
+        --color-error-50: #3d1f1f;
+        --color-error-100: #5c2a2a;
+        --color-error-500: #ef5350;
+        --color-error-600: #f44336;
+        --color-error-700: #ff6659;
+
+        --color-success-50: #1a3d2a;
+        --color-success-100: #2a5c3a;
+        --color-success-500: #66bb6a;
+        --color-success-600: #4caf50;
+        --color-success-700: #81c784;
+
+        --color-warning-50: #3d3015;
+        --color-warning-100: #5c4a20;
+        --color-warning-500: #ffb74d;
+        --color-warning-600: #ffa726;
+
+        --color-info-50: #1a2d3d;
+        --color-info-100: #2a445c;
+        --color-info-500: #64b5f6;
+        --color-info-600: #42a5f5;
     }
 
     body {
         background: var(--color-surface-200);
         color: var(--color-text-primary);
+    }
+
+    /* Override hardcoded white/light backgrounds */
+    .flat-list,
+    .category-tree,
+    .modal-container,
+    .confirm-dialog,
+    .auth-card,
+    .table-container,
+    .links-table,
+    .filter-menu,
+    .toast {
+        background: var(--color-surface-100);
+    }
+
+    .links-table th {
+        background: var(--color-surface-300);
+    }
+
+    .links-table tbody tr:nth-child(even) {
+        background: var(--color-surface-200);
+    }
+
+    .links-table tbody tr:hover,
+    .links-table tbody tr:nth-child(even):hover {
+        background: var(--color-surface-300);
+    }
+
+    .tree-node-content:hover,
+    .flat-list-item-content:hover,
+    .filter-option:hover {
+        background: var(--color-surface-300);
+    }
+
+    .item-name:hover,
+    .category-name:hover {
+        background: var(--color-surface-200);
+    }
+
+    .btn-secondary {
+        background: var(--color-surface-300);
+        color: var(--color-text-primary);
+        border-color: var(--color-border);
+    }
+
+    .btn-secondary:hover:not(:disabled) {
+        background: var(--color-surface-400);
+    }
+
+    .form-input,
+    .search-input,
+    .filter-search,
+    .url-input,
+    .inline-edit-input,
+    .status-filter,
+    .sort-select,
+    .filter-group select,
+    input[type="text"],
+    input[type="email"],
+    input[type="password"],
+    input[type="url"],
+    textarea,
+    select {
+        background: var(--color-surface-100);
+        color: var(--color-text-primary);
+        border-color: var(--color-border);
+    }
+
+    .readonly-field div {
+        background: var(--color-surface-200);
+        color: var(--color-text-primary);
+    }
+
+    .modal-footer {
+        background: var(--color-surface-200);
+    }
+
+    .pagination,
+    .pagination-btn {
+        background: var(--color-surface-100);
+    }
+
+    .pagination-btn:hover:not(:disabled) {
+        background: var(--color-surface-300);
+    }
+
+    .sort-order-btn {
+        background: var(--color-surface-100);
+    }
+
+    .sort-order-btn:hover {
+        background: var(--color-surface-300);
+    }
+
+    .add-category-input,
+    .add-item-input {
+        background: var(--color-surface-300);
+    }
+
+    .chip {
+        background: var(--color-primary-600);
+    }
+
+    .filter-chip {
+        background: var(--color-primary-600);
+    }
+
+    .info-box {
+        background: var(--color-info-50);
+        border-color: var(--color-info-500);
+        color: var(--color-info-600);
+    }
+
+    .error-box {
+        background: var(--color-error-50);
+        border-color: var(--color-error-500);
+        color: var(--color-error-600);
+    }
+
+    .search-clear:hover {
+        background: var(--color-surface-300);
+    }
+
+    .link-logo-placeholder {
+        background: var(--color-surface-300);
+    }
+
+    .empty-state {
+        background: var(--color-surface-100);
+    }
+
+    .sort-container,
+    .filter-panel {
+        background: var(--color-surface-100);
+    }
+
+    .search-results-info {
+        background: var(--color-surface-100);
+    }
+
+    /* Filter buttons */
+    .filter-button {
+        background: var(--color-surface-100);
+        color: var(--color-text-primary);
+        border-color: var(--color-border);
+    }
+
+    .filter-button:hover {
+        background: var(--color-surface-300);
+    }
+
+    .reset-filters {
+        background: var(--color-surface-400);
+        color: var(--color-text-primary);
+    }
+
+    .reset-filters:hover {
+        background: var(--color-primary-600);
+        color: white;
+    }
+
+    /* Navbar buttons */
+    nav button,
+    nav a[role="menuitem"] {
+        background: var(--color-surface-300);
+        color: var(--color-text-primary);
+    }
+
+    nav button:hover,
+    nav a[role="menuitem"]:hover {
+        background: var(--color-surface-400);
+    }
+
+    /* Primary button adjustments */
+    .btn-primary {
+        background: var(--color-primary-500);
+        color: white;
+    }
+
+    .btn-primary:hover:not(:disabled) {
+        background: var(--color-primary-600);
+    }
+
+    /* Delete button */
+    .btn-delete {
+        background: var(--color-surface-100);
+        color: var(--color-error-500);
+        border-color: var(--color-error-500);
+    }
+
+    .btn-delete:hover {
+        background: var(--color-error-500);
+        color: white;
+    }
+
+    /* Icon buttons */
+    .btn-icon {
+        background: var(--color-surface-200);
+        color: var(--color-text-primary);
+    }
+
+    .btn-icon:hover {
+        background: var(--color-surface-300);
+    }
+
+    /* Add link button */
+    .btn-add-link {
+        background: var(--color-primary-500);
+        color: white;
     }
 }
 
