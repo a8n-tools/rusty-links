@@ -1,5 +1,4 @@
 use dioxus::prelude::*;
-use dioxus::document::Stylesheet;
 use dioxus_router::RouterConfig;
 
 use crate::server_functions::auth::check_setup;
@@ -15,7 +14,12 @@ use crate::ui::pages::licenses::LicensesPage;
 #[component]
 pub fn App() -> Element {
     rsx! {
-        Stylesheet { href: asset!("/assets/style.css") }
+        head {
+            // Custom CSS for existing components (loaded first)
+            link { rel: "stylesheet", href: "/assets/style.css" }
+            // Tailwind CSS for utility classes (loaded second, takes precedence)
+            link { rel: "stylesheet", href: "/tailwind.css" }
+        }
         Router::<Route> {
             config: || RouterConfig::default().on_update(|_| None)
         }

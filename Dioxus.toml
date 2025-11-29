@@ -36,8 +36,8 @@ watch_path = ["src", "assets"]
 # Public directory to serve static files from
 public_dir = "assets"
 
-# CSS style file - handled via asset!() macro in App component
-style = []
+# CSS style file - Tailwind CSS served from assets directory
+style = ["tailwind.css"]
 
 # Javascript code file
 script = []

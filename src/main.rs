@@ -110,8 +110,8 @@ async fn main() {
     let router = axum::Router::new()
         .nest("/api", api_router)
         .nest_service("/assets", ServeDir::new("assets"))
-        .route_service("/style.css", tower::util::service_fn(|_req: axum::http::Request<axum::body::Body>| async {
-            let css = include_str!("../assets/style.css");
+        .route_service("/tailwind.css", tower::util::service_fn(|_req: axum::http::Request<axum::body::Body>| async {
+            let css = include_str!("../assets/tailwind.css");
             Ok::<_, std::convert::Infallible>(axum::response::Response::builder()
                 .header("Content-Type", "text/css")
                 .body(axum::body::Body::from(css.to_string()))
