@@ -1,4 +1,5 @@
 use dioxus::prelude::*;
+use dioxus::document::Stylesheet;
 use dioxus_router::RouterConfig;
 
 use crate::server_functions::auth::check_setup;
@@ -11,13 +12,10 @@ use crate::ui::pages::tags::TagsPage;
 use crate::ui::pages::languages::LanguagesPage;
 use crate::ui::pages::licenses::LicensesPage;
 
-// Include the CSS at compile time
-const STYLES: &str = include_str!("../../assets/style.css");
-
 #[component]
 pub fn App() -> Element {
     rsx! {
-        style { {STYLES} }
+        Stylesheet { href: asset!("/assets/style.css") }
         Router::<Route> {
             config: || RouterConfig::default().on_update(|_| None)
         }

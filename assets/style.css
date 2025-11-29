@@ -5,7 +5,9 @@
     --rust-primary: #b7410e;
     --rust-primary-light: #d4621a;
     --rust-primary-dark: #8b3109;
+    --rust-secondary: #9a3a0a;
     --rust-bg: #f5f1ed;
+    --rust-light: #faf8f6;
     --rust-surface: #ffffff;
     --rust-border: #ddd5cc;
     --rust-text: #2c2418;
@@ -74,6 +76,24 @@ body {
     display: flex;
     gap: 1rem;
     align-items: center;
+}
+
+/* Navbar menu buttons and links - explicit colors */
+.navbar-menu a,
+.navbar-menu button,
+.navbar-menu .btn,
+.navbar-menu .btn-secondary {
+    background-color: #e2e8f0 !important;
+    color: #2c2418 !important;
+    border: 1px solid #ddd5cc !important;
+}
+
+.navbar-menu a:hover,
+.navbar-menu button:hover,
+.navbar-menu .btn:hover,
+.navbar-menu .btn-secondary:hover {
+    background-color: #cbd5e0 !important;
+    color: #2c2418 !important;
 }
 
 /* Auth Pages */
@@ -188,12 +208,13 @@ body {
 }
 
 .btn-secondary {
-    background-color: #e2e8f0;
-    color: var(--rust-text);
+    background-color: #e2e8f0 !important;
+    color: #2c2418 !important;
 }
 
 .btn-secondary:hover:not(:disabled) {
-    background-color: #cbd5e0;
+    background-color: #cbd5e0 !important;
+    color: #2c2418 !important;
 }
 
 .btn-full {
@@ -1450,9 +1471,9 @@ body {
 
 .btn-secondary {
     padding: 10px 20px;
-    background: white;
-    color: var(--rust-text);
-    border: 1px solid var(--rust-border);
+    background: #e2e8f0 !important;
+    color: #2c2418 !important;
+    border: 1px solid #ddd5cc;
     border-radius: 6px;
     cursor: pointer;
     font-weight: 500;
@@ -1461,7 +1482,8 @@ body {
 }
 
 .btn-secondary:hover {
-    background: var(--rust-light);
+    background: #cbd5e0 !important;
+    color: #2c2418 !important;
 }
 
 .btn-delete {

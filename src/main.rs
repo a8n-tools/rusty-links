@@ -15,6 +15,8 @@ use std::sync::atomic::AtomicBool;
 #[cfg(feature = "server")]
 use std::time::Duration;
 #[cfg(feature = "server")]
+use tower_http::services::ServeDir;
+#[cfg(feature = "server")]
 use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
 
 #[cfg(feature = "server")]
@@ -104,8 +106,17 @@ async fn main() {
     // Merge the API router with the Dioxus router
     // API routes under /api will be handled by our custom router
     // Everything else will be handled by Dioxus
+    // Also serve static assets from the assets directory
     let router = axum::Router::new()
         .nest("/api", api_router)
+        .nest_service("/assets", ServeDir::new("assets"))
+        .route_service("/style.css", tower::util::service_fn(|_req: axum::http::Request<axum::body::Body>| async {
+            let css = include_str!("../assets/style.css");
+            Ok::<_, std::convert::Infallible>(axum::response::Response::builder()
+                .header("Content-Type", "text/css")
+                .body(axum::body::Body::from(css.to_string()))
+                .unwrap())
+        }))
         .merge(dioxus_router);
 
     // Launch the server
