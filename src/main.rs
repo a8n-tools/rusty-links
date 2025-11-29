@@ -1,9 +1,17 @@
 use rusty_links::ui::app::App;
 
 #[cfg(feature = "server")]
-use rusty_links::{config, error::AppError, scheduler};
+use dioxus::prelude::*;
+#[cfg(feature = "server")]
+use dioxus::server::{DioxusRouterExt, ServeConfig};
+#[cfg(feature = "server")]
+use rusty_links::{api, config, error::AppError, scheduler};
 #[cfg(feature = "server")]
 use sqlx::{postgres::PgPoolOptions, PgPool};
+#[cfg(feature = "server")]
+use std::sync::Arc;
+#[cfg(feature = "server")]
+use std::sync::atomic::AtomicBool;
 #[cfg(feature = "server")]
 use std::time::Duration;
 #[cfg(feature = "server")]
@@ -27,72 +35,92 @@ async fn initialize_database(database_url: &str) -> Result<PgPool, AppError> {
     Ok(pool)
 }
 
+#[cfg(feature = "server")]
+#[tokio::main]
+async fn main() {
+    // Initialize tracing
+    tracing_subscriber::registry()
+        .with(
+            tracing_subscriber::EnvFilter::try_from_default_env()
+                .unwrap_or_else(|_| "info".into()),
+        )
+        .with(tracing_subscriber::fmt::layer())
+        .init();
+
+    tracing::info!("Rusty Links (Fullstack) starting...");
+
+    // Load configuration
+    let config = config::Config::from_env().expect("Failed to load configuration");
+
+    tracing::info!(
+        database_url = %config.masked_database_url(),
+        app_port = config.app_port,
+        "Configuration loaded"
+    );
+
+    // Initialize database
+    let pool = match initialize_database(&config.database_url).await {
+        Ok(pool) => pool,
+        Err(e) => {
+            tracing::error!("Failed to connect to database");
+            tracing::error!("");
+            tracing::error!("Error: {}", e);
+            tracing::error!("");
+            tracing::error!("Please check:");
+            tracing::error!("  1. PostgreSQL is running");
+            tracing::error!("  2. DATABASE_URL in .env is correct: {}", config.masked_database_url());
+            tracing::error!("  3. The database exists and is accessible");
+            tracing::error!("");
+            tracing::error!("To create the database, run:");
+            tracing::error!("  createdb rusty_links");
+            std::process::exit(1);
+        }
+    };
+
+    // Initialize global database pool for server functions
+    rusty_links::server_functions::auth::set_db_pool(pool.clone());
+
+    // Start background scheduler
+    let scheduler_shutdown = Arc::new(AtomicBool::new(false));
+    let scheduler_instance = scheduler::Scheduler::new(pool.clone(), config.clone());
+    let _scheduler_handle = scheduler_instance.start();
+
+    tracing::info!("Background scheduler started");
+
+    // Create API router
+    let api_router = api::create_router(pool.clone(), scheduler_shutdown);
+
+    // Get the fullstack address from CLI or use localhost
+    let address = dioxus::cli_config::fullstack_address_or_localhost();
+
+    tracing::info!("Starting Dioxus fullstack server with API routes at {}", address);
+
+    // Build the Axum router:
+    // 1. First create Dioxus app router (handles server functions, static assets, and rendering)
+    // 2. Then nest our custom API routes (they take precedence due to being more specific)
+    let dioxus_router = axum::Router::new()
+        .serve_dioxus_application(ServeConfig::new(), App);
+
+    // Merge the API router with the Dioxus router
+    // API routes under /api will be handled by our custom router
+    // Everything else will be handled by Dioxus
+    let router = axum::Router::new()
+        .nest("/api", api_router)
+        .merge(dioxus_router);
+
+    // Launch the server
+    let listener = tokio::net::TcpListener::bind(address)
+        .await
+        .expect("Failed to bind to address");
+
+    tracing::info!("Server listening on {}", address);
+
+    axum::serve(listener, router)
+        .await
+        .expect("Server error");
+}
+
+#[cfg(not(feature = "server"))]
 fn main() {
-    #[cfg(feature = "server")]
-    {
-        // Initialize tracing
-        tracing_subscriber::registry()
-            .with(
-                tracing_subscriber::EnvFilter::try_from_default_env()
-                    .unwrap_or_else(|_| "info".into()),
-            )
-            .with(tracing_subscriber::fmt::layer())
-            .init();
-
-        tracing::info!("Rusty Links (Fullstack) starting...");
-
-        // Load configuration
-        let config = config::Config::from_env().expect("Failed to load configuration");
-
-        tracing::info!(
-            database_url = %config.masked_database_url(),
-            app_port = config.app_port,
-            "Configuration loaded"
-        );
-
-        // Start async runtime for database initialization and background tasks
-        let rt = tokio::runtime::Runtime::new().unwrap();
-        let _rt_guard = rt.enter();
-
-        let pool = rt.block_on(async {
-            initialize_database(&config.database_url).await
-        });
-
-        let pool = match pool {
-            Ok(pool) => pool,
-            Err(e) => {
-                tracing::error!("Failed to connect to database");
-                tracing::error!("");
-                tracing::error!("Error: {}", e);
-                tracing::error!("");
-                tracing::error!("Please check:");
-                tracing::error!("  1. PostgreSQL is running");
-                tracing::error!("  2. DATABASE_URL in .env is correct: {}", config.masked_database_url());
-                tracing::error!("  3. The database exists and is accessible");
-                tracing::error!("");
-                tracing::error!("To create the database, run:");
-                tracing::error!("  createdb rusty_links");
-                std::process::exit(1);
-            }
-        };
-
-        // Initialize global database pool for server functions
-        rusty_links::server_functions::auth::set_db_pool(pool.clone());
-
-        // Start background scheduler (runs on the tokio runtime we created)
-        let scheduler = scheduler::Scheduler::new(pool.clone(), config.clone());
-        let _scheduler_handle = scheduler.start();
-
-        tracing::info!("Background scheduler started");
-
-        // Launch Dioxus fullstack app
-        // Note: Port configuration should be done via DIOXUS_PORT env var or Dioxus.toml
-        tracing::info!(port = config.app_port, "Starting Dioxus fullstack server");
-        dioxus::launch(App);
-    }
-
-    #[cfg(not(feature = "server"))]
-    {
-        dioxus::launch(App);
-    }
+    dioxus::launch(App);
 }

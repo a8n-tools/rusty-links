@@ -1,5 +1,5 @@
 use dioxus::prelude::*;
-use crate::server_functions::auth::logout;
+use crate::ui::http;
 
 #[component]
 pub fn Navbar() -> Element {
@@ -10,14 +10,19 @@ pub fn Navbar() -> Element {
         spawn(async move {
             loading.set(true);
 
-            let result = logout().await;
+            let response = http::post_empty("/api/auth/logout").await;
 
             loading.set(false);
 
-            match result {
-                Ok(_) => {
-                    // Logout successful, redirect to login
-                    nav.push("/login");
+            match response {
+                Ok(resp) => {
+                    if resp.is_success() {
+                        // Logout successful, redirect to login
+                        nav.push("/login");
+                    } else {
+                        // Even if logout fails, redirect to login
+                        nav.push("/login");
+                    }
                 }
                 Err(_) => {
                     // Even if logout fails, redirect to login
