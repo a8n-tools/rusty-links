@@ -8,6 +8,19 @@ pub struct CreateLinkRequest {
     pub url: String,
 }
 
+#[derive(Serialize)]
+pub struct CreateLinkWithCategoriesRequest {
+    pub url: String,
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    pub category_ids: Vec<uuid::Uuid>,
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    pub tag_ids: Vec<uuid::Uuid>,
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    pub language_ids: Vec<uuid::Uuid>,
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    pub license_ids: Vec<uuid::Uuid>,
+}
+
 /// Retry configuration
 const MAX_RETRIES: u32 = 3;
 const RETRY_DELAY_MS: u64 = 1000;
@@ -77,6 +90,11 @@ pub async fn create_link_request(url: &str) -> Result<Link, String> {
     };
 
     http::post("/api/links", &request_body).await
+}
+
+/// Create a new link with initial categorization
+pub async fn create_link_with_categories(request: &CreateLinkWithCategoriesRequest) -> Result<Link, String> {
+    http::post("/api/links", request).await
 }
 
 /// Fetch link details by ID
@@ -300,4 +318,26 @@ pub async fn update_tag(id: &str, name: &str) -> Result<TagItem, String> {
 pub async fn delete_tag(id: &str) -> Result<(), String> {
     let url = format!("/api/tags/{}", id);
     http::delete(&url).await
+}
+
+// ==================== Link Preview ====================
+
+#[derive(Debug, Clone, PartialEq, Deserialize)]
+pub struct LinkPreview {
+    pub url: String,
+    pub domain: String,
+    pub title: Option<String>,
+    pub description: Option<String>,
+    pub favicon: Option<String>,
+    pub is_github_repo: bool,
+    pub github_stars: Option<i32>,
+    pub github_description: Option<String>,
+    pub github_languages: Vec<String>,
+    pub github_license: Option<String>,
+}
+
+/// Fetch metadata preview for a URL without creating the link
+pub async fn preview_link(url: &str) -> Result<LinkPreview, String> {
+    let body = serde_json::json!({ "url": url });
+    http::post("/api/links/preview", &body).await
 }

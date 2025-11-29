@@ -47,16 +47,37 @@ async fn get_authenticated_user(pool: &PgPool, jar: &CookieJar) -> Result<User, 
     Ok(user)
 }
 
+/// Request body for creating a link with optional categorization
+#[derive(Debug, Deserialize)]
+struct CreateLinkWithCategories {
+    pub url: String,
+    pub title: Option<String>,
+    pub description: Option<String>,
+    pub logo: Option<String>,
+    #[serde(default)]
+    pub category_ids: Vec<Uuid>,
+    #[serde(default)]
+    pub tag_ids: Vec<Uuid>,
+    #[serde(default)]
+    pub language_ids: Vec<Uuid>,
+    #[serde(default)]
+    pub license_ids: Vec<Uuid>,
+}
+
 /// POST /api/links
 ///
-/// Creates a new link for the authenticated user.
+/// Creates a new link for the authenticated user with optional categorization.
 ///
 /// # Request Body
 /// ```json
 /// {
 ///     "url": "https://example.com/page",
 ///     "title": "Optional Title",
-///     "description": "Optional description"
+///     "description": "Optional description",
+///     "category_ids": ["uuid1", "uuid2"],
+///     "tag_ids": ["uuid1"],
+///     "language_ids": [],
+///     "license_ids": []
 /// }
 /// ```
 ///
@@ -67,15 +88,25 @@ async fn get_authenticated_user(pool: &PgPool, jar: &CookieJar) -> Result<User, 
 async fn create_link_handler(
     State(pool): State<PgPool>,
     jar: CookieJar,
-    Json(mut request): Json<CreateLink>,
+    Json(request): Json<CreateLinkWithCategories>,
 ) -> Result<impl IntoResponse, AppError> {
     let user = get_authenticated_user(&pool, &jar).await?;
 
     tracing::info!(
         user_id = %user.id,
         url = %request.url,
+        categories = request.category_ids.len(),
+        tags = request.tag_ids.len(),
         "Creating new link"
     );
+
+    // Build the CreateLink struct for the model
+    let mut create_link = CreateLink {
+        url: request.url.clone(),
+        title: request.title.clone(),
+        description: request.description.clone(),
+        logo: request.logo.clone(),
+    };
 
     // Check if this is a GitHub repository
     let is_github = crate::github::is_github_repo(&request.url);
@@ -96,8 +127,8 @@ async fn create_link_handler(
                     );
 
                     // Use GitHub description if user didn't provide one
-                    if request.description.is_none() && metadata.description.is_some() {
-                        request.description = metadata.description.clone();
+                    if create_link.description.is_none() && metadata.description.is_some() {
+                        create_link.description = metadata.description.clone();
                         tracing::debug!("Using GitHub description");
                     }
 
@@ -117,16 +148,16 @@ async fn create_link_handler(
         // Not a GitHub repo - try regular web scraping
         if let Ok(metadata) = scraper::scrape_url(&request.url).await {
             // Use scraped data only if user didn't provide it
-            if request.title.is_none() && metadata.title.is_some() {
-                request.title = metadata.title;
+            if create_link.title.is_none() && metadata.title.is_some() {
+                create_link.title = metadata.title;
                 tracing::debug!("Using scraped title");
             }
-            if request.description.is_none() && metadata.description.is_some() {
-                request.description = metadata.description;
+            if create_link.description.is_none() && metadata.description.is_some() {
+                create_link.description = metadata.description;
                 tracing::debug!("Using scraped description");
             }
-            if request.logo.is_none() && metadata.favicon.is_some() {
-                request.logo = metadata.favicon;
+            if create_link.logo.is_none() && metadata.favicon.is_some() {
+                create_link.logo = metadata.favicon;
                 tracing::debug!("Using scraped favicon");
             }
         } else {
@@ -135,7 +166,7 @@ async fn create_link_handler(
     }
 
     // Create the link
-    let link = Link::create(&pool, user.id, request).await?;
+    let link = Link::create(&pool, user.id, create_link).await?;
 
     // If we have GitHub metadata, update the link with it
     if let Some(metadata) = github_metadata {
@@ -144,6 +175,51 @@ async fn create_link_handler(
                 link_id = %link.id,
                 error = %e,
                 "Failed to update GitHub metadata after link creation"
+            );
+        }
+    }
+
+    // Add initial categorization
+    for category_id in &request.category_ids {
+        if let Err(e) = Link::add_category(&pool, link.id, *category_id, user.id).await {
+            tracing::warn!(
+                link_id = %link.id,
+                category_id = %category_id,
+                error = %e,
+                "Failed to add category to new link"
+            );
+        }
+    }
+
+    for tag_id in &request.tag_ids {
+        if let Err(e) = Link::add_tag(&pool, link.id, *tag_id, user.id).await {
+            tracing::warn!(
+                link_id = %link.id,
+                tag_id = %tag_id,
+                error = %e,
+                "Failed to add tag to new link"
+            );
+        }
+    }
+
+    for language_id in &request.language_ids {
+        if let Err(e) = Link::add_language(&pool, link.id, *language_id, user.id).await {
+            tracing::warn!(
+                link_id = %link.id,
+                language_id = %language_id,
+                error = %e,
+                "Failed to add language to new link"
+            );
+        }
+    }
+
+    for license_id in &request.license_ids {
+        if let Err(e) = Link::add_license(&pool, link.id, *license_id, user.id).await {
+            tracing::warn!(
+                link_id = %link.id,
+                license_id = %license_id,
+                error = %e,
+                "Failed to add license to new link"
             );
         }
     }
@@ -1096,6 +1172,27 @@ struct CheckDuplicateQuery {
     url: String,
 }
 
+/// Request for link preview
+#[derive(Debug, Deserialize)]
+struct PreviewRequest {
+    url: String,
+}
+
+/// Response for link preview
+#[derive(Debug, Serialize)]
+struct PreviewResponse {
+    url: String,
+    domain: String,
+    title: Option<String>,
+    description: Option<String>,
+    favicon: Option<String>,
+    is_github_repo: bool,
+    github_stars: Option<i32>,
+    github_description: Option<String>,
+    github_languages: Vec<String>,
+    github_license: Option<String>,
+}
+
 /// GET /api/links/check-duplicate?url=...
 ///
 /// Check if a URL already exists in the user's links
@@ -1124,11 +1221,97 @@ async fn check_duplicate_handler(
     Ok(Json(existing))
 }
 
+/// POST /api/links/preview
+///
+/// Preview metadata for a URL without creating the link.
+/// Returns extracted title, description, favicon, and GitHub info if applicable.
+///
+/// # Request Body
+/// ```json
+/// {
+///     "url": "https://github.com/example/repo"
+/// }
+/// ```
+///
+/// # Response
+/// - 200 OK: Returns preview data with extracted metadata
+/// - 401 Unauthorized: No valid session
+/// - 400 Bad Request: Invalid URL format
+async fn preview_link_handler(
+    State(pool): State<PgPool>,
+    jar: CookieJar,
+    Json(request): Json<PreviewRequest>,
+) -> Result<Json<PreviewResponse>, AppError> {
+    let _user = get_authenticated_user(&pool, &jar).await?;
+
+    tracing::info!(url = %request.url, "Previewing link metadata");
+
+    // Parse and validate URL
+    let parsed_url = url::Url::parse(&request.url)
+        .map_err(|_| AppError::validation("url", "Invalid URL format"))?;
+
+    // Extract domain
+    let domain = parsed_url
+        .host_str()
+        .ok_or_else(|| AppError::validation("url", "URL must have a domain"))?
+        .to_string();
+
+    // Check if GitHub repo
+    let is_github = crate::github::is_github_repo(&request.url);
+
+    let mut response = PreviewResponse {
+        url: request.url.clone(),
+        domain,
+        title: None,
+        description: None,
+        favicon: None,
+        is_github_repo: is_github,
+        github_stars: None,
+        github_description: None,
+        github_languages: vec![],
+        github_license: None,
+    };
+
+    if is_github {
+        // Fetch GitHub metadata
+        if let Some((owner, repo)) = crate::github::parse_repo_from_url(&request.url) {
+            if let Ok(metadata) = crate::github::fetch_repo_metadata(&owner, &repo).await {
+                response.title = Some(format!("{}/{}", owner, repo));
+                response.description = metadata.description.clone();
+                response.github_stars = Some(metadata.stars);
+                response.github_description = metadata.description;
+                response.github_license = metadata.license;
+                // Language is a single string in our metadata, convert to vec
+                if let Some(lang) = metadata.language {
+                    response.github_languages = vec![lang];
+                }
+            }
+        }
+    } else {
+        // Regular web scraping
+        if let Ok(metadata) = scraper::scrape_url(&request.url).await {
+            response.title = metadata.title;
+            response.description = metadata.description;
+            response.favicon = metadata.favicon;
+        }
+    }
+
+    tracing::info!(
+        url = %request.url,
+        title = ?response.title,
+        is_github = is_github,
+        "Link preview generated"
+    );
+
+    Ok(Json(response))
+}
+
 /// Create the links router
 pub fn create_router() -> Router<PgPool> {
     Router::new()
         .route("/", post(create_link_handler).get(list_links_handler))
         .route("/check-duplicate", axum::routing::get(check_duplicate_handler))
+        .route("/preview", post(preview_link_handler))
         .route("/export", axum::routing::get(export_links_handler))
         .route("/import", post(import_links_handler))
         .route("/bulk/delete", post(bulk_delete_handler))

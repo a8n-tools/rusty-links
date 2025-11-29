@@ -3,6 +3,10 @@ use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 use crate::ui::components::modal::{ModalBase, ModalSection, ConfirmDialog};
 use crate::ui::components::metadata_badges::{CategoryInfo, TagInfo, LanguageInfo, LicenseInfo};
+use crate::ui::components::category_select::CategorySelect;
+use crate::ui::components::tag_select::TagSelect;
+use crate::ui::components::language_select::LanguageSelect;
+use crate::ui::components::license_select::LicenseSelect;
 use crate::ui::http;
 
 #[derive(Debug, Clone, PartialEq, Deserialize)]
@@ -330,58 +334,46 @@ pub fn LinkDetailsModal(
                             ModalSection { title: "Categorization".to_string(),
                                 div { class: "form-group",
                                     label { "Categories" }
-                                    div { class: "category-chips",
-                                        for cat in link_data.categories.clone() {
-                                            span {
-                                                key: "{cat.id}",
-                                                class: "chip",
-                                                "{cat.name}"
-                                            }
+                                    CategorySelect {
+                                        selected_ids: form_categories(),
+                                        on_change: move |ids| {
+                                            form_categories.set(ids);
+                                            has_changes.set(true);
                                         }
                                     }
-                                    p { class: "form-hint", "Category editing coming in Step 36" }
                                 }
 
                                 div { class: "form-group",
                                     label { "Tags" }
-                                    div { class: "tag-chips",
-                                        for tag in link_data.tags.clone() {
-                                            span {
-                                                key: "{tag.id}",
-                                                class: "chip",
-                                                "{tag.name}"
-                                            }
+                                    TagSelect {
+                                        selected_ids: form_tags(),
+                                        on_change: move |ids| {
+                                            form_tags.set(ids);
+                                            has_changes.set(true);
                                         }
                                     }
-                                    p { class: "form-hint", "Tag editing coming in Step 36" }
                                 }
 
                                 div { class: "form-group",
                                     label { "Languages" }
-                                    div { class: "language-chips",
-                                        for lang in link_data.languages.clone() {
-                                            span {
-                                                key: "{lang.id}",
-                                                class: "chip",
-                                                "{lang.name}"
-                                            }
+                                    LanguageSelect {
+                                        selected_ids: form_languages(),
+                                        on_change: move |ids| {
+                                            form_languages.set(ids);
+                                            has_changes.set(true);
                                         }
                                     }
-                                    p { class: "form-hint", "Language editing coming in Step 36" }
                                 }
 
                                 div { class: "form-group",
                                     label { "Licenses" }
-                                    div { class: "license-chips",
-                                        for lic in link_data.licenses.clone() {
-                                            span {
-                                                key: "{lic.id}",
-                                                class: "chip",
-                                                "{lic.name}"
-                                            }
+                                    LicenseSelect {
+                                        selected_ids: form_licenses(),
+                                        on_change: move |ids| {
+                                            form_licenses.set(ids);
+                                            has_changes.set(true);
                                         }
                                     }
-                                    p { class: "form-hint", "License editing coming in Step 36" }
                                 }
                             }
 
