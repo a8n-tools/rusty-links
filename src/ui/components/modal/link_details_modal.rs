@@ -3,6 +3,7 @@ use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 use crate::ui::components::modal::{ModalBase, ModalSection, ConfirmDialog};
 use crate::ui::components::metadata_badges::{CategoryInfo, TagInfo, LanguageInfo, LicenseInfo};
+use crate::ui::http;
 
 #[derive(Debug, Clone, PartialEq, Deserialize)]
 struct LinkDetails {
@@ -46,70 +47,24 @@ struct UpdateLinkRequest {
 }
 
 async fn fetch_link(link_id: Uuid) -> Result<LinkDetails, String> {
-    let client = reqwest::Client::new();
     let url = format!("/api/links/{}", link_id);
-
-    let response = client.get(&url).send().await
-        .map_err(|e| format!("Network error: {}", e))?;
-
-    if response.status().is_success() {
-        response.json::<LinkDetails>().await
-            .map_err(|e| format!("Parse error: {}", e))
-    } else {
-        Err(format!("Server error: {}", response.status()))
-    }
+    http::get(&url).await
 }
 
 async fn save_link(link_id: Uuid, form_data: UpdateLinkRequest) -> Result<LinkDetails, String> {
-    let client = reqwest::Client::new();
     let url = format!("/api/links/{}", link_id);
-
-    let response = client.put(&url)
-        .json(&form_data)
-        .send()
-        .await
-        .map_err(|e| format!("Network error: {}", e))?;
-
-    if response.status().is_success() {
-        response.json::<LinkDetails>().await
-            .map_err(|e| format!("Parse error: {}", e))
-    } else {
-        let error_text = response.text().await.unwrap_or_default();
-        Err(format!("Server error: {}", error_text))
-    }
+    http::put(&url, &form_data).await
 }
 
 async fn delete_link(link_id: Uuid) -> Result<(), String> {
-    let client = reqwest::Client::new();
     let url = format!("/api/links/{}", link_id);
-
-    let response = client.delete(&url)
-        .send()
-        .await
-        .map_err(|e| format!("Network error: {}", e))?;
-
-    if response.status().is_success() {
-        Ok(())
-    } else {
-        Err(format!("Server error: {}", response.status()))
-    }
+    http::delete(&url).await
 }
 
 async fn refresh_metadata(link_id: Uuid) -> Result<LinkDetails, String> {
-    let client = reqwest::Client::new();
     let url = format!("/api/links/{}/refresh", link_id);
-
-    let response = client.post(&url)
-        .send()
-        .await
-        .map_err(|e| format!("Network error: {}", e))?;
-
-    if response.status().is_success() {
-        response.json::<LinkDetails>().await
-            .map_err(|e| format!("Parse error: {}", e))
-    } else {
-        Err(format!("Server error: {}", response.status()))
-    }
+    let response = http::post_empty(&url).await?;
+    response.json()
 }
 
 fn format_stars(stars: Option<i32>) -> String {

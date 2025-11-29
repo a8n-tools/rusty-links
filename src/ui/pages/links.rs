@@ -9,6 +9,7 @@ use crate::ui::components::language_select::LanguageSelect;
 use crate::ui::components::license_select::LicenseSelect;
 use crate::ui::components::metadata_badges::{MetadataBadges, CategoryInfo, TagInfo, LanguageInfo, LicenseInfo};
 use crate::ui::components::pagination::Pagination;
+use crate::ui::http;
 
 #[derive(Debug, Clone, Deserialize, PartialEq)]
 struct Link {
@@ -137,7 +138,6 @@ pub fn Links() -> Element {
         let page = current_page();
         spawn(async move {
             loading.set(true);
-            let client = reqwest::Client::new();
 
             // Build URL with query parameters
             let mut params = Vec::new();
@@ -190,12 +190,10 @@ pub fn Links() -> Element {
                 format!("/api/links?{}", params.join("&"))
             };
 
-            let response = client.get(&url).send().await;
-
-            match response {
+            match http::get_response(&url).await {
                 Ok(resp) => {
-                    if resp.status().is_success() {
-                        match resp.json::<PaginatedResponse>().await {
+                    if resp.is_success() {
+                        match resp.json::<PaginatedResponse>() {
                             Ok(data) => {
                                 links.set(data.links);
                                 total_pages.set(data.total_pages);
@@ -206,14 +204,14 @@ pub fn Links() -> Element {
                                 error.set(Some(format!("Failed to parse links: {}", e)));
                             }
                         }
-                    } else if resp.status().as_u16() == 401 {
+                    } else if resp.status == 401 {
                         error.set(Some("Session expired. Please log in again.".to_string()));
                     } else {
                         error.set(Some("Failed to load links".to_string()));
                     }
                 }
                 Err(e) => {
-                    error.set(Some(format!("Network error: {}", e)));
+                    error.set(Some(e));
                 }
             }
             loading.set(false);
@@ -228,42 +226,24 @@ pub fn Links() -> Element {
     // Fetch filter options on mount
     use_effect(move || {
         spawn(async move {
-            let client = reqwest::Client::new();
-
             // Fetch categories
-            if let Ok(resp) = client.get("/api/categories").send().await {
-                if resp.status().is_success() {
-                    if let Ok(data) = resp.json::<Vec<CategoryInfo>>().await {
-                        categories.set(data);
-                    }
-                }
+            if let Ok(data) = http::get::<Vec<CategoryInfo>>("/api/categories").await {
+                categories.set(data);
             }
 
             // Fetch tags
-            if let Ok(resp) = client.get("/api/tags").send().await {
-                if resp.status().is_success() {
-                    if let Ok(data) = resp.json::<Vec<TagInfo>>().await {
-                        tags.set(data);
-                    }
-                }
+            if let Ok(data) = http::get::<Vec<TagInfo>>("/api/tags").await {
+                tags.set(data);
             }
 
             // Fetch languages
-            if let Ok(resp) = client.get("/api/languages").send().await {
-                if resp.status().is_success() {
-                    if let Ok(data) = resp.json::<Vec<LanguageInfo>>().await {
-                        languages.set(data);
-                    }
-                }
+            if let Ok(data) = http::get::<Vec<LanguageInfo>>("/api/languages").await {
+                languages.set(data);
             }
 
             // Fetch licenses
-            if let Ok(resp) = client.get("/api/licenses").send().await {
-                if resp.status().is_success() {
-                    if let Ok(data) = resp.json::<Vec<LicenseInfo>>().await {
-                        licenses.set(data);
-                    }
-                }
+            if let Ok(data) = http::get::<Vec<LicenseInfo>>("/api/licenses").await {
+                licenses.set(data);
             }
         });
     });
@@ -401,42 +381,35 @@ pub fn Links() -> Element {
                                 class: "btn btn-secondary",
                                 onclick: move |_| {
                                     spawn(async move {
-                                        let client = reqwest::Client::new();
-                                        match client.get("/api/links/export").send().await {
+                                        match http::get_response("/api/links/export").await {
                                             Ok(resp) => {
-                                                if resp.status().is_success() {
-                                                    match resp.text().await {
-                                                        #[allow(unused_variables)]
-                                                        Ok(data) => {
-                                                            // Create download using web_sys
-                                                            #[cfg(target_arch = "wasm32")]
-                                                            {
-                                                                use wasm_bindgen::JsCast;
-                                                                let window = web_sys::window().expect("no window");
-                                                                let document = window.document().expect("no document");
+                                                if resp.is_success() {
+                                                    #[allow(unused_variables)]
+                                                    let data = resp.body;
+                                                    // Create download using web_sys
+                                                    #[cfg(target_arch = "wasm32")]
+                                                    {
+                                                        use wasm_bindgen::JsCast;
+                                                        let window = web_sys::window().expect("no window");
+                                                        let document = window.document().expect("no document");
 
-                                                                let blob_parts = js_sys::Array::new();
-                                                                blob_parts.push(&wasm_bindgen::JsValue::from_str(&data));
+                                                        let blob_parts = js_sys::Array::new();
+                                                        blob_parts.push(&wasm_bindgen::JsValue::from_str(&data));
 
-                                                                let mut blob_options = web_sys::BlobPropertyBag::new();
-                                                                blob_options.type_("application/json");
+                                                        let mut blob_options = web_sys::BlobPropertyBag::new();
+                                                        blob_options.type_("application/json");
 
-                                                                if let Ok(blob) = web_sys::Blob::new_with_str_sequence_and_options(&blob_parts, &blob_options) {
-                                                                    let url = web_sys::Url::create_object_url_with_blob(&blob).unwrap();
+                                                        if let Ok(blob) = web_sys::Blob::new_with_str_sequence_and_options(&blob_parts, &blob_options) {
+                                                            let url = web_sys::Url::create_object_url_with_blob(&blob).unwrap();
 
-                                                                    if let Some(link_element) = document.create_element("a").ok() {
-                                                                        let link = link_element.dyn_into::<web_sys::HtmlAnchorElement>().unwrap();
-                                                                        link.set_href(&url);
-                                                                        link.set_download("rusty-links-export.json");
-                                                                        link.click();
+                                                            if let Some(link_element) = document.create_element("a").ok() {
+                                                                let link = link_element.dyn_into::<web_sys::HtmlAnchorElement>().unwrap();
+                                                                link.set_href(&url);
+                                                                link.set_download("rusty-links-export.json");
+                                                                link.click();
 
-                                                                        web_sys::Url::revoke_object_url(&url).ok();
-                                                                    }
-                                                                }
+                                                                web_sys::Url::revoke_object_url(&url).ok();
                                                             }
-                                                        }
-                                                        Err(e) => {
-                                                            error.set(Some(format!("Failed to export: {}", e)));
                                                         }
                                                     }
                                                 } else {
@@ -444,7 +417,7 @@ pub fn Links() -> Element {
                                                 }
                                             }
                                             Err(e) => {
-                                                error.set(Some(format!("Network error: {}", e)));
+                                                error.set(Some(e));
                                             }
                                         }
                                     });
@@ -479,16 +452,17 @@ pub fn Links() -> Element {
                                                             Ok(text_value) => {
                                                                 let text = text_value.as_string().unwrap();
 
-                                                                // Send to import endpoint
-                                                                let client = reqwest::Client::new();
-                                                                match client.post("/api/links/import")
-                                                                    .header("Content-Type", "application/json")
-                                                                    .body(text)
-                                                                    .send()
-                                                                    .await
-                                                                {
+                                                                // Send to import endpoint - parse the text as JSON value
+                                                                let body: serde_json::Value = match serde_json::from_str(&text) {
+                                                                    Ok(v) => v,
+                                                                    Err(e) => {
+                                                                        error.set(Some(format!("Invalid JSON: {}", e)));
+                                                                        return;
+                                                                    }
+                                                                };
+                                                                match http::post_response("/api/links/import", &body).await {
                                                                     Ok(resp) => {
-                                                                        if resp.status().is_success() {
+                                                                        if resp.is_success() {
                                                                             fetch_links();
                                                                             error.set(Some("Import completed successfully!".to_string()));
                                                                         } else {
@@ -775,17 +749,10 @@ pub fn Links() -> Element {
                                 onclick: move |_| {
                                     let ids: Vec<String> = selected_ids().iter().cloned().collect();
                                     spawn(async move {
-                                        let client = reqwest::Client::new();
                                         let body = serde_json::json!({"link_ids": ids});
-                                        let response = client
-                                            .post("/api/links/bulk/delete")
-                                            .json(&body)
-                                            .send()
-                                            .await;
-
-                                        match response {
+                                        match http::post_response("/api/links/bulk/delete", &body).await {
                                             Ok(resp) => {
-                                                if resp.status().is_success() || resp.status().as_u16() == 204 {
+                                                if resp.is_success() || resp.status == 204 {
                                                     // Remove deleted links from list
                                                     let mut current = links();
                                                     let ids_set: HashSet<String> = ids.iter().cloned().collect();
@@ -797,7 +764,7 @@ pub fn Links() -> Element {
                                                 }
                                             }
                                             Err(e) => {
-                                                error.set(Some(format!("Network error: {}", e)));
+                                                error.set(Some(e));
                                             }
                                         }
                                     });
@@ -813,21 +780,14 @@ pub fn Links() -> Element {
                                         if let Ok(category_id) = value.parse::<Uuid>() {
                                             let ids: Vec<String> = selected_ids().iter().cloned().collect();
                                             spawn(async move {
-                                                let client = reqwest::Client::new();
                                                 let body = serde_json::json!({
                                                     "link_ids": ids,
                                                     "category_id": category_id,
                                                     "action": "add"
                                                 });
-                                                let response = client
-                                                    .post("/api/links/bulk/categories")
-                                                    .json(&body)
-                                                    .send()
-                                                    .await;
-
-                                                match response {
+                                                match http::post_response("/api/links/bulk/categories", &body).await {
                                                     Ok(resp) => {
-                                                        if resp.status().is_success() {
+                                                        if resp.is_success() {
                                                             // Refresh links to show updated categories
                                                             fetch_links();
                                                         } else {
@@ -835,7 +795,7 @@ pub fn Links() -> Element {
                                                         }
                                                     }
                                                     Err(e) => {
-                                                        error.set(Some(format!("Network error: {}", e)));
+                                                        error.set(Some(e));
                                                     }
                                                 }
                                             });
@@ -856,21 +816,14 @@ pub fn Links() -> Element {
                                         if let Ok(tag_id) = value.parse::<Uuid>() {
                                             let ids: Vec<String> = selected_ids().iter().cloned().collect();
                                             spawn(async move {
-                                                let client = reqwest::Client::new();
                                                 let body = serde_json::json!({
                                                     "link_ids": ids,
                                                     "tag_id": tag_id,
                                                     "action": "add"
                                                 });
-                                                let response = client
-                                                    .post("/api/links/bulk/tags")
-                                                    .json(&body)
-                                                    .send()
-                                                    .await;
-
-                                                match response {
+                                                match http::post_response("/api/links/bulk/tags", &body).await {
                                                     Ok(resp) => {
-                                                        if resp.status().is_success() {
+                                                        if resp.is_success() {
                                                             // Refresh links to show updated tags
                                                             fetch_links();
                                                         } else {
@@ -878,7 +831,7 @@ pub fn Links() -> Element {
                                                         }
                                                     }
                                                     Err(e) => {
-                                                        error.set(Some(format!("Network error: {}", e)));
+                                                        error.set(Some(e));
                                                     }
                                                 }
                                             });
@@ -1100,32 +1053,22 @@ fn LinkForm(
 
         spawn(async move {
             form_scraping.set(true);
-            let client = reqwest::Client::new();
-            let result = client
-                .post("/api/scrape")
-                .json(&serde_json::json!({ "url": url }))
-                .send()
-                .await;
 
-            form_scraping.set(false);
-
-            if let Ok(resp) = result {
-                if resp.status().is_success() {
-                    if let Ok(scraped) = resp.json::<ScrapeResponse>().await {
-                        // Only auto-fill if user hasn't manually edited
-                        if !title_touched() {
-                            if let Some(title) = scraped.title {
-                                form_title.set(title);
-                            }
-                        }
-                        if !description_touched() {
-                            if let Some(desc) = scraped.description {
-                                form_description.set(desc);
-                            }
-                        }
+            if let Ok(scraped) = http::post::<ScrapeResponse, _>("/api/scrape", &serde_json::json!({ "url": url })).await {
+                // Only auto-fill if user hasn't manually edited
+                if !title_touched() {
+                    if let Some(title) = scraped.title {
+                        form_title.set(title);
+                    }
+                }
+                if !description_touched() {
+                    if let Some(desc) = scraped.description {
+                        form_description.set(desc);
                     }
                 }
             }
+
+            form_scraping.set(false);
         });
     };
 
@@ -1159,110 +1102,78 @@ fn LinkForm(
             form_loading.set(true);
             form_error.set(None);
 
-            let client = reqwest::Client::new();
-
             let response = if let Some(ref id) = edit_id_clone {
                 let request = UpdateLinkRequest {
                     title: if title_val.trim().is_empty() { None } else { Some(title_val) },
                     description: if desc_val.trim().is_empty() { None } else { Some(desc_val) },
                     status: Some(status_val),
                 };
-                client.put(&format!("/api/links/{}", id)).json(&request).send().await
+                http::put::<Link, _>(&format!("/api/links/{}", id), &request).await
             } else {
                 let request = CreateLinkRequest {
                     url: url_val,
                     title: if title_val.trim().is_empty() { None } else { Some(title_val) },
                     description: if desc_val.trim().is_empty() { None } else { Some(desc_val) },
                 };
-                client.post("/api/links").json(&request).send().await
+                http::post::<Link, _>("/api/links", &request).await
             };
 
             form_loading.set(false);
 
             match response {
-                Ok(resp) => {
-                    if resp.status().is_success() {
-                        match resp.json::<Link>().await {
-                            Ok(mut updated_link) => {
-                                let link_id = updated_link.id.clone();
+                Ok(mut updated_link) => {
+                    let link_id = updated_link.id.clone();
 
-                                // Save categories
-                                for cat_id in &categories_val {
-                                    let _ = client
-                                        .post(&format!("/api/links/{}/categories", link_id))
-                                        .json(&serde_json::json!({ "category_id": cat_id }))
-                                        .send()
-                                        .await;
-                                }
+                    // Save categories
+                    for cat_id in &categories_val {
+                        let _ = http::post_response(&format!("/api/links/{}/categories", link_id), &serde_json::json!({ "category_id": cat_id })).await;
+                    }
 
-                                // Save tags
-                                for tag_id in &tags_val {
-                                    let _ = client
-                                        .post(&format!("/api/links/{}/tags", link_id))
-                                        .json(&serde_json::json!({ "tag_id": tag_id }))
-                                        .send()
-                                        .await;
-                                }
+                    // Save tags
+                    for tag_id in &tags_val {
+                        let _ = http::post_response(&format!("/api/links/{}/tags", link_id), &serde_json::json!({ "tag_id": tag_id })).await;
+                    }
 
-                                // Save languages
-                                for lang_id in &languages_val {
-                                    let _ = client
-                                        .post(&format!("/api/links/{}/languages", link_id))
-                                        .json(&serde_json::json!({ "language_id": lang_id }))
-                                        .send()
-                                        .await;
-                                }
+                    // Save languages
+                    for lang_id in &languages_val {
+                        let _ = http::post_response(&format!("/api/links/{}/languages", link_id), &serde_json::json!({ "language_id": lang_id })).await;
+                    }
 
-                                // Save licenses
-                                for lic_id in &licenses_val {
-                                    let _ = client
-                                        .post(&format!("/api/links/{}/licenses", link_id))
-                                        .json(&serde_json::json!({ "license_id": lic_id }))
-                                        .send()
-                                        .await;
-                                }
+                    // Save licenses
+                    for lic_id in &licenses_val {
+                        let _ = http::post_response(&format!("/api/links/{}/licenses", link_id), &serde_json::json!({ "license_id": lic_id })).await;
+                    }
 
-                                // Refetch link to get updated metadata
-                                if let Ok(resp) = client.get("/api/links").send().await {
-                                    if let Ok(all_links) = resp.json::<Vec<Link>>().await {
-                                        if let Some(refreshed) = all_links.iter().find(|l| l.id == link_id) {
-                                            updated_link = refreshed.clone();
-                                        }
-                                    }
-                                }
+                    // Refetch link to get updated metadata
+                    if let Ok(all_links) = http::get::<Vec<Link>>("/api/links").await {
+                        if let Some(refreshed) = all_links.iter().find(|l| l.id == link_id) {
+                            updated_link = refreshed.clone();
+                        }
+                    }
 
-                                let mut current = links();
-                                if is_update {
-                                    if let Some(pos) = current.iter().position(|l| l.id == updated_link.id) {
-                                        current[pos] = updated_link;
-                                    }
-                                } else {
-                                    current.insert(0, updated_link);
-                                }
-                                links.set(current);
-                                form_url.set(String::new());
-                                form_title.set(String::new());
-                                form_description.set(String::new());
-                                form_status.set("active".to_string());
-                                form_categories.set(Vec::new());
-                                form_tags.set(Vec::new());
-                                form_languages.set(Vec::new());
-                                form_licenses.set(Vec::new());
-                                form_error.set(None);
-                                editing_link_id.set(None);
-                                show_form.set(false);
-                            }
-                            Err(e) => {
-                                form_error.set(Some(format!("Failed to parse response: {}", e)));
-                            }
+                    let mut current = links();
+                    if is_update {
+                        if let Some(pos) = current.iter().position(|l| l.id == updated_link.id) {
+                            current[pos] = updated_link;
                         }
                     } else {
-                        let error_text = resp.text().await.unwrap_or_else(|_| "Operation failed".to_string());
-                        form_error.set(Some(error_text));
+                        current.insert(0, updated_link);
                     }
+                    links.set(current);
+                    form_url.set(String::new());
+                    form_title.set(String::new());
+                    form_description.set(String::new());
+                    form_status.set("active".to_string());
+                    form_categories.set(Vec::new());
+                    form_tags.set(Vec::new());
+                    form_languages.set(Vec::new());
+                    form_licenses.set(Vec::new());
+                    form_error.set(None);
+                    editing_link_id.set(None);
+                    show_form.set(false);
                 }
                 Err(e) => {
-                    form_error.set(Some(format!("Network error: {}", e)));
+                    form_error.set(Some(e));
                 }
             }
         });
@@ -1543,13 +1454,10 @@ fn LinkCard(
                                 refreshing_id.set(Some(id.clone()));
 
                                 spawn(async move {
-                                    let client = reqwest::Client::new();
-                                    let response = client.post(&format!("/api/links/{}/refresh", id)).send().await;
-
-                                    match response {
+                                    match http::post_empty(&format!("/api/links/{}/refresh", id)).await {
                                         Ok(resp) => {
-                                            if resp.status().is_success() {
-                                                match resp.json::<Link>().await {
+                                            if resp.is_success() {
+                                                match resp.json::<Link>() {
                                                     Ok(updated_link) => {
                                                         // Update the link in the list
                                                         let mut current = links();
@@ -1567,7 +1475,7 @@ fn LinkCard(
                                             }
                                         }
                                         Err(e) => {
-                                            error.set(Some(format!("Network error: {}", e)));
+                                            error.set(Some(e));
                                         }
                                     }
 
@@ -1597,54 +1505,23 @@ fn LinkCard(
                                     };
 
                                     spawn(async move {
-                                        let client = reqwest::Client::new();
                                         let body = serde_json::json!({"status": "active"});
-                                        let response = client
-                                            .patch(&format!("/api/links/{}", id))
-                                            .header("Content-Type", "application/json")
-                                            .body(body.to_string())
-                                            .send()
-                                            .await;
-
-                                        match response {
-                                            Ok(resp) => {
-                                                if resp.status().is_success() {
-                                                    match resp.json::<Link>().await {
-                                                        Ok(updated_link) => {
-                                                            let mut current = links();
-                                                            if let Some(pos) = current.iter().position(|l| l.id == id) {
-                                                                current[pos] = updated_link;
-                                                                links.set(current);
-                                                            }
-                                                        }
-                                                        Err(e) => {
-                                                            // Rollback optimistic update on parse error
-                                                            let mut current = links();
-                                                            if let Some(pos) = current.iter().position(|l| l.id == id) {
-                                                                current[pos].status = original_status.clone();
-                                                                links.set(current);
-                                                            }
-                                                            error.set(Some(format!("Failed to parse updated link: {}", e)));
-                                                        }
-                                                    }
-                                                } else {
-                                                    // Rollback optimistic update on API error
-                                                    let mut current = links();
-                                                    if let Some(pos) = current.iter().position(|l| l.id == id) {
-                                                        current[pos].status = original_status;
-                                                        links.set(current);
-                                                    }
-                                                    error.set(Some("Failed to update link status".to_string()));
+                                        match http::patch::<Link, _>(&format!("/api/links/{}", id), &body).await {
+                                            Ok(updated_link) => {
+                                                let mut current = links();
+                                                if let Some(pos) = current.iter().position(|l| l.id == id) {
+                                                    current[pos] = updated_link;
+                                                    links.set(current);
                                                 }
                                             }
                                             Err(e) => {
-                                                // Rollback optimistic update on network error
+                                                // Rollback optimistic update on error
                                                 let mut current = links();
                                                 if let Some(pos) = current.iter().position(|l| l.id == id) {
-                                                    current[pos].status = original_status;
+                                                    current[pos].status = original_status.clone();
                                                     links.set(current);
                                                 }
-                                                error.set(Some(format!("Network error: {}", e)));
+                                                error.set(Some(e));
                                             }
                                         }
                                     });
@@ -1667,24 +1544,9 @@ fn LinkCard(
                                 links.set(current);
 
                                 spawn(async move {
-                                    let client = reqwest::Client::new();
-                                    let response = client.delete(&format!("/api/links/{}", id)).send().await;
-
-                                    deleting_id.set(None);
-
-                                    match response {
-                                        Ok(resp) => {
-                                            if resp.status().is_success() || resp.status().as_u16() == 204 {
-                                                // Success - link already removed optimistically
-                                            } else {
-                                                // Rollback - restore deleted link
-                                                if let Some(link) = deleted_link {
-                                                    let mut current = links();
-                                                    current.push(link);
-                                                    links.set(current);
-                                                }
-                                                error.set(Some("Failed to delete link".to_string()));
-                                            }
+                                    match http::delete(&format!("/api/links/{}", id)).await {
+                                        Ok(()) => {
+                                            // Success - link already removed optimistically
                                         }
                                         Err(e) => {
                                             // Rollback - restore deleted link
@@ -1693,9 +1555,11 @@ fn LinkCard(
                                                 current.push(link);
                                                 links.set(current);
                                             }
-                                            error.set(Some(format!("Network error: {}", e)));
+                                            error.set(Some(e));
                                         }
                                     }
+
+                                    deleting_id.set(None);
                                 });
                             },
                             if is_deleting { "..." } else { "🗑️" }

@@ -4,3 +4,4 @@ pub mod components;
 pub mod utils;
 pub mod api_client;
 pub mod performance;
+pub mod http;

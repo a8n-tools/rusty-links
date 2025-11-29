@@ -1,6 +1,7 @@
 use dioxus::prelude::*;
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
+use crate::ui::http;
 
 #[derive(Debug, Clone, Deserialize, PartialEq)]
 pub struct Language {
@@ -27,13 +28,8 @@ pub fn LanguageSelect(
 
     use_effect(move || {
         spawn(async move {
-            let client = reqwest::Client::new();
-            if let Ok(resp) = client.get("/api/languages").send().await {
-                if resp.status().is_success() {
-                    if let Ok(data) = resp.json::<Vec<Language>>().await {
-                        languages.set(data);
-                    }
-                }
+            if let Ok(data) = http::get::<Vec<Language>>("/api/languages").await {
+                languages.set(data);
             }
             loading.set(false);
         });
@@ -100,21 +96,16 @@ pub fn LanguageSelect(
                                         }
                                         spawn(async move {
                                             creating.set(true);
-                                            let client = reqwest::Client::new();
                                             let request = CreateLanguageRequest { name: name.clone() };
-                                            if let Ok(resp) = client.post("/api/languages").json(&request).send().await {
-                                                if resp.status().is_success() {
-                                                    if let Ok(new_lang) = resp.json::<Language>().await {
-                                                        let mut current = languages();
-                                                        current.push(new_lang.clone());
-                                                        current.sort_by(|a, b| a.name.cmp(&b.name));
-                                                        languages.set(current);
-                                                        let mut new_selected = current_selected.clone();
-                                                        new_selected.push(new_lang.id);
-                                                        on_change.call(new_selected);
-                                                        search.set(String::new());
-                                                    }
-                                                }
+                                            if let Ok(new_lang) = http::post::<Language, _>("/api/languages", &request).await {
+                                                let mut current = languages();
+                                                current.push(new_lang.clone());
+                                                current.sort_by(|a, b| a.name.cmp(&b.name));
+                                                languages.set(current);
+                                                let mut new_selected = current_selected.clone();
+                                                new_selected.push(new_lang.id);
+                                                on_change.call(new_selected);
+                                                search.set(String::new());
                                             }
                                             creating.set(false);
                                         });

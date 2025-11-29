@@ -1,6 +1,7 @@
 use dioxus::prelude::*;
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
+use crate::ui::http;
 
 #[derive(Debug, Clone, Deserialize, PartialEq)]
 pub struct Tag {
@@ -26,13 +27,8 @@ pub fn TagSelect(
 
     use_effect(move || {
         spawn(async move {
-            let client = reqwest::Client::new();
-            if let Ok(resp) = client.get("/api/tags").send().await {
-                if resp.status().is_success() {
-                    if let Ok(data) = resp.json::<Vec<Tag>>().await {
-                        tags.set(data);
-                    }
-                }
+            if let Ok(data) = http::get::<Vec<Tag>>("/api/tags").await {
+                tags.set(data);
             }
             loading.set(false);
         });
@@ -99,24 +95,19 @@ pub fn TagSelect(
                                         }
                                         spawn(async move {
                                             creating.set(true);
-                                            let client = reqwest::Client::new();
                                             let request = CreateTagRequest { name: name.clone() };
 
-                                            if let Ok(resp) = client.post("/api/tags").json(&request).send().await {
-                                                if resp.status().is_success() {
-                                                    if let Ok(new_tag) = resp.json::<Tag>().await {
-                                                        let mut current_tags = tags();
-                                                        current_tags.push(new_tag.clone());
-                                                        current_tags.sort_by(|a, b| a.name.cmp(&b.name));
-                                                        tags.set(current_tags);
+                                            if let Ok(new_tag) = http::post::<Tag, _>("/api/tags", &request).await {
+                                                let mut current_tags = tags();
+                                                current_tags.push(new_tag.clone());
+                                                current_tags.sort_by(|a, b| a.name.cmp(&b.name));
+                                                tags.set(current_tags);
 
-                                                        let mut new_selected = current_selected.clone();
-                                                        new_selected.push(new_tag.id);
-                                                        on_change.call(new_selected);
+                                                let mut new_selected = current_selected.clone();
+                                                new_selected.push(new_tag.id);
+                                                on_change.call(new_selected);
 
-                                                        search.set(String::new());
-                                                    }
-                                                }
+                                                search.set(String::new());
                                             }
                                             creating.set(false);
                                         });

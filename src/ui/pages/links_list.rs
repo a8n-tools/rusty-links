@@ -11,6 +11,7 @@ use crate::ui::components::search_filter::{SearchBar, FiltersContainer, FilterOp
 use crate::ui::components::modal::{LinkDetailsModal, AddLinkDialog};
 use crate::ui::components::add_link_button::AddLinkButton;
 use crate::ui::performance::use_debounced;
+use crate::ui::http;
 
 #[derive(Debug, Clone, Deserialize)]
 struct PaginatedLinksResponse {
@@ -74,39 +75,22 @@ async fn fetch_links(
     categories: Vec<Uuid>,
     tags: Vec<Uuid>,
 ) -> Result<PaginatedLinksResponse, String> {
-    let client = reqwest::Client::new();
     let url = build_links_query(page, per_page, sort_by, sort_order, search, languages, licenses, categories, tags);
-
-    let response = client.get(&url).send().await
-        .map_err(|e| format!("Network error: {}", e))?;
-
-    if response.status().is_success() {
-        response.json::<PaginatedLinksResponse>().await
-            .map_err(|e| format!("Parse error: {}", e))
-    } else {
-        Err(format!("Server error: {}", response.status()))
-    }
+    http::get(&url).await
 }
 
 async fn fetch_filter_options() -> Result<
     (Vec<FilterOption>, Vec<FilterOption>, Vec<FilterOption>, Vec<FilterOption>),
     String
 > {
-    let client = reqwest::Client::new();
+    // Fetch all filter options - note: we can't use futures::join! with our simple http functions
+    // So we fetch them sequentially
+    let languages_data: Vec<serde_json::Value> = http::get("/api/languages").await?;
+    let licenses_data: Vec<serde_json::Value> = http::get("/api/licenses").await?;
+    let categories_data: Vec<serde_json::Value> = http::get("/api/categories").await?;
+    let tags_data: Vec<serde_json::Value> = http::get("/api/tags").await?;
 
-    // Fetch all filter options in parallel
-    let (languages_res, licenses_res, categories_res, tags_res) = futures::join!(
-        client.get("/api/languages").send(),
-        client.get("/api/licenses").send(),
-        client.get("/api/categories").send(),
-        client.get("/api/tags").send(),
-    );
-
-    let languages: Vec<FilterOption> = languages_res
-        .map_err(|e| format!("Error fetching languages: {}", e))?
-        .json::<Vec<serde_json::Value>>()
-        .await
-        .map_err(|e| format!("Error parsing languages: {}", e))?
+    let languages: Vec<FilterOption> = languages_data
         .into_iter()
         .filter_map(|v| {
             Some(FilterOption {
@@ -116,11 +100,7 @@ async fn fetch_filter_options() -> Result<
         })
         .collect();
 
-    let licenses: Vec<FilterOption> = licenses_res
-        .map_err(|e| format!("Error fetching licenses: {}", e))?
-        .json::<Vec<serde_json::Value>>()
-        .await
-        .map_err(|e| format!("Error parsing licenses: {}", e))?
+    let licenses: Vec<FilterOption> = licenses_data
         .into_iter()
         .filter_map(|v| {
             Some(FilterOption {
@@ -130,11 +110,7 @@ async fn fetch_filter_options() -> Result<
         })
         .collect();
 
-    let categories: Vec<FilterOption> = categories_res
-        .map_err(|e| format!("Error fetching categories: {}", e))?
-        .json::<Vec<serde_json::Value>>()
-        .await
-        .map_err(|e| format!("Error parsing categories: {}", e))?
+    let categories: Vec<FilterOption> = categories_data
         .into_iter()
         .filter_map(|v| {
             Some(FilterOption {
@@ -144,11 +120,7 @@ async fn fetch_filter_options() -> Result<
         })
         .collect();
 
-    let tags: Vec<FilterOption> = tags_res
-        .map_err(|e| format!("Error fetching tags: {}", e))?
-        .json::<Vec<serde_json::Value>>()
-        .await
-        .map_err(|e| format!("Error parsing tags: {}", e))?
+    let tags: Vec<FilterOption> = tags_data
         .into_iter()
         .filter_map(|v| {
             Some(FilterOption {

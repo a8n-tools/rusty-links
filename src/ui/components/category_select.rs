@@ -1,6 +1,7 @@
 use dioxus::prelude::*;
 use serde::Deserialize;
 use uuid::Uuid;
+use crate::ui::http;
 
 #[derive(Debug, Clone, Deserialize, PartialEq)]
 pub struct Category {
@@ -28,13 +29,8 @@ pub fn CategorySelect(
 
     use_effect(move || {
         spawn(async move {
-            let client = reqwest::Client::new();
-            if let Ok(resp) = client.get("/api/categories/tree").send().await {
-                if resp.status().is_success() {
-                    if let Ok(data) = resp.json::<Vec<CategoryWithChildren>>().await {
-                        categories.set(data);
-                    }
-                }
+            if let Ok(data) = http::get::<Vec<CategoryWithChildren>>("/api/categories/tree").await {
+                categories.set(data);
             }
             loading.set(false);
         });

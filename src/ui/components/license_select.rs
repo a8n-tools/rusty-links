@@ -1,6 +1,7 @@
 use dioxus::prelude::*;
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
+use crate::ui::http;
 
 #[derive(Debug, Clone, Deserialize, PartialEq)]
 pub struct License {
@@ -27,13 +28,8 @@ pub fn LicenseSelect(
 
     use_effect(move || {
         spawn(async move {
-            let client = reqwest::Client::new();
-            if let Ok(resp) = client.get("/api/licenses").send().await {
-                if resp.status().is_success() {
-                    if let Ok(data) = resp.json::<Vec<License>>().await {
-                        licenses.set(data);
-                    }
-                }
+            if let Ok(data) = http::get::<Vec<License>>("/api/licenses").await {
+                licenses.set(data);
             }
             loading.set(false);
         });
@@ -100,21 +96,16 @@ pub fn LicenseSelect(
                                         }
                                         spawn(async move {
                                             creating.set(true);
-                                            let client = reqwest::Client::new();
                                             let request = CreateLicenseRequest { name: name.clone() };
-                                            if let Ok(resp) = client.post("/api/licenses").json(&request).send().await {
-                                                if resp.status().is_success() {
-                                                    if let Ok(new_lic) = resp.json::<License>().await {
-                                                        let mut current = licenses();
-                                                        current.push(new_lic.clone());
-                                                        current.sort_by(|a, b| a.name.cmp(&b.name));
-                                                        licenses.set(current);
-                                                        let mut new_selected = current_selected.clone();
-                                                        new_selected.push(new_lic.id);
-                                                        on_change.call(new_selected);
-                                                        search.set(String::new());
-                                                    }
-                                                }
+                                            if let Ok(new_lic) = http::post::<License, _>("/api/licenses", &request).await {
+                                                let mut current = licenses();
+                                                current.push(new_lic.clone());
+                                                current.sort_by(|a, b| a.name.cmp(&b.name));
+                                                licenses.set(current);
+                                                let mut new_selected = current_selected.clone();
+                                                new_selected.push(new_lic.id);
+                                                on_change.call(new_selected);
+                                                search.set(String::new());
                                             }
                                             creating.set(false);
                                         });
