@@ -125,7 +125,7 @@ fn NavLinks(on_click: EventHandler<MouseEvent>, #[props(default = false)] mobile
     rsx! {
         a {
             class: base_class,
-            href: "/links-table",
+            href: "/links",
             role: "menuitem",
             "aria-label": "View links",
             onclick: move |e| on_click.call(e),

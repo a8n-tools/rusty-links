@@ -4,12 +4,12 @@ use dioxus_router::RouterConfig;
 use crate::server_functions::auth::check_setup;
 use crate::ui::pages::setup::Setup;
 use crate::ui::pages::login::Login;
-use crate::ui::pages::links::Links;
 use crate::ui::pages::links_list::LinksListPage;
 use crate::ui::pages::categories::CategoriesPage;
 use crate::ui::pages::tags::TagsPage;
 use crate::ui::pages::languages::LanguagesPage;
 use crate::ui::pages::licenses::LicensesPage;
+use crate::ui::http;
 
 #[component]
 pub fn App() -> Element {
@@ -35,8 +35,6 @@ pub enum Route {
     LoginPage {},
     #[route("/links")]
     LinksPage {},
-    #[route("/links-table")]
-    LinksList {},
     #[route("/categories")]
     Categories {},
     #[route("/tags")]
@@ -45,41 +43,80 @@ pub enum Route {
     Languages {},
     #[route("/licenses")]
     Licenses {},
+    #[route("/:..route")]
+    NotFound { route: Vec<String> },
+}
+
+#[derive(Clone, Debug, PartialEq)]
+enum HomeState {
+    NeedsSetup,
+    NeedsLogin,
+    LoggedIn,
+    Error(String),
+}
+
+async fn check_home_state() -> HomeState {
+    // First check if setup is needed
+    match check_setup().await {
+        Ok(true) => return HomeState::NeedsSetup,
+        Ok(false) => {}
+        Err(e) => return HomeState::Error(e.to_string()),
+    }
+
+    // Check if user is logged in by calling /api/auth/me
+    match http::get_response("/api/auth/me").await {
+        Ok(response) if response.is_success() => HomeState::LoggedIn,
+        _ => HomeState::NeedsLogin,
+    }
 }
 
 #[component]
 fn Home() -> Element {
     let nav = navigator();
-    let setup_check = use_resource(|| async { check_setup().await });
+    let home_state = use_resource(|| check_home_state());
 
-    // Clone the result to avoid borrow issues
-    let result = setup_check.read().clone();
+    let result = home_state.read().clone();
 
     match result {
-        Some(Ok(needs_setup)) => {
-            if needs_setup {
-                // No users exist, redirect to setup
-                nav.push(Route::SetupPage {});
-            } else {
-                // Users exist, redirect to login
-                nav.push(Route::LoginPage {});
-            }
+        Some(HomeState::NeedsSetup) => {
+            nav.push(Route::SetupPage {});
             rsx! {
                 div { class: "auth-container",
                     div { class: "loading-container",
                         div { class: "spinner spinner-medium" }
-                        p { class: "loading-message", "Redirecting..." }
+                        p { class: "loading-message", "Redirecting to setup..." }
                     }
                 }
             }
         }
-        Some(Err(e)) => {
-            let error_msg = e.to_string();
+        Some(HomeState::LoggedIn) => {
+            nav.push(Route::LinksPage {});
+            rsx! {
+                div { class: "auth-container",
+                    div { class: "loading-container",
+                        div { class: "spinner spinner-medium" }
+                        p { class: "loading-message", "Redirecting to links..." }
+                    }
+                }
+            }
+        }
+        Some(HomeState::NeedsLogin) => {
+            nav.push(Route::LoginPage {});
+            rsx! {
+                div { class: "auth-container",
+                    div { class: "loading-container",
+                        div { class: "spinner spinner-medium" }
+                        p { class: "loading-message", "Redirecting to login..." }
+                    }
+                }
+            }
+        }
+        Some(HomeState::Error(e)) => {
             rsx! {
                 div { class: "auth-container",
                     div { class: "auth-card",
                         h1 { class: "auth-title", "Error" }
-                        p { class: "message message-error", "Failed to check setup status: {error_msg}" }
+                        p { class: "message message-error", "Failed to check status: {e}" }
                     }
                 }
             }
@@ -109,11 +146,6 @@ fn LoginPage() -> Element {
 
 #[component]
 fn LinksPage() -> Element {
-    rsx! { Links {} }
-}
-
-#[component]
-fn LinksList() -> Element {
     rsx! { LinksListPage {} }
 }
 
@@ -135,4 +167,38 @@ fn Languages() -> Element {
 #[component]
 fn Licenses() -> Element {
     rsx! { LicensesPage {} }
+}
+
+#[component]
+fn NotFound(route: Vec<String>) -> Element {
+    let path = format!("/{}", route.join("/"));
+
+    rsx! {
+        div { class: "not-found-container",
+            div { class: "not-found-content",
+                div { class: "not-found-icon", "404" }
+                h1 { class: "not-found-title", "Page Not Found" }
+                p { class: "not-found-message",
+                    "The page "
+                    code { class: "not-found-path", "{path}" }
+                    " doesn't exist."
+                }
+                p { class: "not-found-suggestion",
+                    "It might have been moved, deleted, or perhaps the URL was mistyped."
+                }
+                div { class: "not-found-actions",
+                    a {
+                        class: "btn-primary",
+                        href: "/links",
+                        "Go to Links"
+                    }
+                    a {
+                        class: "btn-secondary",
+                        href: "/",
+                        "Go Home"
+                    }
+                }
+            }
+        }
+    }
 }
