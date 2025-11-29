@@ -1,11 +1,5 @@
 {
-  "name": "rusty-links",
-  "private": true,
-  "scripts": {
-    "tailwind": "tailwindcss -i ./input.css -o ./assets/tailwind.css",
-    "tailwind:watch": "tailwindcss -i ./input.css -o ./assets/tailwind.css --watch"
-  },
-  "devDependencies": {
+  "dependencies": {
     "@tailwindcss/cli": "^4.1.17",
     "tailwindcss": "^4.1.17"
   }

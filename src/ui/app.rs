@@ -14,11 +14,16 @@ use crate::ui::pages::licenses::LicensesPage;
 #[component]
 pub fn App() -> Element {
     rsx! {
-        head {
-            // Custom CSS for existing components (loaded first)
-            link { rel: "stylesheet", href: "/assets/style.css" }
-            // Tailwind CSS for utility classes (loaded second, takes precedence)
-            link { rel: "stylesheet", href: "/tailwind.css" }
+        // head {
+        //     // Custom CSS for existing components (loaded first)
+        //     link { rel: "stylesheet", href: "/assets/style.css" }
+        //     // Tailwind CSS for utility classes (loaded second, takes precedence)
+        //     link { rel: "stylesheet", href: "/tailwind.css" }
+        // }
+        // The Stylesheet component inserts a style link into the head of the document
+        Stylesheet {
+            // Urls are relative to your Cargo.toml file
+            href: asset!("/assets/tailwind.css")
         }
         Router::<Route> {
             config: || RouterConfig::default().on_update(|_| None)

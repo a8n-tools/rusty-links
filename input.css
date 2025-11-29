@@ -1,21 +1,2 @@
 @import "tailwindcss";
-
-/* Custom Rust-themed color extensions */
-@theme {
-    --color-rust: #b7410e;
-    --color-rust-light: #d4621a;
-    --color-rust-dark: #8b3109;
-    --color-rust-secondary: #9a3a0a;
-    --color-rust-bg: #f5f1ed;
-    --color-rust-surface: #ffffff;
-    --color-rust-border: #ddd5cc;
-    --color-rust-text: #2c2418;
-    --color-rust-text-secondary: #5c5347;
-}
-
-/* Ensure navbar buttons have proper cursor */
-@layer components {
-    nav a, nav button {
-        cursor: pointer;
-    }
-}
+@source "./src/**/*.{rs,html,css}";

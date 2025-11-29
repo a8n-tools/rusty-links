@@ -71,24 +71,24 @@ postgres:
 
 ### Core Tables
 
-| Table | Purpose | Rows (typical) |
-|-------|---------|----------------|
-| `users` | User accounts | 1-10 |
-| `sessions` | Authentication sessions | 1-5 per user |
-| `links` | Bookmarked links | 100-10,000+ |
-| `categories` | Link categorization | 10-100 |
-| `tags` | Link tags | 20-200 |
-| `languages` | Programming languages | 20-50 |
-| `licenses` | Software licenses | 20-40 |
+| Table        | Purpose                 | Rows (typical)  |
+|--------------|-------------------------|-----------------|
+| `users`      | User accounts           | 1-10            |
+| `sessions`   | Authentication sessions | 1-5 per user    |
+| `links`      | Bookmarked links        | 100-10,000+     |
+| `categories` | Link categorization     | 10-100          |
+| `tags`       | Link tags               | 20-200          |
+| `languages`  | Programming languages   | 20-50           |
+| `licenses`   | Software licenses       | 20-40           |
 
 ### Junction Tables
 
-| Table | Purpose |
-|-------|---------|
-| `link_categories` | Links ↔ Categories (many-to-many) |
-| `link_tags` | Links ↔ Tags (many-to-many with order) |
-| `link_languages` | Links ↔ Languages (many-to-many with order) |
-| `link_licenses` | Links ↔ Licenses (many-to-many with order) |
+| Table             | Purpose                                     |
+|-------------------|---------------------------------------------|
+| `link_categories` | Links ↔ Categories (many-to-many)           |
+| `link_tags`       | Links ↔ Tags (many-to-many with order)      |
+| `link_languages`  | Links ↔ Languages (many-to-many with order) |
+| `link_licenses`   | Links ↔ Licenses (many-to-many with order)  |
 
 ---
 
@@ -152,12 +152,12 @@ CREATE TABLE users (
 
 **Columns:**
 
-| Column | Type | Constraints | Description |
-|--------|------|-------------|-------------|
-| `id` | UUID | PRIMARY KEY | User identifier |
-| `email` | TEXT | NOT NULL, UNIQUE | User email address |
-| `password_hash` | TEXT | NOT NULL | Argon2 password hash |
-| `created_at` | TIMESTAMPTZ | NOT NULL, DEFAULT NOW() | Account creation timestamp |
+| Column          | Type        | Constraints             | Description                |
+|-----------------|-------------|-------------------------|----------------------------|
+| `id`            | UUID        | PRIMARY KEY             | User identifier            |
+| `email`         | TEXT        | NOT NULL, UNIQUE        | User email address         |
+| `password_hash` | TEXT        | NOT NULL                | Argon2 password hash       |
+| `created_at`    | TIMESTAMPTZ | NOT NULL, DEFAULT NOW() | Account creation timestamp |
 
 **Indexes:**
 - `idx_users_email` - Fast email lookups for authentication
@@ -183,11 +183,11 @@ CREATE TABLE sessions (
 
 **Columns:**
 
-| Column | Type | Constraints | Description |
-|--------|------|-------------|-------------|
-| `id` | TEXT | PRIMARY KEY | Session token (hex string) |
-| `user_id` | UUID | NOT NULL, FK → users(id) | Owner of session |
-| `created_at` | TIMESTAMPTZ | NOT NULL, DEFAULT NOW() | Session creation time |
+| Column       | Type        | Constraints              | Description                |
+|--------------|-------------|--------------------------|----------------------------|
+| `id`         | TEXT        | PRIMARY KEY              | Session token (hex string) |
+| `user_id`    | UUID        | NOT NULL, FK → users(id) | Owner of session           |
+| `created_at` | TIMESTAMPTZ | NOT NULL, DEFAULT NOW()  | Session creation time      |
 
 **Indexes:**
 - `idx_sessions_user_id` - Find all sessions for a user
