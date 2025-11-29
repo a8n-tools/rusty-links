@@ -34,7 +34,7 @@ pub enum Route {
     LoginPage {},
     #[route("/links")]
     LinksPage {},
-    #[route("/links/list")]
+    #[route("/links-table")]
     LinksList {},
     #[route("/categories")]
     Categories {},

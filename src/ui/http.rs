@@ -9,8 +9,10 @@ pub async fn get<T: DeserializeOwned>(url: &str) -> Result<T, String> {
     #[cfg(target_arch = "wasm32")]
     {
         use gloo_net::http::Request;
+        use web_sys::RequestCredentials;
 
         let response = Request::get(url)
+            .credentials(RequestCredentials::Include)
             .send()
             .await
             .map_err(|e| format!("Network error: {}", e))?;
@@ -50,8 +52,10 @@ pub async fn get_response(url: &str) -> Result<HttpResponse, String> {
     #[cfg(target_arch = "wasm32")]
     {
         use gloo_net::http::Request;
+        use web_sys::RequestCredentials;
 
         let response = Request::get(url)
+            .credentials(RequestCredentials::Include)
             .send()
             .await
             .map_err(|e| format!("Network error: {}", e))?;
@@ -89,8 +93,10 @@ pub async fn post<T: DeserializeOwned, B: Serialize>(url: &str, body: &B) -> Res
     #[cfg(target_arch = "wasm32")]
     {
         use gloo_net::http::Request;
+        use web_sys::RequestCredentials;
 
         let response = Request::post(url)
+            .credentials(RequestCredentials::Include)
             .json(body)
             .map_err(|e| format!("Serialize error: {}", e))?
             .send()
@@ -135,8 +141,10 @@ pub async fn post_response<B: Serialize>(url: &str, body: &B) -> Result<HttpResp
     #[cfg(target_arch = "wasm32")]
     {
         use gloo_net::http::Request;
+        use web_sys::RequestCredentials;
 
         let response = Request::post(url)
+            .credentials(RequestCredentials::Include)
             .json(body)
             .map_err(|e| format!("Serialize error: {}", e))?
             .send()
@@ -177,8 +185,10 @@ pub async fn post_empty(url: &str) -> Result<HttpResponse, String> {
     #[cfg(target_arch = "wasm32")]
     {
         use gloo_net::http::Request;
+        use web_sys::RequestCredentials;
 
         let response = Request::post(url)
+            .credentials(RequestCredentials::Include)
             .send()
             .await
             .map_err(|e| format!("Network error: {}", e))?;
@@ -216,8 +226,10 @@ pub async fn put<T: DeserializeOwned, B: Serialize>(url: &str, body: &B) -> Resu
     #[cfg(target_arch = "wasm32")]
     {
         use gloo_net::http::Request;
+        use web_sys::RequestCredentials;
 
         let response = Request::put(url)
+            .credentials(RequestCredentials::Include)
             .json(body)
             .map_err(|e| format!("Serialize error: {}", e))?
             .send()
@@ -262,8 +274,10 @@ pub async fn patch<T: DeserializeOwned, B: Serialize>(url: &str, body: &B) -> Re
     #[cfg(target_arch = "wasm32")]
     {
         use gloo_net::http::Request;
+        use web_sys::RequestCredentials;
 
         let response = Request::patch(url)
+            .credentials(RequestCredentials::Include)
             .json(body)
             .map_err(|e| format!("Serialize error: {}", e))?
             .send()
@@ -308,8 +322,10 @@ pub async fn delete(url: &str) -> Result<(), String> {
     #[cfg(target_arch = "wasm32")]
     {
         use gloo_net::http::Request;
+        use web_sys::RequestCredentials;
 
         let response = Request::delete(url)
+            .credentials(RequestCredentials::Include)
             .send()
             .await
             .map_err(|e| format!("Network error: {}", e))?;
