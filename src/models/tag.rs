@@ -10,7 +10,7 @@ use uuid::Uuid;
 #[derive(Debug, Clone, Serialize, Deserialize, sqlx::FromRow)]
 pub struct Tag {
     pub id: Uuid,
-    pub user_id: Uuid,
+    pub user_id: Option<Uuid>,
     pub name: String,
     pub created_at: DateTime<Utc>,
 }

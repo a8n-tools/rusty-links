@@ -255,7 +255,7 @@ pub async fn delete_all_user_sessions(pool: &PgPool, user_id: Uuid) -> Result<()
 ///
 /// - Name: "session_id"
 /// - HttpOnly: true (JavaScript cannot access)
-/// - Secure: true (HTTPS only)
+/// - Secure: true in production (HTTPS only), false in development
 /// - SameSite: Lax (CSRF protection)
 /// - Path: "/" (available on all routes)
 /// - Max-Age: None (session cookie, persists until logout)
@@ -271,7 +271,7 @@ pub async fn delete_all_user_sessions(pool: &PgPool, user_id: Uuid) -> Result<()
 /// # Security
 ///
 /// - HttpOnly prevents XSS attacks from stealing session token
-/// - Secure ensures cookie only sent over HTTPS
+/// - Secure ensures cookie only sent over HTTPS (in production)
 /// - SameSite=Lax provides CSRF protection while allowing normal navigation
 /// - No expiration means session persists until explicit logout
 ///
@@ -282,9 +282,13 @@ pub async fn delete_all_user_sessions(pool: &PgPool, user_id: Uuid) -> Result<()
 /// // Set cookie on Axum response
 /// ```
 pub fn create_session_cookie(session_id: &str) -> Cookie<'static> {
+    // In development (debug builds), don't require HTTPS for cookies
+    // In production (release builds), require HTTPS
+    let is_secure = !cfg!(debug_assertions);
+
     Cookie::build((SESSION_COOKIE_NAME, session_id.to_string()))
         .http_only(true)
-        .secure(true)
+        .secure(is_secure)
         .same_site(SameSite::Lax)
         .path("/")
         // No max_age = session cookie (deleted when browser closes)
@@ -308,9 +312,13 @@ pub fn create_session_cookie(session_id: &str) -> Cookie<'static> {
 /// // Set cookie on response to clear session
 /// ```
 pub fn create_clear_session_cookie() -> Cookie<'static> {
+    // In development (debug builds), don't require HTTPS for cookies
+    // In production (release builds), require HTTPS
+    let is_secure = !cfg!(debug_assertions);
+
     Cookie::build((SESSION_COOKIE_NAME, ""))
         .http_only(true)
-        .secure(true)
+        .secure(is_secure)
         .same_site(SameSite::Lax)
         .path("/")
         .max_age(Duration::from_secs(0).try_into().unwrap())
@@ -398,7 +406,9 @@ mod tests {
         assert_eq!(cookie.name(), SESSION_COOKIE_NAME);
         assert_eq!(cookie.value(), "test_session_id");
         assert_eq!(cookie.http_only(), Some(true));
-        assert_eq!(cookie.secure(), Some(true));
+        // In debug builds, secure is false; in release builds, secure is true
+        let expected_secure = !cfg!(debug_assertions);
+        assert_eq!(cookie.secure(), Some(expected_secure));
         assert_eq!(cookie.same_site(), Some(SameSite::Lax));
         assert_eq!(cookie.path(), Some("/"));
         // Session cookie has no max_age

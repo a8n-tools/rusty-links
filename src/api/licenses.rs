@@ -20,7 +20,7 @@ async fn get_authenticated_user(pool: &PgPool, jar: &CookieJar) -> Result<User, 
     let session = get_session(pool, &session_id).await?.ok_or(AppError::SessionExpired)?;
 
     sqlx::query_as::<_, User>(
-        "SELECT id, email, password_hash, created_at FROM users WHERE id = $1",
+        "SELECT id, email, password_hash, name, created_at FROM users WHERE id = $1",
     )
     .bind(session.user_id)
     .fetch_one(pool)
@@ -31,18 +31,9 @@ async fn get_authenticated_user(pool: &PgPool, jar: &CookieJar) -> Result<User, 
 #[derive(Debug, Serialize)]
 struct LicenseResponse {
     id: Uuid,
-    name: String,
-    is_global: bool,
-}
-
-impl From<License> for LicenseResponse {
-    fn from(lic: License) -> Self {
-        Self {
-            id: lic.id,
-            name: lic.name,
-            is_global: lic.user_id.is_none(),
-        }
-    }
+    name: String,           // full_name from DB
+    acronym: Option<String>, // name (acronym) from DB
+    link_count: i64,
 }
 
 /// GET /api/licenses
@@ -51,14 +42,40 @@ async fn list_licenses(
     jar: CookieJar,
 ) -> Result<Json<Vec<LicenseResponse>>, AppError> {
     let user = get_authenticated_user(&pool, &jar).await?;
-    let licenses = License::get_all_available(&pool, user.id).await?;
-    let response: Vec<LicenseResponse> = licenses.into_iter().map(|l| l.into()).collect();
+
+    // Fetch licenses with link counts
+    let licenses = sqlx::query_as::<_, (Uuid, String, String, i64)>(
+        r#"
+        SELECT l.id, l.full_name, l.name as acronym, COUNT(ll.link_id) as link_count
+        FROM licenses l
+        LEFT JOIN link_licenses ll ON l.id = ll.license_id
+        LEFT JOIN links lnk ON ll.link_id = lnk.id AND lnk.user_id = $1
+        WHERE l.user_id IS NULL OR l.user_id = $1
+        GROUP BY l.id, l.full_name, l.name
+        ORDER BY l.full_name
+        "#,
+    )
+    .bind(user.id)
+    .fetch_all(&pool)
+    .await?;
+
+    let response: Vec<LicenseResponse> = licenses
+        .into_iter()
+        .map(|(id, name, acronym, link_count)| LicenseResponse {
+            id,
+            name,
+            acronym: Some(acronym),
+            link_count,
+        })
+        .collect();
+
     Ok(Json(response))
 }
 
 #[derive(Debug, Deserialize)]
 struct CreateLicenseRequest {
     name: String,
+    full_name: Option<String>,
 }
 
 /// POST /api/licenses
@@ -68,8 +85,14 @@ async fn create_license(
     Json(request): Json<CreateLicenseRequest>,
 ) -> Result<impl IntoResponse, AppError> {
     let user = get_authenticated_user(&pool, &jar).await?;
-    let license = License::create(&pool, user.id, &request.name).await?;
-    let response: LicenseResponse = license.into();
+    let full_name = request.full_name.as_deref().unwrap_or(&request.name);
+    let license = License::create(&pool, user.id, &request.name, full_name).await?;
+    let response = LicenseResponse {
+        id: license.id,
+        name: license.full_name,
+        acronym: Some(license.name),
+        link_count: 0, // New license has no links yet
+    };
     Ok((StatusCode::CREATED, Json(response)))
 }
 

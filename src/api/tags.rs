@@ -11,7 +11,7 @@ use axum::{
     Json, Router,
 };
 use axum_extra::extract::CookieJar;
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 use sqlx::PgPool;
 use uuid::Uuid;
 
@@ -21,12 +21,19 @@ async fn get_authenticated_user(pool: &PgPool, jar: &CookieJar) -> Result<User, 
     let session = get_session(pool, &session_id).await?.ok_or(AppError::SessionExpired)?;
 
     sqlx::query_as::<_, User>(
-        "SELECT id, email, password_hash, created_at FROM users WHERE id = $1",
+        "SELECT id, email, password_hash, name, created_at FROM users WHERE id = $1",
     )
     .bind(session.user_id)
     .fetch_one(pool)
     .await
     .map_err(AppError::from)
+}
+
+#[derive(Debug, Serialize)]
+struct TagResponse {
+    id: Uuid,
+    name: String,
+    link_count: i64,
 }
 
 #[derive(Debug, Deserialize)]
@@ -42,17 +49,43 @@ async fn create_tag(
 ) -> Result<impl IntoResponse, AppError> {
     let user = get_authenticated_user(&pool, &jar).await?;
     let tag = Tag::create(&pool, user.id, &request.name).await?;
-    Ok((StatusCode::CREATED, Json(tag)))
+    let response = TagResponse {
+        id: tag.id,
+        name: tag.name,
+        link_count: 0, // New tag has no links yet
+    };
+    Ok((StatusCode::CREATED, Json(response)))
 }
 
 /// GET /api/tags
 async fn list_tags(
     State(pool): State<PgPool>,
     jar: CookieJar,
-) -> Result<Json<Vec<Tag>>, AppError> {
+) -> Result<Json<Vec<TagResponse>>, AppError> {
     let user = get_authenticated_user(&pool, &jar).await?;
-    let tags = Tag::get_all_by_user(&pool, user.id).await?;
-    Ok(Json(tags))
+
+    // Fetch tags with link counts
+    let tags = sqlx::query_as::<_, (Uuid, String, i64)>(
+        r#"
+        SELECT t.id, t.name, COUNT(lt.link_id) as link_count
+        FROM tags t
+        LEFT JOIN link_tags lt ON t.id = lt.tag_id
+        LEFT JOIN links l ON lt.link_id = l.id AND l.user_id = $1
+        WHERE t.user_id = $1
+        GROUP BY t.id, t.name
+        ORDER BY t.name
+        "#,
+    )
+    .bind(user.id)
+    .fetch_all(&pool)
+    .await?;
+
+    let response: Vec<TagResponse> = tags
+        .into_iter()
+        .map(|(id, name, link_count)| TagResponse { id, name, link_count })
+        .collect();
+
+    Ok(Json(response))
 }
 
 /// DELETE /api/tags/:id

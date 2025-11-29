@@ -10,8 +10,9 @@ use uuid::Uuid;
 #[derive(Debug, Clone, Serialize, Deserialize, sqlx::FromRow)]
 pub struct License {
     pub id: Uuid,
-    pub name: String,
     pub user_id: Option<Uuid>,
+    pub name: String,
+    pub full_name: String,
     pub created_at: DateTime<Utc>,
 }
 
@@ -33,16 +34,17 @@ impl License {
     }
 
     /// Create a user-specific license
-    pub async fn create(pool: &PgPool, user_id: Uuid, name: &str) -> Result<License, AppError> {
+    pub async fn create(pool: &PgPool, user_id: Uuid, name: &str, full_name: &str) -> Result<License, AppError> {
         let license = sqlx::query_as::<_, License>(
             r#"
-            INSERT INTO licenses (user_id, name)
-            VALUES ($1, $2)
+            INSERT INTO licenses (user_id, name, full_name)
+            VALUES ($1, $2, $3)
             RETURNING *
             "#,
         )
         .bind(user_id)
         .bind(name)
+        .bind(full_name)
         .fetch_one(pool)
         .await?;
 

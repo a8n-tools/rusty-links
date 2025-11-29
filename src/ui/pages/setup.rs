@@ -1,6 +1,7 @@
 use dioxus::prelude::*;
-use crate::server_functions::auth::{setup, SetupRequest};
+use crate::server_functions::auth::SetupRequest;
 use crate::ui::app::Route;
+use crate::ui::http;
 
 #[component]
 pub fn Setup() -> Element {
@@ -44,10 +45,17 @@ pub fn Setup() -> Element {
                 name: name_val.clone(),
             };
 
-            match setup(request).await {
-                Ok(_user) => {
-                    // Setup successful, redirect to links page
-                    nav.push(Route::LinksPage {});
+            // Use REST API for setup (it properly sets cookies)
+            let response = http::post_response("/api/auth/setup", &request).await;
+
+            match response {
+                Ok(resp) => {
+                    if resp.is_success() {
+                        // Setup successful, redirect to links page
+                        nav.push(Route::LinksPage {});
+                    } else {
+                        error.set(Some(format!("Setup failed: {}", resp.body)));
+                    }
                 }
                 Err(e) => {
                     error.set(Some(format!("Setup failed: {}", e)));

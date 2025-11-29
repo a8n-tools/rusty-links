@@ -84,6 +84,30 @@ impl User {
         find_user_by_email(pool, email).await
     }
 
+    /// Find a user by ID
+    pub async fn find_by_id(pool: &PgPool, id: Uuid) -> Result<Option<Self>, AppError> {
+        tracing::debug!(user_id = %id, "Looking up user by ID");
+
+        let user = sqlx::query_as::<_, User>(
+            r#"
+            SELECT id, email, password_hash, name, created_at
+            FROM users
+            WHERE id = $1
+            "#,
+        )
+        .bind(id)
+        .fetch_optional(pool)
+        .await?;
+
+        if user.is_some() {
+            tracing::debug!(user_id = %id, "User found");
+        } else {
+            tracing::debug!(user_id = %id, "User not found");
+        }
+
+        Ok(user)
+    }
+
     /// Verify password against this user's hash
     pub fn verify_password(&self, password: &str) -> bool {
         verify_password(password, &self.password_hash).unwrap_or(false)

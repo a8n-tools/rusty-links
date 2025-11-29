@@ -10,25 +10,16 @@ pub fn Navbar() -> Element {
         spawn(async move {
             loading.set(true);
 
-            let response = http::post_empty("/api/auth/logout").await;
+            // Use REST API for logout (properly clears cookies)
+            let result = http::post_empty("/api/auth/logout").await;
 
             loading.set(false);
 
-            match response {
-                Ok(resp) => {
-                    if resp.is_success() {
-                        // Logout successful, redirect to login
-                        nav.push("/login");
-                    } else {
-                        // Even if logout fails, redirect to login
-                        nav.push("/login");
-                    }
-                }
-                Err(_) => {
-                    // Even if logout fails, redirect to login
-                    nav.push("/login");
-                }
+            // Always redirect to login, even if logout fails
+            if let Err(e) = result {
+                tracing::warn!("Logout failed: {:?}", e);
             }
+            nav.push("/login");
         });
     };
 

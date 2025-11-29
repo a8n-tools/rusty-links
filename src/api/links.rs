@@ -38,7 +38,7 @@ async fn get_authenticated_user(pool: &PgPool, jar: &CookieJar) -> Result<User, 
         })?;
 
     let user = sqlx::query_as::<_, User>(
-        "SELECT id, email, password_hash, created_at FROM users WHERE id = $1",
+        "SELECT id, email, password_hash, name, created_at FROM users WHERE id = $1",
     )
     .bind(session.user_id)
     .fetch_one(pool)

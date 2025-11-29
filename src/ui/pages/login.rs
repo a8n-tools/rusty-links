@@ -1,6 +1,7 @@
 use dioxus::prelude::*;
-use crate::server_functions::auth::{login, LoginRequest};
+use crate::server_functions::auth::LoginRequest;
 use crate::ui::app::Route;
+use crate::ui::http;
 
 #[component]
 pub fn Login() -> Element {
@@ -31,19 +32,21 @@ pub fn Login() -> Element {
                 password: password_val.clone(),
             };
 
-            match login(request).await {
-                Ok(_user) => {
-                    // Login successful, redirect to links page
-                    nav.push(Route::LinksPage {});
+            // Use REST API for login (it properly sets cookies)
+            let response = http::post_response("/api/auth/login", &request).await;
+
+            match response {
+                Ok(resp) => {
+                    if resp.is_success() {
+                        // Login successful, redirect to links page
+                        nav.push(Route::LinksPage {});
+                    } else {
+                        // Show generic error to prevent email enumeration
+                        error.set(Some("Invalid credentials".to_string()));
+                    }
                 }
                 Err(e) => {
-                    // Show generic error to prevent email enumeration
-                    let error_msg = e.to_string();
-                    if error_msg.contains("Invalid credentials") {
-                        error.set(Some("Invalid credentials".to_string()));
-                    } else {
-                        error.set(Some(format!("Login failed: {}", error_msg)));
-                    }
+                    error.set(Some(format!("Login failed: {}", e)));
                 }
             }
 

@@ -20,7 +20,7 @@ async fn get_authenticated_user(pool: &PgPool, jar: &CookieJar) -> Result<User, 
     let session = get_session(pool, &session_id).await?.ok_or(AppError::SessionExpired)?;
 
     sqlx::query_as::<_, User>(
-        "SELECT id, email, password_hash, created_at FROM users WHERE id = $1",
+        "SELECT id, email, password_hash, name, created_at FROM users WHERE id = $1",
     )
     .bind(session.user_id)
     .fetch_one(pool)
@@ -32,17 +32,7 @@ async fn get_authenticated_user(pool: &PgPool, jar: &CookieJar) -> Result<User, 
 struct LanguageResponse {
     id: Uuid,
     name: String,
-    is_global: bool,
-}
-
-impl From<Language> for LanguageResponse {
-    fn from(lang: Language) -> Self {
-        Self {
-            id: lang.id,
-            name: lang.name,
-            is_global: lang.user_id.is_none(),
-        }
-    }
+    link_count: i64,
 }
 
 /// GET /api/languages
@@ -51,8 +41,28 @@ async fn list_languages(
     jar: CookieJar,
 ) -> Result<Json<Vec<LanguageResponse>>, AppError> {
     let user = get_authenticated_user(&pool, &jar).await?;
-    let languages = Language::get_all_available(&pool, user.id).await?;
-    let response: Vec<LanguageResponse> = languages.into_iter().map(|l| l.into()).collect();
+
+    // Fetch languages with link counts
+    let languages = sqlx::query_as::<_, (Uuid, String, i64)>(
+        r#"
+        SELECT l.id, l.name, COUNT(ll.link_id) as link_count
+        FROM languages l
+        LEFT JOIN link_languages ll ON l.id = ll.language_id
+        LEFT JOIN links lnk ON ll.link_id = lnk.id AND lnk.user_id = $1
+        WHERE l.user_id IS NULL OR l.user_id = $1
+        GROUP BY l.id, l.name
+        ORDER BY l.name
+        "#,
+    )
+    .bind(user.id)
+    .fetch_all(&pool)
+    .await?;
+
+    let response: Vec<LanguageResponse> = languages
+        .into_iter()
+        .map(|(id, name, link_count)| LanguageResponse { id, name, link_count })
+        .collect();
+
     Ok(Json(response))
 }
 
@@ -69,7 +79,11 @@ async fn create_language(
 ) -> Result<impl IntoResponse, AppError> {
     let user = get_authenticated_user(&pool, &jar).await?;
     let language = Language::create(&pool, user.id, &request.name).await?;
-    let response: LanguageResponse = language.into();
+    let response = LanguageResponse {
+        id: language.id,
+        name: language.name,
+        link_count: 0, // New language has no links yet
+    };
     Ok((StatusCode::CREATED, Json(response)))
 }
 

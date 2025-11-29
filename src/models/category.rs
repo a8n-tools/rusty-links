@@ -16,6 +16,7 @@ pub struct Category {
     pub name: String,
     pub parent_id: Option<Uuid>,
     pub depth: i32,
+    pub sort_order: Option<i32>,
     pub created_at: DateTime<Utc>,
 }
 
@@ -256,6 +257,7 @@ mod tests {
                 name: "Root".to_string(),
                 parent_id: None,
                 depth: 0,
+                sort_order: None,
                 created_at: now,
             },
             Category {
@@ -264,6 +266,7 @@ mod tests {
                 name: "Child".to_string(),
                 parent_id: Some(root_id),
                 depth: 1,
+                sort_order: None,
                 created_at: now,
             },
         ];
