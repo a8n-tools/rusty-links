@@ -7,7 +7,6 @@ use crate::ui::http;
 pub struct License {
     pub id: Uuid,
     pub name: String,
-    pub is_global: bool,
 }
 
 #[derive(Debug, Serialize)]

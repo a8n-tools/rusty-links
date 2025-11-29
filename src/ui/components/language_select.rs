@@ -7,7 +7,8 @@ use crate::ui::http;
 pub struct Language {
     pub id: Uuid,
     pub name: String,
-    pub is_global: bool,
+    #[serde(default)]
+    pub link_count: i64,
 }
 
 #[derive(Debug, Serialize)]

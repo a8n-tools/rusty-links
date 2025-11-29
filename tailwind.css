@@ -256,6 +256,7 @@
         max-width: 1600px;
         margin: 0 auto;
         padding: 24px;
+        overflow-x: hidden;
     }
 
     /* Page Header */
@@ -2840,6 +2841,8 @@
 
     .content-container {
         padding: 16px;
+        max-width: 100%;
+        overflow-x: hidden;
     }
 
     .page-header {
@@ -2885,6 +2888,7 @@
     .content-container {
         max-width: 100%;
         padding: 20px;
+        overflow-x: hidden;
     }
 
     .modal-content {
@@ -2932,6 +2936,8 @@
 
     .content-container {
         padding: 12px;
+        max-width: 100%;
+        overflow-x: hidden;
     }
 
     .page-header {
@@ -3283,6 +3289,7 @@
     .content-container {
         max-width: 1600px;
         margin: 0 auto;
+        overflow-x: hidden;
     }
 
     .link-grid {

@@ -4,19 +4,23 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-Rusty Links is a full-stack Rust web application using Dioxus (fullstack mode) for the frontend and Axum for the backend API. It uses PostgreSQL for data storage with SQLx for database access.
+Rusty Links is a full-stack Rust web application using Dioxus 0.7 (fullstack mode) for the frontend. It uses PostgreSQL for data storage with SQLx for database access. Tailwind CSS v4 is used for the styling.
+IMPORTANT: Do NOT modify `./assets/tailwind.css`. All CSS should go in `./tailwind.css` and `dx` will automatically run the `tailwindcss` cli to generate `./assets/tailwind.css`.
 
 ## Build & Development Commands
 
 ```bash
-# Build the project
-cargo build
-
 # Run in development (requires PostgreSQL and .env file)
 dx serve
 
 # Check for compilation errors without building
 cargo check
+
+# Check server feature only
+cargo check --features server
+
+# Check web/WASM feature only
+cargo check --features web --target wasm32-unknown-unknown
 
 # Run tests
 cargo test
@@ -24,20 +28,35 @@ cargo test
 # Run a specific test
 cargo test <test_name>
 
+# Code quality
+cargo fmt
+cargo clippy
+
 # Database migrations (auto-run on startup, but manual commands available)
-cargo install sqlx-cli --no-default-features --features postgres
 sqlx migrate add <migration_name>
 sqlx migrate run
 ```
 
+## Feature Flags
+
+The project uses Cargo features to separate server and client code:
+- `server` - Enables Axum, SQLx, Tokio, and server-side modules
+- `web` - Enables WASM/browser-specific dependencies (gloo-net, web-sys)
+
+Server-only modules (`#[cfg(feature = "server")]`): api, auth, config, error, github, models, scheduler, scraper
+
 ## Architecture
 
-- **Entry point**: `src/main.rs` - Initializes database pool, creates Axum router with Dioxus frontend and API routes
+- **Entry point**: `src/main.rs` - Initializes database pool, starts scheduler, creates Axum router with Dioxus frontend and API routes
 - **API layer**: `src/api/` - REST endpoints nested under `/api`, with auth routes at `/api/auth/*`
+- **Server functions**: `src/server_functions/` - Dioxus server functions bridging client/server communication (available on both sides)
 - **Auth**: `src/auth/` - Session-based authentication using cookies, Argon2 password hashing
 - **UI**: `src/ui/` - Dioxus components with pages (`pages/`) and reusable components (`components/`)
-- **Models**: `src/models/` - Database models (User, etc.)
-- **Config**: `src/config.rs` - Environment-based configuration (DATABASE_URL, APP_PORT, etc.)
+- **Models**: `src/models/` - Database models (User, Link, Category, Tag, etc.)
+- **Scheduler**: `src/scheduler/` - Background task runner for periodic metadata updates
+- **Scraper**: `src/scraper/` - HTML metadata extraction (titles, descriptions, logos)
+- **GitHub**: `src/github/` - GitHub API integration for repo metadata (stars, languages, licenses)
+- **Config**: `src/config.rs` - Environment-based configuration
 - **Errors**: `src/error.rs` - Centralized error handling with `AppError` type
 
 ## Database
@@ -50,6 +69,7 @@ sqlx migrate run
 
 Requires `.env` file with:
 - `DATABASE_URL` - PostgreSQL connection string
-- `APP_PORT` - Server port (default varies)
-- `UPDATE_INTERVAL_DAYS` - Update scheduling interval
-- `LOG_LEVEL` - Tracing log level
+- `APP_PORT` - Server port (default: 8080)
+- `UPDATE_INTERVAL_DAYS` - Days between metadata updates (default: 30)
+- `RUST_LOG` - Tracing log level (default: info)
+- `GITHUB_TOKEN` - Optional, for higher GitHub API rate limits
