@@ -182,6 +182,21 @@ impl Link {
         Ok(exists)
     }
 
+    /// Find a link by URL for a user, returns None if not found
+    pub async fn find_by_url(pool: &PgPool, user_id: Uuid, url: &str) -> Result<Option<Link>, AppError> {
+        let link = sqlx::query_as::<_, Link>(
+            r#"
+            SELECT * FROM links WHERE user_id = $1 AND url = $2
+            "#,
+        )
+        .bind(user_id)
+        .bind(url)
+        .fetch_optional(pool)
+        .await?;
+
+        Ok(link)
+    }
+
     /// Get all links for a user
     pub async fn get_all_by_user(pool: &PgPool, user_id: Uuid) -> Result<Vec<Link>, AppError> {
         let links = sqlx::query_as::<_, Link>(

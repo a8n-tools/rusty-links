@@ -257,6 +257,42 @@ async fn list_links_handler(
     }))
 }
 
+/// GET /api/links/:id
+///
+/// Gets a single link by ID with all its metadata.
+///
+/// # Response
+/// - 200 OK: Returns the link with categories, tags, languages, and licenses
+/// - 401 Unauthorized: No valid session
+/// - 404 Not Found: Link not found or doesn't belong to user
+async fn get_link_handler(
+    State(pool): State<PgPool>,
+    jar: CookieJar,
+    Path(id): Path<Uuid>,
+) -> Result<Json<LinkWithCategories>, AppError> {
+    let user = get_authenticated_user(&pool, &jar).await?;
+
+    tracing::debug!(
+        user_id = %user.id,
+        link_id = %id,
+        "Fetching link"
+    );
+
+    let link = Link::get_by_id(&pool, id, user.id).await?;
+    let categories = Link::get_categories(&pool, id, user.id).await?;
+    let tags = Link::get_tags(&pool, id, user.id).await?;
+    let languages = Link::get_languages(&pool, id, user.id).await?;
+    let licenses = Link::get_licenses(&pool, id, user.id).await?;
+
+    Ok(Json(LinkWithCategories {
+        link,
+        categories,
+        tags,
+        languages,
+        licenses,
+    }))
+}
+
 /// PUT /api/links/:id
 ///
 /// Updates an existing link.
@@ -1054,16 +1090,51 @@ async fn import_links_handler(
     }))
 }
 
+/// Query parameters for check-duplicate endpoint
+#[derive(Debug, Deserialize)]
+struct CheckDuplicateQuery {
+    url: String,
+}
+
+/// GET /api/links/check-duplicate?url=...
+///
+/// Check if a URL already exists in the user's links
+///
+/// # Query Parameters
+/// - `url`: The URL to check for duplicates
+///
+/// # Response
+/// - 200 OK: Returns the existing link if found, or null if not
+/// - 401 Unauthorized: No valid session
+async fn check_duplicate_handler(
+    State(pool): State<PgPool>,
+    jar: CookieJar,
+    Query(query): Query<CheckDuplicateQuery>,
+) -> Result<Json<Option<Link>>, AppError> {
+    let user = get_authenticated_user(&pool, &jar).await?;
+
+    tracing::debug!(
+        user_id = %user.id,
+        url = %query.url,
+        "Checking for duplicate URL"
+    );
+
+    let existing = Link::find_by_url(&pool, user.id, &query.url).await?;
+
+    Ok(Json(existing))
+}
+
 /// Create the links router
 pub fn create_router() -> Router<PgPool> {
     Router::new()
         .route("/", post(create_link_handler).get(list_links_handler))
+        .route("/check-duplicate", axum::routing::get(check_duplicate_handler))
         .route("/export", axum::routing::get(export_links_handler))
         .route("/import", post(import_links_handler))
         .route("/bulk/delete", post(bulk_delete_handler))
         .route("/bulk/categories", post(bulk_category_handler))
         .route("/bulk/tags", post(bulk_tag_handler))
-        .route("/{id}", put(update_link_handler).delete(delete_link_handler))
+        .route("/{id}", axum::routing::get(get_link_handler).put(update_link_handler).delete(delete_link_handler))
         .route("/{id}/refresh", post(refresh_link_handler))
         .route("/{id}/refresh-github", post(refresh_github_handler))
         .route("/{id}/categories", post(add_category_handler).get(get_categories_handler))
