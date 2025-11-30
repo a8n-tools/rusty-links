@@ -620,9 +620,19 @@ async fn refresh_link_handler(
     // Verify link exists and belongs to user
     let link = Link::get_by_id(&pool, id, user.id).await?;
 
-    // If it's a GitHub repository, refresh GitHub metadata
-    if link.is_github_repo {
-        if let Some((owner, repo)) = crate::github::parse_repo_from_url(&link.url) {
+    // Determine the GitHub URL to use (main URL or source_code_url)
+    // Only accept URLs that start with https://github.com/
+    let github_url = if link.is_github_repo && link.url.starts_with("https://github.com/") {
+        Some(link.url.clone())
+    } else {
+        link.source_code_url.as_ref()
+            .filter(|url| url.starts_with("https://github.com/"))
+            .cloned()
+    };
+
+    // If we have a GitHub URL, fetch GitHub metadata
+    if let Some(ref gh_url) = github_url {
+        if let Some((owner, repo)) = crate::github::parse_repo_from_url(gh_url) {
             match crate::github::fetch_repo_metadata(&owner, &repo).await {
                 Ok(metadata) => {
                     tracing::info!(
@@ -652,8 +662,10 @@ async fn refresh_link_handler(
                 }
             }
         }
-    } else {
-        // Not a GitHub repo - scrape the URL for metadata
+    }
+
+    // Always scrape the main URL for metadata (title, description, logo)
+    if !link.is_github_repo {
         match scraper::scrape_url(&link.url).await {
             Ok(metadata) => {
                 tracing::info!(

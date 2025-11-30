@@ -40,14 +40,14 @@ struct LinkDetails {
 
 #[derive(Debug, Clone, Serialize)]
 struct UpdateLinkRequest {
-    url: String,
+    url: Option<String>,
     source_code_url: Option<String>,
     documentation_url: Option<String>,
     notes: Option<String>,
-    category_ids: Vec<Uuid>,
-    tag_ids: Vec<Uuid>,
-    language_ids: Vec<Uuid>,
-    license_ids: Vec<Uuid>,
+    category_ids: Option<Vec<Uuid>>,
+    tag_ids: Option<Vec<Uuid>>,
+    language_ids: Option<Vec<Uuid>>,
+    license_ids: Option<Vec<Uuid>>,
 }
 
 async fn fetch_link(link_id: Uuid) -> Result<LinkDetails, String> {
@@ -157,7 +157,7 @@ pub fn LinkDetailsModal(
             save_error.set(None);
 
             let form_data = UpdateLinkRequest {
-                url: form_url(),
+                url: Some(form_url()),
                 source_code_url: if form_source_code_url().is_empty() {
                     None
                 } else {
@@ -173,10 +173,10 @@ pub fn LinkDetailsModal(
                 } else {
                     Some(form_notes())
                 },
-                category_ids: form_categories(),
-                tag_ids: form_tags(),
-                language_ids: form_languages(),
-                license_ids: form_licenses(),
+                category_ids: Some(form_categories()),
+                tag_ids: Some(form_tags()),
+                language_ids: Some(form_languages()),
+                license_ids: Some(form_licenses()),
             };
 
             match save_link(link_id_clone, form_data).await {
@@ -378,37 +378,51 @@ pub fn LinkDetailsModal(
                             }
 
                             // Section 4: GitHub Information (conditional)
-                            if link_data.is_github_repo {
-                                ModalSection { title: "GitHub Information".to_string(),
-                                    div { class: "readonly-field",
-                                        label { "Stars" }
-                                        div { "{format_stars(link_data.github_stars)}" }
-                                    }
+                            // Show when main URL is GitHub OR when source_code_url is GitHub
+                            {
+                                let has_github_source = link_data.source_code_url
+                                    .as_ref()
+                                    .map(|url| url.contains("github.com"))
+                                    .unwrap_or(false);
 
-                                    div { class: "readonly-field",
-                                        label { "Archived" }
-                                        if link_data.github_archived.unwrap_or(false) {
-                                            span { class: "badge badge-warning", "Archived" }
-                                        } else {
-                                            span { class: "badge badge-success", "Active" }
+                                if link_data.is_github_repo || has_github_source {
+                                    rsx! {
+                                        ModalSection { title: "GitHub Information".to_string(),
+                                            div { class: "github-stats",
+                                                span { class: "github-stat",
+                                                    "⭐ {format_stars(link_data.github_stars)}"
+                                                }
+                                                span { class: "github-stat",
+                                                    if link_data.github_archived.unwrap_or(false) {
+                                                        "📦 Archived"
+                                                    } else {
+                                                        "✅ Active"
+                                                    }
+                                                }
+                                            }
+
+                                            div { class: "readonly-field",
+                                                label {
+                                                    "Last Commit: {link_data.github_last_commit.clone().unwrap_or(\"-\".to_string())}"
+                                                }
+                                            }
+
+                                            button {
+                                                class: "btn-refresh",
+                                                disabled: refreshing(),
+                                                onclick: handle_refresh,
+                                                if refreshing() {
+                                                    span { class: "refresh-icon spinning", "↻" }
+                                                    " Refreshing..."
+                                                } else {
+                                                    span { class: "refresh-icon", "↻" }
+                                                    " Refresh Metadata"
+                                                }
+                                            }
                                         }
                                     }
-
-                                    div { class: "readonly-field",
-                                        label { "Last Commit" }
-                                        div { "{link_data.github_last_commit.clone().unwrap_or(\"-\".to_string())}" }
-                                    }
-
-                                    button {
-                                        class: "btn-refresh",
-                                        disabled: refreshing(),
-                                        onclick: handle_refresh,
-                                        if refreshing() {
-                                            "Refreshing..."
-                                        } else {
-                                            "Refresh Metadata"
-                                        }
-                                    }
+                                } else {
+                                    rsx! {}
                                 }
                             }
 

@@ -9,7 +9,7 @@
 
 use crate::error::AppError;
 use crate::models::{Category, Language, License, Tag};
-use chrono::{DateTime, Utc};
+use chrono::{DateTime, NaiveDate, Utc};
 use serde::{Deserialize, Serialize};
 use sqlx::PgPool;
 use url::Url;
@@ -28,10 +28,13 @@ pub struct Link {
     pub title: Option<String>,
     pub description: Option<String>,
     pub logo: Option<String>,
+    pub source_code_url: Option<String>,
+    pub documentation_url: Option<String>,
+    pub notes: Option<String>,
     pub is_github_repo: bool,
     pub github_stars: Option<i32>,
     pub github_archived: Option<bool>,
-    pub github_last_commit: Option<DateTime<Utc>>,
+    pub github_last_commit: Option<NaiveDate>,
     pub status: String,
     pub consecutive_failures: i32,
     pub refreshed_at: Option<DateTime<Utc>>,
@@ -52,10 +55,18 @@ pub struct CreateLink {
 /// Data for updating a link
 #[derive(Debug, Clone, Deserialize, Default)]
 pub struct UpdateLink {
+    pub url: Option<String>,
     pub title: Option<String>,
     pub description: Option<String>,
     pub status: Option<String>,
     pub logo: Option<String>,
+    pub source_code_url: Option<String>,
+    pub documentation_url: Option<String>,
+    pub notes: Option<String>,
+    pub category_ids: Option<Vec<Uuid>>,
+    pub tag_ids: Option<Vec<Uuid>>,
+    pub language_ids: Option<Vec<Uuid>>,
+    pub license_ids: Option<Vec<Uuid>>,
 }
 
 /// Search parameters for filtering links
@@ -473,14 +484,19 @@ impl Link {
             }
         }
 
+        // Update the link's basic fields
         let link = sqlx::query_as::<_, Link>(
             r#"
             UPDATE links
             SET
-                title = COALESCE($3, title),
-                description = COALESCE($4, description),
-                status = COALESCE($5, status),
-                logo = COALESCE($6, logo),
+                url = COALESCE($3, url),
+                title = COALESCE($4, title),
+                description = COALESCE($5, description),
+                status = COALESCE($6, status),
+                logo = COALESCE($7, logo),
+                source_code_url = CASE WHEN $8::boolean THEN $9 ELSE source_code_url END,
+                documentation_url = CASE WHEN $10::boolean THEN $11 ELSE documentation_url END,
+                notes = CASE WHEN $12::boolean THEN $13 ELSE notes END,
                 updated_at = NOW()
             WHERE id = $1 AND user_id = $2
             RETURNING *
@@ -488,17 +504,121 @@ impl Link {
         )
         .bind(id)
         .bind(user_id)
+        .bind(&update.url)
         .bind(&update.title)
         .bind(&update.description)
         .bind(&update.status)
         .bind(&update.logo)
+        .bind(update.source_code_url.is_some())
+        .bind(&update.source_code_url)
+        .bind(update.documentation_url.is_some())
+        .bind(&update.documentation_url)
+        .bind(update.notes.is_some())
+        .bind(&update.notes)
         .fetch_optional(pool)
         .await?
         .ok_or_else(|| AppError::not_found("link", &id.to_string()))?;
 
+        // Update junction tables if IDs are provided
+        if let Some(category_ids) = &update.category_ids {
+            Self::update_categories(pool, id, category_ids).await?;
+        }
+        if let Some(tag_ids) = &update.tag_ids {
+            Self::update_tags(pool, id, tag_ids).await?;
+        }
+        if let Some(language_ids) = &update.language_ids {
+            Self::update_languages(pool, id, language_ids).await?;
+        }
+        if let Some(license_ids) = &update.license_ids {
+            Self::update_licenses(pool, id, license_ids).await?;
+        }
+
         tracing::info!(link_id = %id, "Link updated");
 
         Ok(link)
+    }
+
+    /// Update link categories (replaces all existing)
+    async fn update_categories(pool: &PgPool, link_id: Uuid, category_ids: &[Uuid]) -> Result<(), AppError> {
+        // Delete existing categories
+        sqlx::query("DELETE FROM link_categories WHERE link_id = $1")
+            .bind(link_id)
+            .execute(pool)
+            .await?;
+
+        // Insert new categories
+        for category_id in category_ids {
+            sqlx::query("INSERT INTO link_categories (link_id, category_id) VALUES ($1, $2)")
+                .bind(link_id)
+                .bind(category_id)
+                .execute(pool)
+                .await?;
+        }
+
+        Ok(())
+    }
+
+    /// Update link tags (replaces all existing)
+    async fn update_tags(pool: &PgPool, link_id: Uuid, tag_ids: &[Uuid]) -> Result<(), AppError> {
+        // Delete existing tags
+        sqlx::query("DELETE FROM link_tags WHERE link_id = $1")
+            .bind(link_id)
+            .execute(pool)
+            .await?;
+
+        // Insert new tags with order
+        for (order, tag_id) in tag_ids.iter().enumerate() {
+            sqlx::query("INSERT INTO link_tags (link_id, tag_id, order_num) VALUES ($1, $2, $3)")
+                .bind(link_id)
+                .bind(tag_id)
+                .bind(order as i32)
+                .execute(pool)
+                .await?;
+        }
+
+        Ok(())
+    }
+
+    /// Update link languages (replaces all existing)
+    async fn update_languages(pool: &PgPool, link_id: Uuid, language_ids: &[Uuid]) -> Result<(), AppError> {
+        // Delete existing languages
+        sqlx::query("DELETE FROM link_languages WHERE link_id = $1")
+            .bind(link_id)
+            .execute(pool)
+            .await?;
+
+        // Insert new languages with order
+        for (order, language_id) in language_ids.iter().enumerate() {
+            sqlx::query("INSERT INTO link_languages (link_id, language_id, order_num) VALUES ($1, $2, $3)")
+                .bind(link_id)
+                .bind(language_id)
+                .bind(order as i32)
+                .execute(pool)
+                .await?;
+        }
+
+        Ok(())
+    }
+
+    /// Update link licenses (replaces all existing)
+    async fn update_licenses(pool: &PgPool, link_id: Uuid, license_ids: &[Uuid]) -> Result<(), AppError> {
+        // Delete existing licenses
+        sqlx::query("DELETE FROM link_licenses WHERE link_id = $1")
+            .bind(link_id)
+            .execute(pool)
+            .await?;
+
+        // Insert new licenses with order
+        for (order, license_id) in license_ids.iter().enumerate() {
+            sqlx::query("INSERT INTO link_licenses (link_id, license_id, order_num) VALUES ($1, $2, $3)")
+                .bind(link_id)
+                .bind(license_id)
+                .bind(order as i32)
+                .execute(pool)
+                .await?;
+        }
+
+        Ok(())
     }
 
     /// Delete a link (requires user_id for verification)
@@ -941,20 +1061,29 @@ impl Link {
     /// Update GitHub metadata for a link
     ///
     /// Updates GitHub-specific fields and sets refreshed_at timestamp.
-    /// This function should only be called for links where is_github_repo = true.
+    /// This function can be called for links where:
+    /// - is_github_repo = true (main URL is GitHub), OR
+    /// - source_code_url starts with https://github.com/
     pub async fn update_github_metadata(
         pool: &PgPool,
         link_id: Uuid,
         user_id: Uuid,
         metadata: crate::github::GitHubRepoMetadata,
     ) -> Result<(), AppError> {
-        // Verify link belongs to user and is a GitHub repo
+        // Verify link belongs to user
         let link = Self::get_by_id(pool, link_id, user_id).await?;
 
-        if !link.is_github_repo {
+        // Check if this link has a GitHub source (main URL or source_code_url)
+        let has_github_source = link.is_github_repo
+            || link.source_code_url
+                .as_ref()
+                .map(|url| url.starts_with("https://github.com/"))
+                .unwrap_or(false);
+
+        if !has_github_source {
             return Err(AppError::validation(
                 "link",
-                "This link is not a GitHub repository",
+                "This link does not have a GitHub repository URL",
             ));
         }
 
@@ -964,6 +1093,9 @@ impl Link {
             archived = metadata.archived,
             "Updating GitHub metadata for link"
         );
+
+        // Convert DateTime<Utc> to NaiveDate for the DATE column
+        let last_commit_date = metadata.last_commit.map(|dt| dt.date_naive());
 
         sqlx::query(
             r#"
@@ -980,7 +1112,7 @@ impl Link {
         .bind(link_id)
         .bind(metadata.stars)
         .bind(metadata.archived)
-        .bind(metadata.last_commit)
+        .bind(last_commit_date)
         .bind(user_id)
         .execute(pool)
         .await?;

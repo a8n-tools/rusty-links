@@ -533,6 +533,15 @@
         cursor: not-allowed;
     }
 
+    .refresh-icon {
+        display: inline-block;
+        font-size: 1.1em;
+    }
+
+    .refresh-icon.spinning {
+        animation: spin 1s linear infinite;
+    }
+
     .btn-retry {
         padding: 6px 12px;
         background: var(--color-primary-500);
@@ -1709,8 +1718,6 @@
         font-size: 0.875rem;
         font-weight: 600;
         color: var(--color-text-secondary);
-        text-transform: uppercase;
-        letter-spacing: 0.5px;
     }
 
     .readonly-field div {
@@ -1737,6 +1744,17 @@
         outline: none;
         border-color: var(--color-primary-500);
         box-shadow: var(--shadow-focus);
+    }
+
+    .github-stats {
+        display: flex;
+        gap: 24px;
+        padding: 12px 0;
+    }
+
+    .github-stat {
+        font-size: 1rem;
+        color: var(--color-text-primary);
     }
 
     .notes-textarea {
