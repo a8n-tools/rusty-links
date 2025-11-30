@@ -253,8 +253,6 @@
     }
 
     .content-container {
-        max-width: 1600px;
-        margin: 0 auto;
         padding: 24px;
         overflow-x: hidden;
     }
@@ -2812,12 +2810,6 @@
    Responsive Design
    ============================================================================ */
 
-@media (max-width: 1400px) {
-    .cell-description {
-        max-width: 250px;
-    }
-}
-
 @media (max-width: 1023px) {
     body {
         font-size: 15px;
@@ -2857,7 +2849,8 @@
     }
 
     table {
-        min-width: 800px;
+        width: 100%;
+        min-width: 0;
     }
 
     th,
@@ -2867,7 +2860,7 @@
     }
 
     .links-table {
-        min-width: 1200px;
+        min-width: 0;
     }
 
     .link-card {
@@ -2897,7 +2890,8 @@
     }
 }
 
-@media (max-width: 768px) {
+@media (max-width: 767px) {
+    /* Filter styles */
     .filters-container {
         flex-direction: column;
         align-items: stretch;
@@ -2915,9 +2909,8 @@
     .filter-menu {
         width: 100%;
     }
-}
 
-@media (max-width: 767px) {
+    /* Typography */
     body {
         font-size: 14px;
     }
@@ -2999,24 +2992,18 @@
     }
 
     table {
-        min-width: 600px;
+        width: 100%;
+        min-width: 0;
+    }
+
+    .links-table {
+        min-width: 0;
     }
 
     th,
     td {
         padding: 8px;
         font-size: 12px;
-    }
-
-    .table-container::after {
-        content: "\2192 Scroll to see more";
-        display: block;
-        text-align: center;
-        padding: 8px;
-        background: var(--color-surface-200);
-        color: var(--color-text-muted);
-        font-size: 11px;
-        border-top: 1px solid var(--color-border);
     }
 
     .modal {
@@ -3103,7 +3090,11 @@
 
     .category-tree,
     .flat-list {
-        margin: 0 -12px;
+        margin: 0;
+        width: calc(100%);
+        border-radius: 0;
+        border-left: none;
+        border-right: none;
     }
 
     .tree-node-content,
@@ -3151,11 +3142,12 @@
     }
 
     .flat-list-item-content {
-        flex-wrap: wrap;
+        flex-wrap: nowrap;
     }
 
     .item-info {
-        flex-basis: 100%;
+        flex: 1;
+        min-width: 0;
     }
 
     .add-license-input-special {
@@ -3278,17 +3270,12 @@
     }
 }
 
-@media (max-width: 640px) {
-    .pagination {
-        flex-direction: column;
-        gap: 12px;
-    }
-}
-
 @media (min-width: 1024px) {
     .content-container {
         max-width: 1600px;
+        width: 100%;
         margin: 0 auto;
+        padding: 24px;
         overflow-x: hidden;
     }
 
