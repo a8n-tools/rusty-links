@@ -27,8 +27,8 @@ serde_json = "1.0.145"
 # HTTP client (for scraping - server only uses native TLS)
 # For WASM, we use target-specific dependency below
 
-# HTML parsing
-scraper = "0.24.0"
+# HTML parsing (using git until next release with selectors 0.33 / rustc-hash)
+scraper = { git = "https://github.com/rust-scraper/scraper" }
 
 # Configuration
 dotenvy = "0.15.7"
