@@ -137,7 +137,7 @@ async fn fetch_filter_options() -> Result<
 pub fn LinksListPage() -> Element {
     // State for links data
     let mut links = use_signal(|| Vec::<Link>::new());
-    let mut loading = use_signal(|| true);
+    let mut initial_load = use_signal(|| true);  // Only true for first load
     let mut error = use_signal(|| Option::<String>::None);
 
     // Pagination state
@@ -152,7 +152,7 @@ pub fn LinksListPage() -> Element {
 
     // Search state with debouncing (300ms delay)
     let mut search_query = use_signal(|| String::new());
-    let mut debounced_search = use_debounced(search_query(), 300);
+    let debounced_search = use_debounced(search_query, 300);
 
     // Filter state
     let mut selected_languages = use_signal(|| Vec::<Uuid>::new());
@@ -194,7 +194,6 @@ pub fn LinksListPage() -> Element {
     // Fetch links function
     let fetch = move || {
         spawn(async move {
-            loading.set(true);
             error.set(None);
 
             match fetch_links(
@@ -212,11 +211,11 @@ pub fn LinksListPage() -> Element {
                     links.set(response.links);
                     total_pages.set(response.total_pages);
                     total_links.set(response.total);
-                    loading.set(false);
+                    initial_load.set(false);
                 },
                 Err(err) => {
                     error.set(Some(err));
-                    loading.set(false);
+                    initial_load.set(false);
                 }
             }
         });
@@ -294,7 +293,6 @@ pub fn LinksListPage() -> Element {
     // Reset all filters
     let handle_reset = move |_| {
         search_query.set(String::new());
-        debounced_search.set(String::new());
         selected_languages.set(Vec::new());
         selected_licenses.set(Vec::new());
         selected_categories.set(Vec::new());
@@ -361,7 +359,7 @@ pub fn LinksListPage() -> Element {
                 }
 
                 // Loading, error, empty, or table
-                if loading() {
+                if initial_load() {
                     LoadingSpinner {}
                 } else if let Some(err) = error() {
                     div { class: "error-message",

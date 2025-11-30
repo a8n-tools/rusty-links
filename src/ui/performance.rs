@@ -26,19 +26,26 @@ async fn sleep_ms(_ms: u64) {
     // The actual runtime will use either WASM or server implementations
 }
 
-/// Debounce a signal value with a configurable delay
+/// Debounce a signal with a configurable delay
 /// Returns a debounced signal that updates after the delay period
+/// Only updates the debounced value if it actually changed
 pub fn use_debounced<T: Clone + PartialEq + 'static>(
-    value: T,
+    source: Signal<T>,
     delay_ms: u64,
 ) -> Signal<T> {
-    let mut debounced = use_signal(|| value.clone());
+    let mut debounced = use_signal(|| source());
 
     use_effect(move || {
-        let current_value = value.clone();
+        let current_value = source();
+
         spawn(async move {
             sleep_ms(delay_ms).await;
-            debounced.set(current_value);
+
+            // Only update if the value is different from current debounced value
+            // and matches what the source currently is (avoids stale updates)
+            if debounced() != current_value && source() == current_value {
+                debounced.set(current_value);
+            }
         });
     });
 
