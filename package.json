@@ -2,6 +2,7 @@
   "name": "rusty-links",
   "private": true,
   "dependencies": {
+    "@dreamsicle.io/stylelint-config-tailwindcss": "^1.1.2",
     "@tailwindcss/cli": "^4.1.17",
     "stylelint": "^16.26.1",
     "tailwindcss": "^4.1.17"

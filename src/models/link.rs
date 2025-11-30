@@ -958,13 +958,15 @@ impl Link {
             "Updating scraped metadata for link"
         );
 
+        // Note: We always update the logo field, even if the new value is None.
+        // This ensures invalid favicons are cleared when the scraper can't find a valid one.
         sqlx::query(
             r#"
             UPDATE links
             SET
                 title = COALESCE($2, title),
                 description = COALESCE($3, description),
-                logo = COALESCE($4, logo),
+                logo = $4,
                 updated_at = NOW()
             WHERE id = $1 AND user_id = $5
             "#,

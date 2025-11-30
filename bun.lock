@@ -3,6 +3,7 @@
   "workspaces": {
     "": {
       "dependencies": {
+        "@dreamsicle.io/stylelint-config-tailwindcss": "^1.1.2",
         "@tailwindcss/cli": "^4.1.17",
         "stylelint": "^16.26.1",
         "tailwindcss": "^4.1.17",
@@ -30,6 +31,8 @@
     "@csstools/media-query-list-parser": ["@csstools/media-query-list-parser@4.0.3", "", { "peerDependencies": { "@csstools/css-parser-algorithms": "^3.0.5", "@csstools/css-tokenizer": "^3.0.4" } }, "sha512-HAYH7d3TLRHDOUQK4mZKf9k9Ph/m8Akstg66ywKR4SFAigjs3yBiUeZtFxywiTm5moZMAp/5W/ZuFnNXXYLuuQ=="],
 
     "@csstools/selector-specificity": ["@csstools/selector-specificity@5.0.0", "", { "peerDependencies": { "postcss-selector-parser": "^7.0.0" } }, "sha512-PCqQV3c4CoVm3kdPhyeZ07VmBRdH2EpMFA/pd9OASpOEC3aXNGoqPDAZ80D0cLpMBxnmk0+yNhGsEx31hq7Gtw=="],
+
+    "@dreamsicle.io/stylelint-config-tailwindcss": ["@dreamsicle.io/stylelint-config-tailwindcss@1.1.2", "", { "peerDependencies": { "stylelint": "^16.17.0" } }, "sha512-g5nPxKyZKh139CT67tTFT3WD7kB4y4WoHLGqlmLfTjs52cvWGwFUBSiUpPnB2sSBh5efXPtw4VYv8zwPt6C19A=="],
 
     "@dual-bundle/import-meta-resolve": ["@dual-bundle/import-meta-resolve@4.2.1", "", {}, "sha512-id+7YRUgoUX6CgV0DtuhirQWodeeA7Lf4i2x71JS/vtA5pRb/hIGWlw+G6MeXvsM+MXrz0VAydTGElX1rAfgPg=="],
 

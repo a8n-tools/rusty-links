@@ -189,12 +189,12 @@ pub fn LinksTable(
                                 on_row_click.call(link.id.clone());
                             },
 
-                            // Logo
+                            // Link icon/logo
                             td { class: "cell-logo",
                                 if let Some(logo) = &link.logo {
                                     img {
                                         src: "{logo}",
-                                        alt: "Logo",
+                                        alt: "🔗",
                                         class: "link-logo"
                                     }
                                 } else {

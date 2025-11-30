@@ -25,7 +25,7 @@
     --color-accent-700: #8b3109;
 
     /* Surface colors */
-    --color-surface-50: #ffffff;
+    --color-surface-50: #fff;
     --color-surface-100: #faf8f6;
     --color-surface-200: #f5f1ed;
     --color-surface-300: #ebe7e3;
@@ -43,18 +43,15 @@
     --color-error-500: #c53030;
     --color-error-600: #991b1b;
     --color-error-700: #742a2a;
-
     --color-success-50: #f0fdf4;
     --color-success-100: #c6f6d5;
     --color-success-500: #38a169;
     --color-success-600: #22543d;
     --color-success-700: #065f46;
-
     --color-warning-50: #fffbeb;
     --color-warning-100: #fed7aa;
     --color-warning-500: #f59e0b;
     --color-warning-600: #92400e;
-
     --color-info-50: #eff6ff;
     --color-info-100: #bee3f8;
     --color-info-500: #2196f3;
@@ -64,18 +61,18 @@
     --color-border: #ddd5cc;
 
     /* Font families */
-    --font-sans: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
-    --font-mono: "Courier New", Courier, monospace;
+    --font-sans: -apple-system, blinkmacsystemfont, "Segoe UI", roboto, "Helvetica Neue", arial, sans-serif;
+    --font-mono: "Courier New", courier, monospace;
 
     /* Shadows */
-    --shadow-sm: 0 2px 4px rgba(0, 0, 0, 0.05);
-    --shadow-md: 0 4px 6px rgba(0, 0, 0, 0.1);
-    --shadow-lg: 0 4px 12px rgba(0, 0, 0, 0.15);
-    --shadow-xl: 0 20px 60px rgba(0, 0, 0, 0.3);
-    --shadow-primary: 0 4px 8px rgba(183, 65, 14, 0.2);
-    --shadow-primary-sm: 0 2px 8px rgba(183, 65, 14, 0.2);
-    --shadow-focus: 0 0 0 3px rgba(183, 65, 14, 0.1);
-    --shadow-focus-lg: 0 0 0 3px rgba(183, 65, 14, 0.2);
+    --shadow-sm: 0 2px 4px rgb(0 0 0 / 5%);
+    --shadow-md: 0 4px 6px rgb(0 0 0 / 10%);
+    --shadow-lg: 0 4px 12px rgb(0 0 0 / 15%);
+    --shadow-xl: 0 20px 60px rgb(0 0 0 / 30%);
+    --shadow-primary: 0 4px 8px rgb(183 65 14 / 20%);
+    --shadow-primary-sm: 0 2px 8px rgb(183 65 14 / 20%);
+    --shadow-focus: 0 0 0 3px rgb(183 65 14 / 10%);
+    --shadow-focus-lg: 0 0 0 3px rgb(183 65 14 / 20%);
 
     /* Border radius */
     --radius-sm: 4px;
@@ -86,7 +83,7 @@
 
     /* Animations */
     --animate-spin: spin 0.8s linear infinite;
-    --animate-slide-in: slideIn 0.3s ease-out;
+    --animate-slide-in: slidein 0.3s ease-out;
     --animate-indeterminate: indeterminate 1.5s ease-in-out infinite;
 }
 
@@ -106,7 +103,7 @@
         color: var(--color-primary-500);
     }
 
-    a:not(.btn):not(.navbar-brand):not([role="menuitem"]) {
+    a:not(.btn, .navbar-brand, [role="menuitem"]) {
         text-decoration: underline;
         text-decoration-thickness: 1px;
         text-underline-offset: 2px;
@@ -171,7 +168,7 @@
     textarea[aria-invalid="true"]:focus-visible,
     select[aria-invalid="true"]:focus-visible {
         outline-color: var(--color-error-500);
-        box-shadow: 0 0 0 3px rgba(211, 47, 47, 0.2);
+        box-shadow: 0 0 0 3px rgb(211 47 47 / 20%);
     }
 
     /* Table sort indicators */
@@ -203,7 +200,7 @@
     }
 
     summary:hover {
-        background: rgba(183, 65, 14, 0.05);
+        background: rgb(183 65 14 / 5%);
     }
 
     summary:focus-visible {
@@ -570,7 +567,7 @@
     }
 
     .btn-dismiss:hover {
-        background: rgba(0, 0, 0, 0.05);
+        background: rgb(0 0 0 / 5%);
     }
 
     .btn-add-link {
@@ -597,7 +594,7 @@
     button[aria-pressed="true"],
     .btn[aria-pressed="true"] {
         background: var(--color-accent-500);
-        box-shadow: inset 0 2px 4px rgba(0, 0, 0, 0.2);
+        box-shadow: inset 0 2px 4px rgb(0 0 0 / 20%);
     }
 
     /* Messages */
@@ -631,7 +628,7 @@
         display: inline-block;
         width: 1rem;
         height: 1rem;
-        border: 2px solid rgba(255, 255, 255, 0.3);
+        border: 2px solid rgb(255 255 255 / 30%);
         border-radius: 50%;
         border-top-color: white;
         animation: var(--animate-spin);
@@ -711,7 +708,7 @@
         display: inline-block;
         width: 16px;
         height: 16px;
-        border: 2px solid rgba(255, 255, 255, 0.3);
+        border: 2px solid rgb(255 255 255 / 30%);
         border-top: 2px solid white;
         border-radius: 50%;
         animation: spin 0.8s linear infinite;
@@ -728,7 +725,7 @@
     .progress-message {
         color: var(--color-text-primary);
         font-size: 14px;
-        margin: 0 0 8px 0;
+        margin: 0 0 8px;
         font-weight: 500;
     }
 
@@ -1297,6 +1294,7 @@
         padding: 12px;
         border-bottom: 1px solid var(--color-border);
         color: var(--color-text-primary);
+        vertical-align: middle;
     }
 
     .links-table tr.link-row {
@@ -1320,24 +1318,29 @@
     .cell-logo {
         width: 48px;
         text-align: center;
+        padding: 8px !important;
     }
 
+    /* Logo exists. Uses <img> tags */
     .link-logo {
-        width: 48px;
-        height: 48px;
+        width: 32px;
+        height: 32px;
         object-fit: contain;
         border-radius: var(--radius-sm);
+        display: inline-block;
+        vertical-align: middle;
     }
 
+    /* Placeholder for when logo does not exist. Uses <div> tags */
     .link-logo-placeholder {
-        width: 48px;
-        height: 48px;
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        font-size: 24px;
-        background: #f3f4f6;
+        width: 32px;
+        height: 32px;
+        font-size: 20px;
+        line-height: 32px;
         border-radius: var(--radius-sm);
+        background: inherit !important;
+        display: inline-block;
+        vertical-align: middle;
     }
 
     .cell-title {
@@ -1478,18 +1481,18 @@
     }
 
     .error-message-info {
-        background: rgba(33, 150, 243, 0.1);
-        border: 1px solid rgba(33, 150, 243, 0.3);
+        background: rgb(33 150 243 / 10%);
+        border: 1px solid rgb(33 150 243 / 30%);
     }
 
     .error-message-warning {
-        background: rgba(255, 152, 0, 0.1);
-        border: 1px solid rgba(255, 152, 0, 0.3);
+        background: rgb(255 152 0 / 10%);
+        border: 1px solid rgb(255 152 0 / 30%);
     }
 
     .error-message-error {
-        background: rgba(244, 67, 54, 0.1);
-        border: 1px solid rgba(244, 67, 54, 0.3);
+        background: rgb(244 67 54 / 10%);
+        border: 1px solid rgb(244 67 54 / 30%);
     }
 
     .error-content {
@@ -1568,7 +1571,7 @@
     .modal-overlay {
         position: fixed;
         inset: 0;
-        background: rgba(0, 0, 0, 0.5);
+        background: rgb(0 0 0 / 50%);
         display: flex;
         align-items: center;
         justify-content: center;
@@ -1875,7 +1878,7 @@
     .preview-description {
         font-size: 0.875rem;
         color: var(--color-text-secondary);
-        margin: 0 0 12px 0;
+        margin: 0 0 12px;
         line-height: 1.5;
     }
 
@@ -1988,6 +1991,7 @@
         0%, 100% {
             opacity: 1;
         }
+
         50% {
             opacity: 0.6;
         }
@@ -2126,6 +2130,7 @@
         from {
             opacity: 0;
         }
+
         to {
             opacity: 1;
         }
@@ -2136,9 +2141,11 @@
             transform: scale(0);
             opacity: 0;
         }
+
         50% {
             transform: scale(1.2);
         }
+
         100% {
             transform: scale(1);
             opacity: 1;
@@ -2195,7 +2202,7 @@
     }
 
     /* Responsive Design for Add Link Dialog */
-    @media (max-width: 640px) {
+    @media (width <= 640px) {
         .add-link-dialog {
             width: 100%;
             max-width: 100%;
@@ -2274,13 +2281,13 @@
     }
 
     .confirm-dialog h3 {
-        margin: 0 0 16px 0;
+        margin: 0 0 16px;
         font-size: 1.25rem;
         color: var(--color-text-primary);
     }
 
     .confirm-dialog p {
-        margin: 0 0 24px 0;
+        margin: 0 0 24px;
         color: var(--color-text-secondary);
         line-height: 1.6;
     }
@@ -2556,13 +2563,13 @@
         font-size: 20px;
         font-weight: 600;
         color: var(--color-text-primary);
-        margin: 0 0 8px 0;
+        margin: 0 0 8px;
     }
 
     .empty-description {
         font-size: 14px;
         color: var(--color-text-muted);
-        margin: 0 0 24px 0;
+        margin: 0 0 24px;
         max-width: 400px;
     }
 
@@ -2684,13 +2691,13 @@
         font-size: 2rem;
         font-weight: 700;
         color: var(--color-text-primary);
-        margin: 0 0 1rem 0;
+        margin: 0 0 1rem;
     }
 
     .not-found-message {
         font-size: 1.125rem;
         color: var(--color-text-secondary);
-        margin: 0 0 0.5rem 0;
+        margin: 0 0 0.5rem;
     }
 
     .not-found-path {
@@ -2705,7 +2712,7 @@
     .not-found-suggestion {
         font-size: 1rem;
         color: var(--color-text-muted);
-        margin: 0 0 2rem 0;
+        margin: 0 0 2rem;
     }
 
     .not-found-actions {
@@ -2782,10 +2789,7 @@
     .focus-trap-active::before {
         content: '';
         position: absolute;
-        top: -4px;
-        left: -4px;
-        right: -4px;
-        bottom: -4px;
+        inset: -4px;
         border: 2px solid var(--color-primary-500);
         border-radius: inherit;
         pointer-events: none;
@@ -2817,6 +2821,7 @@
         transform: translateX(100%);
         opacity: 0;
     }
+
     to {
         transform: translateX(0);
         opacity: 1;
@@ -2827,6 +2832,7 @@
     0% {
         transform: translateX(-100%);
     }
+
     100% {
         transform: translateX(400%);
     }
@@ -2836,7 +2842,7 @@
    Responsive Design
    ============================================================================ */
 
-@media (max-width: 1023px) {
+@media (width <= 1023px) {
     body {
         font-size: 15px;
     }
@@ -2899,7 +2905,7 @@
     }
 }
 
-@media (min-width: 768px) and (max-width: 1023px) {
+@media (width >= 768px) and (width <= 1023px) {
     .link-grid {
         grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
     }
@@ -2916,7 +2922,7 @@
     }
 }
 
-@media (max-width: 767px) {
+@media (width <= 767px) {
     /* Filter styles */
     .filters-container {
         flex-direction: column;
@@ -3275,14 +3281,13 @@
     }
 }
 
-@media (max-width: 767px) and (orientation: landscape) {
+@media (width <= 767px) and (orientation: landscape) {
     .modal-body {
         max-height: calc(100vh - 120px);
     }
 
     .page-header {
-        flex-direction: row;
-        flex-wrap: wrap;
+        flex-flow: row wrap;
     }
 
     .page-header button {
@@ -3296,7 +3301,7 @@
     }
 }
 
-@media (min-width: 1024px) {
+@media (width >= 1024px) {
     .content-container {
         max-width: 1600px;
         width: 100%;
@@ -3322,7 +3327,7 @@
 
     .tree-node-content:hover,
     .flat-list-item-content:hover {
-        background: rgba(183, 65, 14, 0.02);
+        background: rgb(183 65 14 / 2%);
     }
 }
 
@@ -3334,13 +3339,13 @@
     @theme {
         --color-primary-500: #a83f0f;
         --color-accent-500: #8b3410;
-        --color-border: #000000;
-        --color-text-primary: #000000;
+        --color-border: #000;
+        --color-text-primary: #000;
     }
 
     button,
     .btn {
-        border: 2px solid currentColor;
+        border: 2px solid currentcolor;
     }
 }
 
@@ -3378,7 +3383,7 @@
         /* Light text for dark mode - high contrast */
         --color-text-primary: #f0f0f0;
         --color-text-secondary: #d0d0d0;
-        --color-text-contrast: #ffffff;
+        --color-text-contrast: #fff;
         --color-text-muted: #a0a0a0;
 
         /* Borders visible on dark */
@@ -3397,18 +3402,15 @@
         --color-error-500: #ef5350;
         --color-error-600: #f44336;
         --color-error-700: #ff6659;
-
         --color-success-50: #1a3d2a;
         --color-success-100: #2a5c3a;
         --color-success-500: #66bb6a;
         --color-success-600: #4caf50;
         --color-success-700: #81c784;
-
         --color-warning-50: #3d3015;
         --color-warning-100: #5c4a20;
         --color-warning-500: #ffb74d;
         --color-warning-600: #ffa726;
-
         --color-info-50: #1a2d3d;
         --color-info-100: #2a445c;
         --color-info-500: #64b5f6;
@@ -3631,6 +3633,65 @@
 }
 
 /* ============================================================================
+   Add Link Page Styles
+   ============================================================================ */
+
+@layer components {
+    .add-link-page-content {
+        max-width: 800px;
+        margin: 0 auto;
+    }
+
+    /* Preview section with separator */
+    .add-link-page-content .preview-section {
+        padding-bottom: 24px;
+        margin-bottom: 24px;
+        border-bottom: 1px solid var(--color-border);
+    }
+
+    /* Use edit-section styles for categorization in add-link page */
+    .add-link-page-content .edit-section {
+        margin-bottom: 24px;
+    }
+
+    .add-link-page-content .edit-section:last-of-type {
+        border-bottom: none;
+    }
+
+    .add-link-page-content .page-footer {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        padding-top: 24px;
+        margin-top: 24px;
+    }
+
+    .add-link-page-content .page-actions {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        margin-left: auto;
+    }
+
+    /* Responsive adjustments for Add Link page */
+    @media (width <= 640px) {
+        .add-link-page-content .page-footer {
+            flex-direction: column;
+            gap: 16px;
+        }
+
+        .add-link-page-content .page-actions {
+            width: 100%;
+            margin-left: 0;
+        }
+
+        .add-link-page-content .page-actions button {
+            flex: 1;
+        }
+    }
+}
+
+/* ============================================================================
    Edit Link Page Styles
    ============================================================================ */
 
@@ -3772,7 +3833,7 @@
     }
 
     /* Responsive adjustments */
-    @media (max-width: 640px) {
+    @media (width <= 640px) {
         .edit-section-content .form-group {
             grid-template-columns: 1fr;
             gap: 8px;

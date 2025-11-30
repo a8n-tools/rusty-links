@@ -261,6 +261,7 @@ pub fn EditLinkPage(link_id: Uuid) -> Element {
             match refresh_metadata(link_id).await {
                 Ok(updated_link) => {
                     link.set(Some(updated_link));
+                    has_changes.set(true);
                     refreshing.set(false);
                 }
                 Err(err) => {

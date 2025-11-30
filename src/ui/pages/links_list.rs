@@ -184,20 +184,21 @@ pub fn LinksListPage() -> Element {
         use wasm_bindgen::prelude::*;
         use wasm_bindgen::JsCast;
 
-        let nav = nav.clone();
         let closure = Closure::wrap(Box::new(move |event: web_sys::ClipboardEvent| {
+            let Some(window) = web_sys::window() else {
+                return;
+            };
+
             // Check if focus is in an input/textarea (let normal paste work there)
-            if let Some(window) = web_sys::window() {
-                if let Some(document) = window.document() {
-                    if let Some(active) = document.active_element() {
-                        let tag = active.tag_name().to_lowercase();
-                        if tag == "input" || tag == "textarea" {
-                            return;
-                        }
-                        // Also check for contenteditable
-                        if active.get_attribute("contenteditable").is_some() {
-                            return;
-                        }
+            if let Some(document) = window.document() {
+                if let Some(active) = document.active_element() {
+                    let tag = active.tag_name().to_lowercase();
+                    if tag == "input" || tag == "textarea" {
+                        return;
+                    }
+                    // Also check for contenteditable
+                    if active.get_attribute("contenteditable").is_some() {
+                        return;
                     }
                 }
             }
@@ -210,8 +211,10 @@ pub fn LinksListPage() -> Element {
                         // Prevent default paste behavior
                         event.prevent_default();
                         // Navigate to add link page with the URL
+                        // Use window.location directly since we're outside Dioxus runtime context
                         let encoded_url = urlencoding::encode(&trimmed);
-                        nav.push(format!("/links/add?initial_url={}", encoded_url));
+                        let url = format!("/links/add?initial_url={}", encoded_url);
+                        let _ = window.location().set_href(&url);
                     }
                 }
             }

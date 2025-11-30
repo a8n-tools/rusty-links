@@ -196,14 +196,6 @@ pub fn AddLinkPage(initial_url: Option<String>) -> Element {
     // Check if we're in a loading state
     let is_loading = move || progress_step().is_some();
 
-    // Count of selected categorizations
-    let selection_count = move || {
-        selected_categories().len()
-            + selected_tags().len()
-            + selected_languages().len()
-            + selected_licenses().len()
-    };
-
     // Focus URL input on mount
     use_effect(move || {
         #[cfg(target_arch = "wasm32")]
@@ -369,14 +361,14 @@ pub fn AddLinkPage(initial_url: Option<String>) -> Element {
             };
 
             match create_link_with_categories(&request).await {
-                Ok(link) => {
+                Ok(_link) => {
                     creating.set(false);
                     show_success.set(true);
                     // Brief delay to show success animation
                     #[cfg(target_arch = "wasm32")]
                     gloo_timers::future::TimeoutFuture::new(500).await;
-                    // Navigate to edit page for the new link
-                    nav.push(format!("/links/{}/edit", link.id));
+                    // Navigate back to links list
+                    nav.push("/links");
                 }
                 Err(err) => {
                     error.set(Some(format_error(&err)));
@@ -511,20 +503,10 @@ pub fn AddLinkPage(initial_url: Option<String>) -> Element {
                             }
                         }
 
-                        // Categorization Accordion
-                        details { class: "categorization-accordion",
-                            open: selection_count() > 0,
-                            summary { class: "categorization-summary",
-                                span { class: "categorization-arrow" }
-                                "Add Categories (optional)"
-                                if selection_count() > 0 {
-                                    span { class: "categorization-count",
-                                        " ({selection_count()} selected)"
-                                    }
-                                }
-                            }
-
-                            div { class: "categorization-content",
+                        // Categorization Section
+                        div { class: "edit-section",
+                            h3 { class: "edit-section-title", "Categorization" }
+                            div { class: "edit-section-content",
                                 div { class: "form-group",
                                     label { "Categories" }
                                     CategorySelect {
