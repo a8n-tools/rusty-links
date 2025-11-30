@@ -1,4 +1,6 @@
+pub mod add_link;
 pub mod categories;
+pub mod edit_link;
 pub mod languages;
 pub mod licenses;
 pub mod links;

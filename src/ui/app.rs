@@ -1,9 +1,12 @@
 use dioxus::prelude::*;
 use dioxus_router::RouterConfig;
+use uuid::Uuid;
 
 use crate::server_functions::auth::check_setup;
 use crate::ui::http;
+use crate::ui::pages::add_link::AddLinkPage;
 use crate::ui::pages::categories::CategoriesPage;
+use crate::ui::pages::edit_link::EditLinkPage;
 use crate::ui::pages::languages::LanguagesPage;
 use crate::ui::pages::licenses::LicensesPage;
 use crate::ui::pages::links_list::LinksListPage;
@@ -35,6 +38,10 @@ pub enum Route {
     LoginPage {},
     #[route("/links")]
     LinksPage {},
+    #[route("/links/add?:initial_url")]
+    AddLink { initial_url: Option<String> },
+    #[route("/links/:link_id/edit")]
+    EditLink { link_id: Uuid },
     #[route("/categories")]
     Categories {},
     #[route("/tags")]
@@ -147,6 +154,16 @@ fn LoginPage() -> Element {
 #[component]
 fn LinksPage() -> Element {
     rsx! { LinksListPage {} }
+}
+
+#[component]
+fn AddLink(initial_url: Option<String>) -> Element {
+    rsx! { AddLinkPage { initial_url: initial_url } }
+}
+
+#[component]
+fn EditLink(link_id: Uuid) -> Element {
+    rsx! { EditLinkPage { link_id: link_id } }
 }
 
 #[component]

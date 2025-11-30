@@ -1,7 +1,5 @@
-use crate::ui::components::add_link_button::AddLinkButton;
 use crate::ui::components::empty_state::EmptyState;
 use crate::ui::components::loading::LoadingSpinner;
-use crate::ui::components::modal::{AddLinkDialog, LinkDetailsModal};
 use crate::ui::components::navbar::Navbar;
 use crate::ui::components::pagination::Pagination;
 use crate::ui::components::search_filter::{FilterOption, FiltersContainer, SearchBar};
@@ -9,6 +7,8 @@ use crate::ui::components::table::links_table::Link;
 use crate::ui::components::table::LinksTable;
 use crate::ui::http;
 use crate::ui::performance::use_debounced;
+#[cfg(target_arch = "wasm32")]
+use crate::ui::utils::is_valid_url;
 use dioxus::prelude::*;
 use serde::Deserialize;
 use uuid::Uuid;
@@ -17,7 +17,9 @@ use uuid::Uuid;
 struct PaginatedLinksResponse {
     links: Vec<Link>,
     total: i64,
+    #[allow(dead_code)]
     page: u32,
+    #[allow(dead_code)]
     per_page: u32,
     total_pages: u32,
 }
@@ -142,6 +144,8 @@ async fn fetch_filter_options() -> Result<
 
 #[component]
 pub fn LinksListPage() -> Element {
+    let nav = navigator();
+
     // State for links data
     let mut links = use_signal(|| Vec::<Link>::new());
     let mut initial_load = use_signal(|| true); // Only true for first load
@@ -173,13 +177,59 @@ pub fn LinksListPage() -> Element {
     let mut categories = use_signal(|| Vec::<FilterOption>::new());
     let mut tags = use_signal(|| Vec::<FilterOption>::new());
 
-    // Modal state
-    let mut show_modal = use_signal(|| false);
-    let mut selected_link_id = use_signal(|| Option::<Uuid>::None);
+    // Global paste handler - listen for paste events anywhere in the document
+    // Navigates to /links/add when a URL is pasted (except when in an input field)
+    #[cfg(target_arch = "wasm32")]
+    use_effect(move || {
+        use wasm_bindgen::prelude::*;
+        use wasm_bindgen::JsCast;
 
-    // Add link via paste state
-    let mut show_paste_dialog = use_signal(|| false);
-    let paste_url = use_signal(|| String::new());
+        let nav = nav.clone();
+        let closure = Closure::wrap(Box::new(move |event: web_sys::ClipboardEvent| {
+            // Check if focus is in an input/textarea (let normal paste work there)
+            if let Some(window) = web_sys::window() {
+                if let Some(document) = window.document() {
+                    if let Some(active) = document.active_element() {
+                        let tag = active.tag_name().to_lowercase();
+                        if tag == "input" || tag == "textarea" {
+                            return;
+                        }
+                        // Also check for contenteditable
+                        if active.get_attribute("contenteditable").is_some() {
+                            return;
+                        }
+                    }
+                }
+            }
+
+            // Get clipboard data
+            if let Some(clipboard_data) = event.clipboard_data() {
+                if let Ok(text) = clipboard_data.get_data("text/plain") {
+                    let trimmed = text.trim().to_string();
+                    if is_valid_url(&trimmed) {
+                        // Prevent default paste behavior
+                        event.prevent_default();
+                        // Navigate to add link page with the URL
+                        let encoded_url = urlencoding::encode(&trimmed);
+                        nav.push(format!("/links/add?initial_url={}", encoded_url));
+                    }
+                }
+            }
+        }) as Box<dyn FnMut(_)>);
+
+        // Add event listener to document
+        if let Some(window) = web_sys::window() {
+            if let Some(document) = window.document() {
+                let _ = document.add_event_listener_with_callback(
+                    "paste",
+                    closure.as_ref().unchecked_ref(),
+                );
+            }
+        }
+
+        // Keep the closure alive for the lifetime of the component
+        closure.forget();
+    });
 
     // Fetch filter options on mount (runs once)
     use_effect(move || {
@@ -313,19 +363,14 @@ pub fn LinksListPage() -> Element {
         current_page.set(1);
     };
 
-    // Handle link created from paste
-    let handle_paste_link_created = move |link: Link| {
-        show_paste_dialog.set(false);
-        selected_link_id.set(Some(link.id));
-        show_modal.set(true);
-        fetch();
+    // Handle Add Link button click - navigate to add page
+    let handle_add_link = move |_| {
+        nav.push("/links/add");
     };
 
-    // Handle duplicate from paste
-    let handle_paste_duplicate = move |link: Link| {
-        show_paste_dialog.set(false);
-        selected_link_id.set(Some(link.id));
-        show_modal.set(true);
+    // Handle row click - navigate to edit page
+    let handle_row_click = move |link_id: Uuid| {
+        nav.push(format!("/links/{}/edit", link_id));
     };
 
     rsx! {
@@ -335,11 +380,25 @@ pub fn LinksListPage() -> Element {
             div { class: "content-container",
                 div { class: "page-header",
                     h1 { "Links" }
-                    AddLinkButton {
-                        on_add: move |_| {
-                            // Refresh links list after adding
-                            fetch();
+                    button {
+                        class: "btn-primary btn-add-link",
+                        onclick: handle_add_link,
+                        // Plus icon SVG
+                        svg {
+                            class: "icon",
+                            xmlns: "http://www.w3.org/2000/svg",
+                            width: "20",
+                            height: "20",
+                            view_box: "0 0 24 24",
+                            fill: "none",
+                            stroke: "currentColor",
+                            stroke_width: "2",
+                            stroke_linecap: "round",
+                            stroke_linejoin: "round",
+                            line { x1: "12", y1: "5", x2: "12", y2: "19" }
+                            line { x1: "5", y1: "12", x2: "19", y2: "12" }
                         }
+                        "Add Link"
                     }
                 }
 
@@ -392,10 +451,7 @@ pub fn LinksListPage() -> Element {
                         sort_by: sort_by(),
                         sort_order: sort_order(),
                         on_sort: handle_sort,
-                        on_row_click: move |link_id: Uuid| {
-                            selected_link_id.set(Some(link_id));
-                            show_modal.set(true);
-                        }
+                        on_row_click: handle_row_click
                     }
 
                     // Pagination
@@ -409,32 +465,6 @@ pub fn LinksListPage() -> Element {
                     div { class: "results-info",
                         {results_info()}
                     }
-                }
-            }
-
-            // Link Details Modal
-            if let Some(link_id) = selected_link_id() {
-                LinkDetailsModal {
-                    link_id: link_id,
-                    is_open: show_modal(),
-                    on_close: move |_| {
-                        show_modal.set(false);
-                        selected_link_id.set(None);
-                    },
-                    on_save: move |_| {
-                        // Re-fetch links after save
-                        fetch();
-                    }
-                }
-            }
-
-            // Add Link Dialog (from paste)
-            if show_paste_dialog() {
-                AddLinkDialog {
-                    initial_url: paste_url(),
-                    on_close: move |_| show_paste_dialog.set(false),
-                    on_success: handle_paste_link_created,
-                    on_duplicate: handle_paste_duplicate
                 }
             }
         }
