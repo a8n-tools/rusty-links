@@ -298,9 +298,7 @@ impl AppError {
             AppError::SessionExpired => {
                 "Your session has expired. Please log in again.".to_string()
             }
-            AppError::Unauthorized => {
-                "You are not authorized to access this resource.".to_string()
-            }
+            AppError::Unauthorized => "You are not authorized to access this resource.".to_string(),
             AppError::Forbidden(msg) => msg.clone(),
             AppError::NotFound { resource, .. } => {
                 format!("{} not found.", capitalize_first(resource))
@@ -508,8 +506,8 @@ impl axum::response::IntoResponse for AppError {
 
         // Convert error to API response
         let response = self.to_response();
-        let status_code = StatusCode::from_u16(response.status)
-            .unwrap_or(StatusCode::INTERNAL_SERVER_ERROR);
+        let status_code =
+            StatusCode::from_u16(response.status).unwrap_or(StatusCode::INTERNAL_SERVER_ERROR);
 
         (status_code, Json(response)).into_response()
     }

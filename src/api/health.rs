@@ -1,8 +1,4 @@
-use axum::{
-    extract::State,
-    http::StatusCode,
-    Json,
-};
+use axum::{extract::State, http::StatusCode, Json};
 use serde::Serialize;
 use std::sync::atomic::Ordering;
 
@@ -28,7 +24,11 @@ pub async fn scheduler_health(
     let running = !state.scheduler_shutdown.load(Ordering::Relaxed);
 
     let response = SchedulerHealthResponse {
-        status: if running { "healthy".to_string() } else { "stopped".to_string() },
+        status: if running {
+            "healthy".to_string()
+        } else {
+            "stopped".to_string()
+        },
         running,
     };
 
@@ -51,13 +51,14 @@ pub async fn database_health(
     State(state): State<AppState>,
 ) -> Result<Json<DatabaseHealthResponse>, StatusCode> {
     // Try a simple query to verify database connection
-    let connected = sqlx::query("SELECT 1")
-        .fetch_one(&state.pool)
-        .await
-        .is_ok();
+    let connected = sqlx::query("SELECT 1").fetch_one(&state.pool).await.is_ok();
 
     let response = DatabaseHealthResponse {
-        status: if connected { "healthy".to_string() } else { "unhealthy".to_string() },
+        status: if connected {
+            "healthy".to_string()
+        } else {
+            "unhealthy".to_string()
+        },
         connected,
     };
 

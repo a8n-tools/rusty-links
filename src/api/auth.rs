@@ -12,12 +12,10 @@ use crate::auth::{
     get_session, get_session_from_cookies,
 };
 use crate::error::AppError;
-use crate::models::{check_user_exists, create_user, find_user_by_email, verify_password, CreateUser, User};
-use axum::{
-    extract::State,
-    response::IntoResponse,
-    Json,
+use crate::models::{
+    check_user_exists, create_user, find_user_by_email, verify_password, CreateUser, User,
 };
+use axum::{extract::State, response::IntoResponse, Json};
 use axum_extra::extract::CookieJar;
 use serde::{Deserialize, Serialize};
 use sqlx::PgPool;
@@ -202,12 +200,10 @@ pub async fn logout_handler(
     })?;
 
     // Verify session exists
-    let session = get_session(&pool, &session_id)
-        .await?
-        .ok_or_else(|| {
-            tracing::debug!(session_id = %session_id, "Logout attempt with invalid session");
-            AppError::SessionExpired
-        })?;
+    let session = get_session(&pool, &session_id).await?.ok_or_else(|| {
+        tracing::debug!(session_id = %session_id, "Logout attempt with invalid session");
+        AppError::SessionExpired
+    })?;
 
     tracing::info!(
         user_id = %session.user_id,
@@ -264,12 +260,10 @@ pub async fn me_handler(
     })?;
 
     // Verify session exists
-    let session = get_session(&pool, &session_id)
-        .await?
-        .ok_or_else(|| {
-            tracing::debug!(session_id = %session_id, "Invalid session");
-            AppError::SessionExpired
-        })?;
+    let session = get_session(&pool, &session_id).await?.ok_or_else(|| {
+        tracing::debug!(session_id = %session_id, "Invalid session");
+        AppError::SessionExpired
+    })?;
 
     // Load user from database
     let user = sqlx::query_as::<_, User>(

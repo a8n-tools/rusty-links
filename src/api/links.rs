@@ -8,7 +8,10 @@
 
 use crate::auth::{get_session, get_session_from_cookies};
 use crate::error::AppError;
-use crate::models::{Category, CreateLink, Language, License, Link, LinkSearchParams, LinkWithCategories, Tag, UpdateLink, User};
+use crate::models::{
+    Category, CreateLink, Language, License, Link, LinkSearchParams, LinkWithCategories, Tag,
+    UpdateLink, User,
+};
 use crate::scraper;
 use axum::{
     extract::{Path, Query, State},
@@ -30,12 +33,10 @@ async fn get_authenticated_user(pool: &PgPool, jar: &CookieJar) -> Result<User, 
         AppError::SessionExpired
     })?;
 
-    let session = get_session(pool, &session_id)
-        .await?
-        .ok_or_else(|| {
-            tracing::debug!(session_id = %session_id, "Invalid session");
-            AppError::SessionExpired
-        })?;
+    let session = get_session(pool, &session_id).await?.ok_or_else(|| {
+        tracing::debug!(session_id = %session_id, "Invalid session");
+        AppError::SessionExpired
+    })?;
 
     let user = sqlx::query_as::<_, User>(
         "SELECT id, email, password_hash, name, created_at FROM users WHERE id = $1",
@@ -625,7 +626,8 @@ async fn refresh_link_handler(
     let github_url = if link.is_github_repo && link.url.starts_with("https://github.com/") {
         Some(link.url.clone())
     } else {
-        link.source_code_url.as_ref()
+        link.source_code_url
+            .as_ref()
             .filter(|url| url.starts_with("https://github.com/"))
             .cloned()
     };
@@ -643,7 +645,8 @@ async fn refresh_link_handler(
                         "Successfully fetched GitHub metadata"
                     );
 
-                    if let Err(e) = Link::update_github_metadata(&pool, id, user.id, metadata).await {
+                    if let Err(e) = Link::update_github_metadata(&pool, id, user.id, metadata).await
+                    {
                         tracing::warn!(
                             link_id = %id,
                             error = %e,
@@ -871,12 +874,7 @@ async fn bulk_category_handler(
         match req.action.as_str() {
             "add" => Link::add_category(&pool, *link_id, req.category_id, user.id).await?,
             "remove" => Link::remove_category(&pool, *link_id, req.category_id, user.id).await?,
-            _ => {
-                return Err(AppError::validation(
-                    "action",
-                    "Must be 'add' or 'remove'",
-                ))
-            }
+            _ => return Err(AppError::validation("action", "Must be 'add' or 'remove'")),
         }
     }
 
@@ -924,12 +922,7 @@ async fn bulk_tag_handler(
         match req.action.as_str() {
             "add" => Link::add_tag(&pool, *link_id, req.tag_id, user.id).await?,
             "remove" => Link::remove_tag(&pool, *link_id, req.tag_id, user.id).await?,
-            _ => {
-                return Err(AppError::validation(
-                    "action",
-                    "Must be 'add' or 'remove'",
-                ))
-            }
+            _ => return Err(AppError::validation("action", "Must be 'add' or 'remove'")),
         }
     }
 
@@ -957,7 +950,7 @@ struct ExportLink {
     title: Option<String>,
     description: Option<String>,
     status: String,
-    categories: Vec<String>,  // Names, not IDs
+    categories: Vec<String>, // Names, not IDs
     tags: Vec<String>,
     languages: Vec<String>,
     licenses: Vec<String>,
@@ -1099,7 +1092,10 @@ async fn import_links_handler(
             }
             Ok(false) => {}
             Err(e) => {
-                errors.push(format!("{}: failed to check existence: {}", link_data.url, e));
+                errors.push(format!(
+                    "{}: failed to check existence: {}",
+                    link_data.url, e
+                ));
                 continue;
             }
         }
@@ -1322,22 +1318,51 @@ async fn preview_link_handler(
 pub fn create_router() -> Router<PgPool> {
     Router::new()
         .route("/", post(create_link_handler).get(list_links_handler))
-        .route("/check-duplicate", axum::routing::get(check_duplicate_handler))
+        .route(
+            "/check-duplicate",
+            axum::routing::get(check_duplicate_handler),
+        )
         .route("/preview", post(preview_link_handler))
         .route("/export", axum::routing::get(export_links_handler))
         .route("/import", post(import_links_handler))
         .route("/bulk/delete", post(bulk_delete_handler))
         .route("/bulk/categories", post(bulk_category_handler))
         .route("/bulk/tags", post(bulk_tag_handler))
-        .route("/{id}", axum::routing::get(get_link_handler).put(update_link_handler).delete(delete_link_handler))
+        .route(
+            "/{id}",
+            axum::routing::get(get_link_handler)
+                .put(update_link_handler)
+                .delete(delete_link_handler),
+        )
         .route("/{id}/refresh", post(refresh_link_handler))
         .route("/{id}/refresh-github", post(refresh_github_handler))
-        .route("/{id}/categories", post(add_category_handler).get(get_categories_handler))
-        .route("/{id}/categories/{category_id}", axum::routing::delete(remove_category_handler))
+        .route(
+            "/{id}/categories",
+            post(add_category_handler).get(get_categories_handler),
+        )
+        .route(
+            "/{id}/categories/{category_id}",
+            axum::routing::delete(remove_category_handler),
+        )
         .route("/{id}/tags", post(add_tag_handler).get(get_tags_handler))
-        .route("/{id}/tags/{tag_id}", axum::routing::delete(remove_tag_handler))
-        .route("/{id}/languages", post(add_language_handler).get(get_languages_handler))
-        .route("/{id}/languages/{language_id}", axum::routing::delete(remove_language_handler))
-        .route("/{id}/licenses", post(add_license_handler).get(get_licenses_handler))
-        .route("/{id}/licenses/{license_id}", axum::routing::delete(remove_license_handler))
+        .route(
+            "/{id}/tags/{tag_id}",
+            axum::routing::delete(remove_tag_handler),
+        )
+        .route(
+            "/{id}/languages",
+            post(add_language_handler).get(get_languages_handler),
+        )
+        .route(
+            "/{id}/languages/{language_id}",
+            axum::routing::delete(remove_language_handler),
+        )
+        .route(
+            "/{id}/licenses",
+            post(add_license_handler).get(get_licenses_handler),
+        )
+        .route(
+            "/{id}/licenses/{license_id}",
+            axum::routing::delete(remove_license_handler),
+        )
 }

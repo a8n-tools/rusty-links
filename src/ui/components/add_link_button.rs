@@ -1,13 +1,11 @@
-use dioxus::prelude::*;
-use uuid::Uuid;
 use crate::ui::components::modal::{AddLinkDialog, LinkDetailsModal};
 use crate::ui::components::table::links_table::Link;
-use crate::ui::utils::{read_clipboard, is_valid_url};
+use crate::ui::utils::{is_valid_url, read_clipboard};
+use dioxus::prelude::*;
+use uuid::Uuid;
 
 #[component]
-pub fn AddLinkButton(
-    on_add: EventHandler<()>,
-) -> Element {
+pub fn AddLinkButton(on_add: EventHandler<()>) -> Element {
     let mut show_dialog = use_signal(|| false);
     let mut clipboard_url = use_signal(|| Option::<String>::None);
     let mut show_duplicate_modal = use_signal(|| false);
@@ -22,7 +20,7 @@ pub fn AddLinkButton(
             match read_clipboard().await {
                 Ok(text) if is_valid_url(&text) => {
                     clipboard_url.set(Some(text));
-                },
+                }
                 _ => {
                     clipboard_url.set(None);
                 }

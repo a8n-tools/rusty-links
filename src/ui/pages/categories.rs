@@ -1,12 +1,12 @@
-use dioxus::prelude::*;
-use crate::ui::components::navbar::Navbar;
-use crate::ui::components::loading::{LoadingSpinner, SpinnerSize};
-use crate::ui::components::management::{CategoryTreeNode, AddCategoryInput};
-use crate::ui::components::modal::ConfirmDialog;
 use crate::ui::api_client::{
-    CategoryNode, fetch_categories, fetch_category, create_category,
-    update_category, delete_category
+    create_category, delete_category, fetch_categories, fetch_category, update_category,
+    CategoryNode,
 };
+use crate::ui::components::loading::{LoadingSpinner, SpinnerSize};
+use crate::ui::components::management::{AddCategoryInput, CategoryTreeNode};
+use crate::ui::components::modal::ConfirmDialog;
+use crate::ui::components::navbar::Navbar;
+use dioxus::prelude::*;
 
 #[component]
 pub fn CategoriesPage() -> Element {
@@ -38,7 +38,7 @@ pub fn CategoriesPage() -> Element {
                 Ok(cats) => {
                     categories.set(cats);
                     loading.set(false);
-                },
+                }
                 Err(err) => {
                     error.set(Some(err));
                     loading.set(false);
@@ -63,7 +63,7 @@ pub fn CategoriesPage() -> Element {
                     show_add_input.set(false);
                     new_category_parent.set(None);
                     fetch();
-                },
+                }
                 Err(err) => {
                     error.set(Some(err));
                 }
@@ -82,7 +82,7 @@ pub fn CategoriesPage() -> Element {
                 Ok(_) => {
                     editing_id.set(None);
                     fetch();
-                },
+                }
                 Err(err) => {
                     error.set(Some(err));
                     editing_id.set(None);
@@ -101,7 +101,7 @@ pub fn CategoriesPage() -> Element {
                 Ok(cat) => {
                     delete_category_info.set(Some(cat));
                     delete_confirm_id.set(Some(category_id));
-                },
+                }
                 Err(err) => {
                     error.set(Some(err));
                 }
@@ -121,7 +121,7 @@ pub fn CategoriesPage() -> Element {
                         delete_confirm_id.set(None);
                         delete_category_info.set(None);
                         fetch();
-                    },
+                    }
                     Err(err) => {
                         error.set(Some(err));
                         delete_confirm_id.set(None);

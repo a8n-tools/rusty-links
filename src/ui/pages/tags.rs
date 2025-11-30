@@ -1,13 +1,10 @@
-use dioxus::prelude::*;
+use crate::ui::api_client::{create_tag, delete_tag, fetch_tag, fetch_tags, update_tag, TagItem};
+use crate::ui::components::loading::{LoadingSpinner, SpinnerSize};
+use crate::ui::components::management::{AddItemInput, FlatListItem};
+use crate::ui::components::modal::ConfirmDialog;
 use crate::ui::components::navbar::Navbar;
 use crate::ui::components::skip_link::SkipLink;
-use crate::ui::components::loading::{LoadingSpinner, SpinnerSize};
-use crate::ui::components::management::{FlatListItem, AddItemInput};
-use crate::ui::components::modal::ConfirmDialog;
-use crate::ui::api_client::{
-    TagItem, fetch_tags, fetch_tag, create_tag,
-    update_tag, delete_tag
-};
+use dioxus::prelude::*;
 
 #[component]
 pub fn TagsPage() -> Element {
@@ -38,7 +35,7 @@ pub fn TagsPage() -> Element {
                 Ok(tgs) => {
                     tags.set(tgs);
                     loading.set(false);
-                },
+                }
                 Err(err) => {
                     error.set(Some(err));
                     loading.set(false);
@@ -62,7 +59,7 @@ pub fn TagsPage() -> Element {
                 Ok(_) => {
                     show_add_input.set(false);
                     fetch();
-                },
+                }
                 Err(err) => {
                     error.set(Some(err));
                 }
@@ -81,7 +78,7 @@ pub fn TagsPage() -> Element {
                 Ok(_) => {
                     editing_id.set(None);
                     fetch();
-                },
+                }
                 Err(err) => {
                     error.set(Some(err));
                     editing_id.set(None);
@@ -100,7 +97,7 @@ pub fn TagsPage() -> Element {
                 Ok(tag) => {
                     delete_tag_info.set(Some(tag));
                     delete_confirm_id.set(Some(tag_id));
-                },
+                }
                 Err(err) => {
                     error.set(Some(err));
                 }
@@ -120,7 +117,7 @@ pub fn TagsPage() -> Element {
                         delete_confirm_id.set(None);
                         delete_tag_info.set(None);
                         fetch();
-                    },
+                    }
                     Err(err) => {
                         error.set(Some(err));
                         delete_confirm_id.set(None);

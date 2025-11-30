@@ -28,4 +28,6 @@ pub use language::Language;
 pub use license::License;
 pub use link::{CreateLink, Link, LinkSearchParams, LinkWithCategories, UpdateLink};
 pub use tag::Tag;
-pub use user::{check_user_exists, create_user, find_user_by_email, verify_password, CreateUser, User};
+pub use user::{
+    check_user_exists, create_user, find_user_by_email, verify_password, CreateUser, User,
+};

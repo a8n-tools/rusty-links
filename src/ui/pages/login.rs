@@ -1,7 +1,7 @@
-use dioxus::prelude::*;
 use crate::server_functions::auth::LoginRequest;
 use crate::ui::app::Route;
 use crate::ui::http;
+use dioxus::prelude::*;
 
 #[component]
 pub fn Login() -> Element {

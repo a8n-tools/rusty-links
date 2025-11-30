@@ -18,10 +18,12 @@ use uuid::Uuid;
 /// Helper to get authenticated user
 async fn get_authenticated_user(pool: &PgPool, jar: &CookieJar) -> Result<User, AppError> {
     let session_id = get_session_from_cookies(jar).ok_or(AppError::SessionExpired)?;
-    let session = get_session(pool, &session_id).await?.ok_or(AppError::SessionExpired)?;
+    let session = get_session(pool, &session_id)
+        .await?
+        .ok_or(AppError::SessionExpired)?;
 
     sqlx::query_as::<_, User>(
-        "SELECT id, email, password_hash, name, created_at FROM users WHERE id = $1"
+        "SELECT id, email, password_hash, name, created_at FROM users WHERE id = $1",
     )
     .bind(session.user_id)
     .fetch_one(pool)
@@ -81,13 +83,15 @@ async fn list_categories(
 
     let response: Vec<CategoryResponse> = categories
         .into_iter()
-        .map(|(id, name, parent_id, depth, link_count)| CategoryResponse {
-            id,
-            name,
-            parent_id,
-            depth,
-            link_count,
-        })
+        .map(
+            |(id, name, parent_id, depth, link_count)| CategoryResponse {
+                id,
+                name,
+                parent_id,
+                depth,
+                link_count,
+            },
+        )
         .collect();
 
     Ok(Json(response))
@@ -194,5 +198,10 @@ pub fn create_router() -> Router<PgPool> {
     Router::new()
         .route("/", post(create_category).get(list_categories))
         .route("/tree", get(get_category_tree))
-        .route("/{id}", get(get_category).put(update_category).delete(delete_category))
+        .route(
+            "/{id}",
+            get(get_category)
+                .put(update_category)
+                .delete(delete_category),
+        )
 }

@@ -1,12 +1,12 @@
-use dioxus::prelude::*;
-use crate::ui::components::navbar::Navbar;
-use crate::ui::components::loading::{LoadingSpinner, SpinnerSize};
-use crate::ui::components::management::{FlatListItem, AddItemInput};
-use crate::ui::components::modal::ConfirmDialog;
 use crate::ui::api_client::{
-    LanguageItem, fetch_languages, fetch_language, create_language,
-    update_language, delete_language
+    create_language, delete_language, fetch_language, fetch_languages, update_language,
+    LanguageItem,
 };
+use crate::ui::components::loading::{LoadingSpinner, SpinnerSize};
+use crate::ui::components::management::{AddItemInput, FlatListItem};
+use crate::ui::components::modal::ConfirmDialog;
+use crate::ui::components::navbar::Navbar;
+use dioxus::prelude::*;
 
 #[component]
 pub fn LanguagesPage() -> Element {
@@ -37,7 +37,7 @@ pub fn LanguagesPage() -> Element {
                 Ok(langs) => {
                     languages.set(langs);
                     loading.set(false);
-                },
+                }
                 Err(err) => {
                     error.set(Some(err));
                     loading.set(false);
@@ -61,7 +61,7 @@ pub fn LanguagesPage() -> Element {
                 Ok(_) => {
                     show_add_input.set(false);
                     fetch();
-                },
+                }
                 Err(err) => {
                     error.set(Some(err));
                 }
@@ -80,7 +80,7 @@ pub fn LanguagesPage() -> Element {
                 Ok(_) => {
                     editing_id.set(None);
                     fetch();
-                },
+                }
                 Err(err) => {
                     error.set(Some(err));
                     editing_id.set(None);
@@ -99,7 +99,7 @@ pub fn LanguagesPage() -> Element {
                 Ok(lang) => {
                     delete_language_info.set(Some(lang));
                     delete_confirm_id.set(Some(language_id));
-                },
+                }
                 Err(err) => {
                     error.set(Some(err));
                 }
@@ -119,7 +119,7 @@ pub fn LanguagesPage() -> Element {
                         delete_confirm_id.set(None);
                         delete_language_info.set(None);
                         fetch();
-                    },
+                    }
                     Err(err) => {
                         error.set(Some(err));
                         delete_confirm_id.set(None);

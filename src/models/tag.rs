@@ -53,12 +53,10 @@ impl Tag {
 
     /// Get all tags for a user
     pub async fn get_all_by_user(pool: &PgPool, user_id: Uuid) -> Result<Vec<Tag>, AppError> {
-        let tags = sqlx::query_as::<_, Tag>(
-            "SELECT * FROM tags WHERE user_id = $1 ORDER BY name",
-        )
-        .bind(user_id)
-        .fetch_all(pool)
-        .await?;
+        let tags = sqlx::query_as::<_, Tag>("SELECT * FROM tags WHERE user_id = $1 ORDER BY name")
+            .bind(user_id)
+            .fetch_all(pool)
+            .await?;
 
         Ok(tags)
     }
@@ -70,13 +68,12 @@ impl Tag {
         name: &str,
     ) -> Result<Tag, AppError> {
         // Try to find existing tag with this name
-        let existing = sqlx::query_as::<_, Tag>(
-            "SELECT * FROM tags WHERE user_id = $1 AND name = $2"
-        )
-        .bind(user_id)
-        .bind(name)
-        .fetch_optional(pool)
-        .await?;
+        let existing =
+            sqlx::query_as::<_, Tag>("SELECT * FROM tags WHERE user_id = $1 AND name = $2")
+                .bind(user_id)
+                .bind(name)
+                .fetch_optional(pool)
+                .await?;
 
         if let Some(tag) = existing {
             return Ok(tag);

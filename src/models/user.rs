@@ -47,7 +47,12 @@ pub struct User {
 
 impl User {
     /// Create a new user (associated function wrapper)
-    pub async fn create(pool: &PgPool, email: &str, password: &str, name: &str) -> Result<Self, AppError> {
+    pub async fn create(
+        pool: &PgPool,
+        email: &str,
+        password: &str,
+        name: &str,
+    ) -> Result<Self, AppError> {
         // Validate email format
         validate_email(email)?;
 
@@ -185,7 +190,7 @@ pub async fn create_user(pool: &PgPool, create_user: CreateUser) -> Result<User,
     )
     .bind(&create_user.email)
     .bind(&password_hash)
-    .bind("")  // Default empty name for legacy function
+    .bind("") // Default empty name for legacy function
     .fetch_one(pool)
     .await?; // Automatic conversion: unique violation → AppError::Duplicate
 
@@ -363,10 +368,7 @@ pub async fn check_user_exists(pool: &PgPool) -> Result<bool, AppError> {
 fn validate_email(email: &str) -> Result<(), AppError> {
     // Check if email contains @
     if !email.contains('@') {
-        return Err(AppError::validation(
-            "email",
-            "Email must contain @ symbol",
-        ));
+        return Err(AppError::validation("email", "Email must contain @ symbol"));
     }
 
     // Split on @ and validate parts

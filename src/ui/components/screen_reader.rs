@@ -24,10 +24,7 @@ pub fn LiveRegion(
 
 /// Component for announcing loading states to screen readers
 #[component]
-pub fn LoadingAnnouncement(
-    loading: bool,
-    message: String,
-) -> Element {
+pub fn LoadingAnnouncement(loading: bool, message: String) -> Element {
     if !loading {
         return rsx! { div { class: "sr-only" } };
     }
@@ -45,9 +42,7 @@ pub fn LoadingAnnouncement(
 
 /// Component for announcing errors to screen readers
 #[component]
-pub fn ErrorAnnouncement(
-    error: Option<String>,
-) -> Element {
+pub fn ErrorAnnouncement(error: Option<String>) -> Element {
     match error {
         Some(msg) => rsx! {
             div {
@@ -57,6 +52,6 @@ pub fn ErrorAnnouncement(
                 "Error: {msg}"
             }
         },
-        None => rsx! { div { class: "sr-only" } }
+        None => rsx! { div { class: "sr-only" } },
     }
 }

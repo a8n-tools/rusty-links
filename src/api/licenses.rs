@@ -17,7 +17,9 @@ use uuid::Uuid;
 
 async fn get_authenticated_user(pool: &PgPool, jar: &CookieJar) -> Result<User, AppError> {
     let session_id = get_session_from_cookies(jar).ok_or(AppError::SessionExpired)?;
-    let session = get_session(pool, &session_id).await?.ok_or(AppError::SessionExpired)?;
+    let session = get_session(pool, &session_id)
+        .await?
+        .ok_or(AppError::SessionExpired)?;
 
     sqlx::query_as::<_, User>(
         "SELECT id, email, password_hash, name, created_at FROM users WHERE id = $1",
@@ -31,7 +33,7 @@ async fn get_authenticated_user(pool: &PgPool, jar: &CookieJar) -> Result<User, 
 #[derive(Debug, Serialize)]
 struct LicenseResponse {
     id: Uuid,
-    name: String,           // full_name from DB
+    name: String,            // full_name from DB
     acronym: Option<String>, // name (acronym) from DB
     link_count: i64,
 }
@@ -105,13 +107,11 @@ async fn delete_license(
     let user = get_authenticated_user(&pool, &jar).await?;
 
     // Check if it's a global license
-    let lic = sqlx::query_as::<_, License>(
-        "SELECT * FROM licenses WHERE id = $1"
-    )
-    .bind(id)
-    .fetch_optional(&pool)
-    .await?
-    .ok_or_else(|| AppError::not_found("license", &id.to_string()))?;
+    let lic = sqlx::query_as::<_, License>("SELECT * FROM licenses WHERE id = $1")
+        .bind(id)
+        .fetch_optional(&pool)
+        .await?
+        .ok_or_else(|| AppError::not_found("license", &id.to_string()))?;
 
     if lic.user_id.is_none() {
         return Err(AppError::forbidden("Cannot delete global license"));

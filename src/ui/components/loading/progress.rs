@@ -29,9 +29,7 @@ pub fn LoadingProgress(
 }
 
 #[component]
-pub fn IndeterminateProgress(
-    #[props(default = String::new())] message: String,
-) -> Element {
+pub fn IndeterminateProgress(#[props(default = String::new())] message: String) -> Element {
     rsx! {
         div { class: "progress-container",
             if !message.is_empty() {

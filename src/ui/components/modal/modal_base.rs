@@ -1,10 +1,7 @@
 use dioxus::prelude::*;
 
 #[component]
-pub fn ModalBase(
-    on_close: EventHandler<()>,
-    children: Element,
-) -> Element {
+pub fn ModalBase(on_close: EventHandler<()>, children: Element) -> Element {
     rsx! {
         div {
             class: "modal-overlay",

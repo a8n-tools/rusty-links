@@ -9,9 +9,9 @@ use rusty_links::{api, config, error::AppError, scheduler};
 #[cfg(feature = "server")]
 use sqlx::{postgres::PgPoolOptions, PgPool};
 #[cfg(feature = "server")]
-use std::sync::Arc;
-#[cfg(feature = "server")]
 use std::sync::atomic::AtomicBool;
+#[cfg(feature = "server")]
+use std::sync::Arc;
 #[cfg(feature = "server")]
 use std::time::Duration;
 #[cfg(feature = "server")]
@@ -43,8 +43,7 @@ async fn main() {
     // Initialize tracing
     tracing_subscriber::registry()
         .with(
-            tracing_subscriber::EnvFilter::try_from_default_env()
-                .unwrap_or_else(|_| "info".into()),
+            tracing_subscriber::EnvFilter::try_from_default_env().unwrap_or_else(|_| "info".into()),
         )
         .with(tracing_subscriber::fmt::layer())
         .init();
@@ -70,7 +69,10 @@ async fn main() {
             tracing::error!("");
             tracing::error!("Please check:");
             tracing::error!("  1. PostgreSQL is running");
-            tracing::error!("  2. DATABASE_URL in .env is correct: {}", config.masked_database_url());
+            tracing::error!(
+                "  2. DATABASE_URL in .env is correct: {}",
+                config.masked_database_url()
+            );
             tracing::error!("  3. The database exists and is accessible");
             tracing::error!("");
             tracing::error!("To create the database, run:");
@@ -95,13 +97,15 @@ async fn main() {
     // Get the fullstack address from CLI or use localhost
     let address = dioxus::cli_config::fullstack_address_or_localhost();
 
-    tracing::info!("Starting Dioxus fullstack server with API routes at {}", address);
+    tracing::info!(
+        "Starting Dioxus fullstack server with API routes at {}",
+        address
+    );
 
     // Build the Axum router:
     // 1. First create Dioxus app router (handles server functions, static assets, and rendering)
     // 2. Then nest our custom API routes (they take precedence due to being more specific)
-    let dioxus_router = axum::Router::new()
-        .serve_dioxus_application(ServeConfig::new(), App);
+    let dioxus_router = axum::Router::new().serve_dioxus_application(ServeConfig::new(), App);
 
     // Merge the API router with the Dioxus router
     // API routes under /api will be handled by our custom router
@@ -110,13 +114,18 @@ async fn main() {
     let router = axum::Router::new()
         .nest("/api", api_router)
         .nest_service("/assets", ServeDir::new("assets"))
-        .route_service("/tailwind.css", tower::util::service_fn(|_req: axum::http::Request<axum::body::Body>| async {
-            let css = include_str!("../assets/tailwind.css");
-            Ok::<_, std::convert::Infallible>(axum::response::Response::builder()
-                .header("Content-Type", "text/css")
-                .body(axum::body::Body::from(css.to_string()))
-                .unwrap())
-        }))
+        .route_service(
+            "/tailwind.css",
+            tower::util::service_fn(|_req: axum::http::Request<axum::body::Body>| async {
+                let css = include_str!("../assets/tailwind.css");
+                Ok::<_, std::convert::Infallible>(
+                    axum::response::Response::builder()
+                        .header("Content-Type", "text/css")
+                        .body(axum::body::Body::from(css.to_string()))
+                        .unwrap(),
+                )
+            }),
+        )
         .merge(dioxus_router);
 
     // Launch the server
@@ -126,9 +135,7 @@ async fn main() {
 
     tracing::info!("Server listening on {}", address);
 
-    axum::serve(listener, router)
-        .await
-        .expect("Server error");
+    axum::serve(listener, router).await.expect("Server error");
 }
 
 #[cfg(not(feature = "server"))]

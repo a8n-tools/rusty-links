@@ -17,7 +17,9 @@ use uuid::Uuid;
 
 async fn get_authenticated_user(pool: &PgPool, jar: &CookieJar) -> Result<User, AppError> {
     let session_id = get_session_from_cookies(jar).ok_or(AppError::SessionExpired)?;
-    let session = get_session(pool, &session_id).await?.ok_or(AppError::SessionExpired)?;
+    let session = get_session(pool, &session_id)
+        .await?
+        .ok_or(AppError::SessionExpired)?;
 
     sqlx::query_as::<_, User>(
         "SELECT id, email, password_hash, name, created_at FROM users WHERE id = $1",
@@ -60,7 +62,11 @@ async fn list_languages(
 
     let response: Vec<LanguageResponse> = languages
         .into_iter()
-        .map(|(id, name, link_count)| LanguageResponse { id, name, link_count })
+        .map(|(id, name, link_count)| LanguageResponse {
+            id,
+            name,
+            link_count,
+        })
         .collect();
 
     Ok(Json(response))
@@ -96,13 +102,11 @@ async fn delete_language(
     let user = get_authenticated_user(&pool, &jar).await?;
 
     // Check if it's a global language
-    let lang = sqlx::query_as::<_, Language>(
-        "SELECT * FROM languages WHERE id = $1"
-    )
-    .bind(id)
-    .fetch_optional(&pool)
-    .await?
-    .ok_or_else(|| AppError::not_found("language", &id.to_string()))?;
+    let lang = sqlx::query_as::<_, Language>("SELECT * FROM languages WHERE id = $1")
+        .bind(id)
+        .fetch_optional(&pool)
+        .await?
+        .ok_or_else(|| AppError::not_found("language", &id.to_string()))?;
 
     if lang.user_id.is_none() {
         return Err(AppError::forbidden("Cannot delete global language"));

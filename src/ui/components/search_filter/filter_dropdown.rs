@@ -27,8 +27,13 @@ pub fn FilterDropdown(
         if search_query().is_empty() {
             options_for_filter.clone()
         } else {
-            options_for_filter.iter()
-                .filter(|opt| opt.label.to_lowercase().contains(&search_query().to_lowercase()))
+            options_for_filter
+                .iter()
+                .filter(|opt| {
+                    opt.label
+                        .to_lowercase()
+                        .contains(&search_query().to_lowercase())
+                })
                 .cloned()
                 .collect()
         }

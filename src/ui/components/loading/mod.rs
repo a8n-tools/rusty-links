@@ -1,5 +1,5 @@
-pub mod spinner;
 pub mod progress;
+pub mod spinner;
 
-pub use spinner::{LoadingSpinner, InlineSpinner, ButtonSpinner, SpinnerSize};
-pub use progress::{LoadingProgress, IndeterminateProgress};
+pub use progress::{IndeterminateProgress, LoadingProgress};
+pub use spinner::{ButtonSpinner, InlineSpinner, LoadingSpinner, SpinnerSize};

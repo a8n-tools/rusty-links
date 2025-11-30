@@ -1,7 +1,7 @@
-pub mod app;
-pub mod pages;
-pub mod components;
-pub mod utils;
 pub mod api_client;
-pub mod performance;
+pub mod app;
+pub mod components;
 pub mod http;
+pub mod pages;
+pub mod performance;
+pub mod utils;

@@ -53,8 +53,10 @@ struct GitHubLicense {
 pub fn is_github_repo(url: &str) -> bool {
     static GITHUB_REGEX: OnceLock<Regex> = OnceLock::new();
     let re = GITHUB_REGEX.get_or_init(|| {
-        Regex::new(r"^(?:https?://github\.com/|git@github\.com:)([^/]+)/([^/\s]+?)(?:\.git)?(?:/.*)?$")
-            .unwrap()
+        Regex::new(
+            r"^(?:https?://github\.com/|git@github\.com:)([^/]+)/([^/\s]+?)(?:\.git)?(?:/.*)?$",
+        )
+        .unwrap()
     });
 
     re.is_match(url)
@@ -80,8 +82,10 @@ pub fn is_github_repo(url: &str) -> bool {
 pub fn parse_repo_from_url(url: &str) -> Option<(String, String)> {
     static GITHUB_REGEX: OnceLock<Regex> = OnceLock::new();
     let re = GITHUB_REGEX.get_or_init(|| {
-        Regex::new(r"^(?:https?://github\.com/|git@github\.com:)([^/]+)/([^/\s]+?)(?:\.git)?(?:/.*)?$")
-            .unwrap()
+        Regex::new(
+            r"^(?:https?://github\.com/|git@github\.com:)([^/]+)/([^/\s]+?)(?:\.git)?(?:/.*)?$",
+        )
+        .unwrap()
     });
 
     re.captures(url).map(|caps| {
@@ -112,10 +116,7 @@ pub fn parse_repo_from_url(url: &str) -> Option<(String, String)> {
 /// let metadata = fetch_repo_metadata("rust-lang", "rust").await?;
 /// println!("Stars: {}", metadata.stars);
 /// ```
-pub async fn fetch_repo_metadata(
-    owner: &str,
-    repo: &str,
-) -> Result<GitHubRepoMetadata, AppError> {
+pub async fn fetch_repo_metadata(owner: &str, repo: &str) -> Result<GitHubRepoMetadata, AppError> {
     let url = format!("https://api.github.com/repos/{}/{}", owner, repo);
 
     tracing::info!(
@@ -165,7 +166,7 @@ pub async fn fetch_repo_metadata(
         );
         return Err(AppError::not_found(
             "GitHub repository",
-            &format!("{}/{}", owner, repo)
+            &format!("{}/{}", owner, repo),
         ));
     }
 
@@ -221,7 +222,9 @@ mod tests {
         assert!(is_github_repo("https://github.com/rust-lang/rust"));
         assert!(is_github_repo("https://github.com/rust-lang/rust.git"));
         assert!(is_github_repo("https://github.com/owner/repo/tree/main"));
-        assert!(is_github_repo("https://github.com/owner/repo/blob/main/README.md"));
+        assert!(is_github_repo(
+            "https://github.com/owner/repo/blob/main/README.md"
+        ));
         assert!(is_github_repo("git@github.com:owner/repo.git"));
 
         // Invalid URLs

@@ -119,7 +119,7 @@ N/A - Initial release
 
 ```bash
 # Pull the image
-docker pull ghcr.io/YOUR-USERNAME/rusty-links:1.0.0
+docker pull ghcr.io/NiceGuyIT/rusty-links:1.0.0
 
 # Create .env file
 cat > .env <<EOF
@@ -150,7 +150,7 @@ services:
       - postgres_data:/var/lib/postgresql/data
 
   app:
-    image: ghcr.io/YOUR-USERNAME/rusty-links:1.0.0
+    image: ghcr.io/NiceGuyIT/rusty-links:1.0.0
     depends_on:
       - postgres
     environment:
@@ -167,7 +167,7 @@ volumes:
 
 ```bash
 # Clone repository
-git clone https://github.com/YOUR-USERNAME/rusty-links.git
+git clone https://github.com/NiceGuyIT/rusty-links.git
 cd rusty-links
 
 # Copy environment template
@@ -227,7 +227,7 @@ See [Configuration Guide](README.md#configuration) for complete details.
 
 ## Known Issues
 
-None at this time. Please report issues at: https://github.com/YOUR-USERNAME/rusty-links/issues
+None at this time. Please report issues at: https://github.com/NiceGuyIT/rusty-links/issues
 
 ---
 
@@ -279,7 +279,7 @@ See [CHANGELOG.md](CHANGELOG.md) for the complete roadmap.
 
 Thank you to everyone who contributed to this release!
 
-- [@YOUR-USERNAME](https://github.com/YOUR-USERNAME) - Project creator and maintainer
+- [@NiceGuyIT](https://github.com/NiceGuyIT) - Project creator and maintainer
 
 Want to contribute? See [CONTRIBUTING.md](CONTRIBUTING.md) for guidelines.
 
@@ -287,9 +287,9 @@ Want to contribute? See [CONTRIBUTING.md](CONTRIBUTING.md) for guidelines.
 
 ## Support
 
-- **Documentation:** https://github.com/YOUR-USERNAME/rusty-links/tree/main/docs
-- **Issues:** https://github.com/YOUR-USERNAME/rusty-links/issues
-- **Discussions:** https://github.com/YOUR-USERNAME/rusty-links/discussions
+- **Documentation:** https://github.com/NiceGuyIT/rusty-links/tree/main/docs
+- **Issues:** https://github.com/NiceGuyIT/rusty-links/issues
+- **Discussions:** https://github.com/NiceGuyIT/rusty-links/discussions
 
 ---
 
@@ -318,13 +318,13 @@ Special thanks to the Rust community for their excellent tools and libraries.
 
 See [CHANGELOG.md](CHANGELOG.md) for complete version history.
 
-**Compare:** [v0.0.0...v1.0.0](https://github.com/YOUR-USERNAME/rusty-links/compare/v0.0.0...v1.0.0)
+**Compare:** [v0.0.0...v1.0.0](https://github.com/NiceGuyIT/rusty-links/compare/v0.0.0...v1.0.0)
 
 ---
 
 **Download:**
-- Docker: `docker pull ghcr.io/YOUR-USERNAME/rusty-links:1.0.0`
-- Source: [rusty-links-1.0.0.tar.gz](https://github.com/YOUR-USERNAME/rusty-links/archive/refs/tags/v1.0.0.tar.gz)
+- Docker: `docker pull ghcr.io/NiceGuyIT/rusty-links:1.0.0`
+- Source: [rusty-links-1.0.0.tar.gz](https://github.com/NiceGuyIT/rusty-links/archive/refs/tags/v1.0.0.tar.gz)
 
 **Checksums:** (Add SHA256 checksums if distributing binaries)
 

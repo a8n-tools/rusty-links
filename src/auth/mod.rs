@@ -14,6 +14,6 @@ pub mod session;
 
 // Re-export commonly used types for convenience
 pub use session::{
-    create_clear_session_cookie, create_session, create_session_cookie,
-    delete_session, get_session, get_session_from_cookies,
+    create_clear_session_cookie, create_session, create_session_cookie, delete_session,
+    get_session, get_session_from_cookies,
 };

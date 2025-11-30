@@ -1,8 +1,8 @@
+use crate::ui::components::metadata_badges::{CategoryInfo, LanguageInfo, LicenseInfo, TagInfo};
+use crate::ui::components::table::TableHeader;
 use dioxus::prelude::*;
 use serde::Deserialize;
 use uuid::Uuid;
-use crate::ui::components::table::TableHeader;
-use crate::ui::components::metadata_badges::{CategoryInfo, TagInfo, LanguageInfo, LicenseInfo};
 
 #[derive(Debug, Clone, PartialEq, Deserialize)]
 pub struct Link {

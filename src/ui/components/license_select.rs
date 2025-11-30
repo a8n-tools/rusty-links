@@ -1,7 +1,7 @@
+use crate::ui::http;
 use dioxus::prelude::*;
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
-use crate::ui::http;
 
 #[derive(Debug, Clone, Deserialize, PartialEq)]
 pub struct License {
@@ -15,10 +15,7 @@ struct CreateLicenseRequest {
 }
 
 #[component]
-pub fn LicenseSelect(
-    selected_ids: Vec<Uuid>,
-    on_change: EventHandler<Vec<Uuid>>,
-) -> Element {
+pub fn LicenseSelect(selected_ids: Vec<Uuid>, on_change: EventHandler<Vec<Uuid>>) -> Element {
     let mut licenses = use_signal(|| Vec::<License>::new());
     let mut loading = use_signal(|| true);
     let mut expanded = use_signal(|| false);
@@ -51,7 +48,9 @@ pub fn LicenseSelect(
         .collect();
 
     let can_create = !search_val.trim().is_empty()
-        && !licenses().iter().any(|l| l.name.to_lowercase() == search_val.to_lowercase());
+        && !licenses()
+            .iter()
+            .any(|l| l.name.to_lowercase() == search_val.to_lowercase());
 
     rsx! {
         div { class: "multi-select",

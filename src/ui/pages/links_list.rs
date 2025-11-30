@@ -1,17 +1,17 @@
+use crate::ui::components::add_link_button::AddLinkButton;
+use crate::ui::components::empty_state::EmptyState;
+use crate::ui::components::loading::LoadingSpinner;
+use crate::ui::components::modal::{AddLinkDialog, LinkDetailsModal};
+use crate::ui::components::navbar::Navbar;
+use crate::ui::components::pagination::Pagination;
+use crate::ui::components::search_filter::{FilterOption, FiltersContainer, SearchBar};
+use crate::ui::components::table::links_table::Link;
+use crate::ui::components::table::LinksTable;
+use crate::ui::http;
+use crate::ui::performance::use_debounced;
 use dioxus::prelude::*;
 use serde::Deserialize;
 use uuid::Uuid;
-use crate::ui::components::navbar::Navbar;
-use crate::ui::components::table::LinksTable;
-use crate::ui::components::table::links_table::Link;
-use crate::ui::components::pagination::Pagination;
-use crate::ui::components::loading::LoadingSpinner;
-use crate::ui::components::empty_state::EmptyState;
-use crate::ui::components::search_filter::{SearchBar, FiltersContainer, FilterOption};
-use crate::ui::components::modal::{LinkDetailsModal, AddLinkDialog};
-use crate::ui::components::add_link_button::AddLinkButton;
-use crate::ui::performance::use_debounced;
-use crate::ui::http;
 
 #[derive(Debug, Clone, Deserialize)]
 struct PaginatedLinksResponse {
@@ -75,13 +75,20 @@ async fn fetch_links(
     categories: Vec<Uuid>,
     tags: Vec<Uuid>,
 ) -> Result<PaginatedLinksResponse, String> {
-    let url = build_links_query(page, per_page, sort_by, sort_order, search, languages, licenses, categories, tags);
+    let url = build_links_query(
+        page, per_page, sort_by, sort_order, search, languages, licenses, categories, tags,
+    );
     http::get(&url).await
 }
 
 async fn fetch_filter_options() -> Result<
-    (Vec<FilterOption>, Vec<FilterOption>, Vec<FilterOption>, Vec<FilterOption>),
-    String
+    (
+        Vec<FilterOption>,
+        Vec<FilterOption>,
+        Vec<FilterOption>,
+        Vec<FilterOption>,
+    ),
+    String,
 > {
     // Fetch all filter options - note: we can't use futures::join! with our simple http functions
     // So we fetch them sequentially
@@ -137,7 +144,7 @@ async fn fetch_filter_options() -> Result<
 pub fn LinksListPage() -> Element {
     // State for links data
     let mut links = use_signal(|| Vec::<Link>::new());
-    let mut initial_load = use_signal(|| true);  // Only true for first load
+    let mut initial_load = use_signal(|| true); // Only true for first load
     let mut error = use_signal(|| Option::<String>::None);
 
     // Pagination state
@@ -183,7 +190,7 @@ pub fn LinksListPage() -> Element {
                     licenses.set(lics);
                     categories.set(cats);
                     tags.set(tgs);
-                },
+                }
                 Err(err) => {
                     tracing::error!("Error fetching filter options: {}", err);
                 }
@@ -206,13 +213,15 @@ pub fn LinksListPage() -> Element {
                 selected_licenses(),
                 selected_categories(),
                 selected_tags(),
-            ).await {
+            )
+            .await
+            {
                 Ok(response) => {
                     links.set(response.links);
                     total_pages.set(response.total_pages);
                     total_links.set(response.total);
                     initial_load.set(false);
-                },
+                }
                 Err(err) => {
                     error.set(Some(err));
                     initial_load.set(false);
@@ -248,7 +257,11 @@ pub fn LinksListPage() -> Element {
     let handle_sort = move |column: String| {
         if sort_by() == column {
             // Toggle order
-            let new_order = if sort_order() == "asc" { "desc".to_string() } else { "asc".to_string() };
+            let new_order = if sort_order() == "asc" {
+                "desc".to_string()
+            } else {
+                "asc".to_string()
+            };
             sort_order.set(new_order);
         } else {
             // New column, default to desc

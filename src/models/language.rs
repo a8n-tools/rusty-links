@@ -17,7 +17,10 @@ pub struct Language {
 
 impl Language {
     /// Get all available languages (global + user's custom)
-    pub async fn get_all_available(pool: &PgPool, user_id: Uuid) -> Result<Vec<Language>, AppError> {
+    pub async fn get_all_available(
+        pool: &PgPool,
+        user_id: Uuid,
+    ) -> Result<Vec<Language>, AppError> {
         let languages = sqlx::query_as::<_, Language>(
             r#"
             SELECT * FROM languages
@@ -53,13 +56,11 @@ impl Language {
 
     /// Delete a user-created language (cannot delete global languages)
     pub async fn delete(pool: &PgPool, id: Uuid, user_id: Uuid) -> Result<(), AppError> {
-        let result = sqlx::query(
-            "DELETE FROM languages WHERE id = $1 AND user_id = $2",
-        )
-        .bind(id)
-        .bind(user_id)
-        .execute(pool)
-        .await?;
+        let result = sqlx::query("DELETE FROM languages WHERE id = $1 AND user_id = $2")
+            .bind(id)
+            .bind(user_id)
+            .execute(pool)
+            .await?;
 
         if result.rows_affected() == 0 {
             return Err(AppError::not_found("language", &id.to_string()));

@@ -4,20 +4,16 @@ use crate::auth::{get_session, get_session_from_cookies};
 use crate::error::AppError;
 use crate::models::User;
 use crate::scraper;
-use axum::{
-    extract::State,
-    http::StatusCode,
-    response::IntoResponse,
-    routing::post,
-    Json, Router,
-};
+use axum::{extract::State, http::StatusCode, response::IntoResponse, routing::post, Json, Router};
 use axum_extra::extract::CookieJar;
 use serde::{Deserialize, Serialize};
 use sqlx::PgPool;
 
 async fn get_authenticated_user(pool: &PgPool, jar: &CookieJar) -> Result<User, AppError> {
     let session_id = get_session_from_cookies(jar).ok_or(AppError::SessionExpired)?;
-    let session = get_session(pool, &session_id).await?.ok_or(AppError::SessionExpired)?;
+    let session = get_session(pool, &session_id)
+        .await?
+        .ok_or(AppError::SessionExpired)?;
 
     sqlx::query_as::<_, User>(
         "SELECT id, email, password_hash, name, created_at FROM users WHERE id = $1",

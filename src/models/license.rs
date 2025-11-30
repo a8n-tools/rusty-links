@@ -34,7 +34,12 @@ impl License {
     }
 
     /// Create a user-specific license
-    pub async fn create(pool: &PgPool, user_id: Uuid, name: &str, full_name: &str) -> Result<License, AppError> {
+    pub async fn create(
+        pool: &PgPool,
+        user_id: Uuid,
+        name: &str,
+        full_name: &str,
+    ) -> Result<License, AppError> {
         let license = sqlx::query_as::<_, License>(
             r#"
             INSERT INTO licenses (user_id, name, full_name)
@@ -55,13 +60,11 @@ impl License {
 
     /// Delete a user-created license (cannot delete global licenses)
     pub async fn delete(pool: &PgPool, id: Uuid, user_id: Uuid) -> Result<(), AppError> {
-        let result = sqlx::query(
-            "DELETE FROM licenses WHERE id = $1 AND user_id = $2",
-        )
-        .bind(id)
-        .bind(user_id)
-        .execute(pool)
-        .await?;
+        let result = sqlx::query("DELETE FROM licenses WHERE id = $1 AND user_id = $2")
+            .bind(id)
+            .bind(user_id)
+            .execute(pool)
+            .await?;
 
         if result.rows_affected() == 0 {
             return Err(AppError::not_found("license", &id.to_string()));

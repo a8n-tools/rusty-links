@@ -1,12 +1,11 @@
-use dioxus::prelude::*;
-use crate::ui::components::navbar::Navbar;
+use crate::ui::api_client::{
+    create_license, delete_license, fetch_license, fetch_licenses, update_license, LicenseItem,
+};
 use crate::ui::components::loading::{LoadingSpinner, SpinnerSize};
 use crate::ui::components::management::FlatListItem;
 use crate::ui::components::modal::ConfirmDialog;
-use crate::ui::api_client::{
-    LicenseItem, fetch_licenses, fetch_license, create_license,
-    update_license, delete_license
-};
+use crate::ui::components::navbar::Navbar;
+use dioxus::prelude::*;
 
 #[component]
 pub fn LicensesPage() -> Element {
@@ -37,7 +36,7 @@ pub fn LicensesPage() -> Element {
                 Ok(lics) => {
                     licenses.set(lics);
                     loading.set(false);
-                },
+                }
                 Err(err) => {
                     error.set(Some(err));
                     loading.set(false);
@@ -61,7 +60,7 @@ pub fn LicensesPage() -> Element {
                 Ok(_) => {
                     show_add_input.set(false);
                     fetch();
-                },
+                }
                 Err(err) => {
                     error.set(Some(err));
                 }
@@ -82,7 +81,7 @@ pub fn LicensesPage() -> Element {
                 Ok(_) => {
                     editing_id.set(None);
                     fetch();
-                },
+                }
                 Err(err) => {
                     error.set(Some(err));
                     editing_id.set(None);
@@ -101,7 +100,7 @@ pub fn LicensesPage() -> Element {
                 Ok(lic) => {
                     delete_license_info.set(Some(lic));
                     delete_confirm_id.set(Some(license_id));
-                },
+                }
                 Err(err) => {
                     error.set(Some(err));
                 }
@@ -121,7 +120,7 @@ pub fn LicensesPage() -> Element {
                         delete_confirm_id.set(None);
                         delete_license_info.set(None);
                         fetch();
-                    },
+                    }
                     Err(err) => {
                         error.set(Some(err));
                         delete_confirm_id.set(None);

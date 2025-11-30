@@ -1,7 +1,7 @@
+use crate::ui::http;
 use dioxus::prelude::*;
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
-use crate::ui::http;
 
 #[derive(Debug, Clone, Deserialize, PartialEq)]
 pub struct Tag {
@@ -15,10 +15,7 @@ struct CreateTagRequest {
 }
 
 #[component]
-pub fn TagSelect(
-    selected_ids: Vec<Uuid>,
-    on_change: EventHandler<Vec<Uuid>>,
-) -> Element {
+pub fn TagSelect(selected_ids: Vec<Uuid>, on_change: EventHandler<Vec<Uuid>>) -> Element {
     let mut tags = use_signal(|| Vec::<Tag>::new());
     let mut loading = use_signal(|| true);
     let mut expanded = use_signal(|| false);
@@ -51,7 +48,9 @@ pub fn TagSelect(
         .collect();
 
     let can_create = !search_val.trim().is_empty()
-        && !tags().iter().any(|t| t.name.to_lowercase() == search_val.to_lowercase());
+        && !tags()
+            .iter()
+            .any(|t| t.name.to_lowercase() == search_val.to_lowercase());
 
     rsx! {
         div { class: "multi-select",

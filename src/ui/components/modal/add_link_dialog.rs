@@ -1,23 +1,23 @@
-use dioxus::prelude::*;
-use uuid::Uuid;
-use crate::ui::components::modal::ModalBase;
-use crate::ui::components::table::links_table::Link;
+use crate::ui::api_client::{
+    check_duplicate_url, create_link_with_categories, fetch_languages, fetch_licenses,
+    preview_link, CreateLinkWithCategoriesRequest, LinkPreview,
+};
 use crate::ui::components::category_select::CategorySelect;
-use crate::ui::components::tag_select::TagSelect;
 use crate::ui::components::language_select::LanguageSelect;
 use crate::ui::components::license_select::LicenseSelect;
+use crate::ui::components::modal::ModalBase;
+use crate::ui::components::table::links_table::Link;
+use crate::ui::components::tag_select::TagSelect;
 use crate::ui::utils::is_valid_url;
-use crate::ui::api_client::{
-    check_duplicate_url, create_link_with_categories, preview_link,
-    fetch_languages, fetch_licenses,
-    LinkPreview, CreateLinkWithCategoriesRequest
-};
+use dioxus::prelude::*;
+use uuid::Uuid;
 
 /// Format error messages to be more user-friendly
 fn format_error(error: &str) -> String {
     // Network errors
     if error.contains("Network error") || error.contains("fetch") {
-        return "Unable to connect. Please check your internet connection and try again.".to_string();
+        return "Unable to connect. Please check your internet connection and try again."
+            .to_string();
     }
 
     // Timeout errors
@@ -60,7 +60,8 @@ fn format_error(error: &str) -> String {
 
     // Metadata fetch errors
     if error.contains("Failed to fetch preview") {
-        return "Could not load preview. The website might be unavailable or blocking requests.".to_string();
+        return "Could not load preview. The website might be unavailable or blocking requests."
+            .to_string();
     }
 
     // Default: return original error but clean it up
@@ -254,7 +255,8 @@ pub fn AddLinkDialog(
                     if let Ok(licenses) = fetch_licenses().await {
                         if let Some(matched) = licenses.iter().find(|lic| {
                             lic.name.to_lowercase() == gh_license.to_lowercase()
-                                || lic.acronym.as_ref().map(|a| a.to_lowercase()) == Some(gh_license.to_lowercase())
+                                || lic.acronym.as_ref().map(|a| a.to_lowercase())
+                                    == Some(gh_license.to_lowercase())
                         }) {
                             if let Ok(id) = Uuid::parse_str(&matched.id) {
                                 selected_licenses.set(vec![id]);
@@ -316,7 +318,7 @@ pub fn AddLinkDialog(
                     // Duplicate found - notify parent
                     progress_step.set(None);
                     on_duplicate.call(existing_link);
-                },
+                }
                 Ok(None) => {
                     // No duplicate - fetch preview
                     // Step 3: Fetching metadata
@@ -326,14 +328,14 @@ pub fn AddLinkDialog(
                         Ok(preview_data) => {
                             preview.set(Some(preview_data));
                             progress_step.set(None);
-                        },
+                        }
                         Err(err) => {
                             error.set(Some(format_error(&err)));
                             can_retry_preview.set(true);
                             progress_step.set(None);
                         }
                     }
-                },
+                }
                 Err(err) => {
                     error.set(Some(format_error(&err)));
                     can_retry_preview.set(true);
@@ -375,7 +377,7 @@ pub fn AddLinkDialog(
                     #[cfg(target_arch = "wasm32")]
                     gloo_timers::future::TimeoutFuture::new(500).await;
                     on_success.call(link);
-                },
+                }
                 Err(err) => {
                     error.set(Some(format_error(&err)));
                     creating.set(false);

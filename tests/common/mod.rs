@@ -16,8 +16,7 @@ use std::env;
 ///
 /// Panics if DATABASE_URL is not set or database connection fails.
 pub async fn setup_test_db() -> PgPool {
-    let database_url = env::var("DATABASE_URL")
-        .expect("DATABASE_URL must be set for tests");
+    let database_url = env::var("DATABASE_URL").expect("DATABASE_URL must be set for tests");
 
     let pool = PgPoolOptions::new()
         .max_connections(5)
@@ -56,10 +55,7 @@ pub async fn cleanup_test_db(pool: &PgPool) {
         .execute(pool)
         .await
         .ok();
-    sqlx::query("DELETE FROM links")
-        .execute(pool)
-        .await
-        .ok();
+    sqlx::query("DELETE FROM links").execute(pool).await.ok();
     sqlx::query("DELETE FROM categories")
         .execute(pool)
         .await
@@ -76,14 +72,8 @@ pub async fn cleanup_test_db(pool: &PgPool) {
         .execute(pool)
         .await
         .ok();
-    sqlx::query("DELETE FROM sessions")
-        .execute(pool)
-        .await
-        .ok();
-    sqlx::query("DELETE FROM users")
-        .execute(pool)
-        .await
-        .ok();
+    sqlx::query("DELETE FROM sessions").execute(pool).await.ok();
+    sqlx::query("DELETE FROM users").execute(pool).await.ok();
 }
 
 /// Create a test user with default credentials

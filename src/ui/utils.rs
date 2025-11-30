@@ -25,10 +25,12 @@ pub async fn read_clipboard() -> Result<String, String> {
     let clipboard = navigator.clipboard();
 
     let promise = clipboard.read_text();
-    let result = JsFuture::from(promise).await
+    let result = JsFuture::from(promise)
+        .await
         .map_err(|_| "Failed to read clipboard")?;
 
-    let text = result.as_string()
+    let text = result
+        .as_string()
         .ok_or("Clipboard content is not a string")?;
 
     Ok(text)

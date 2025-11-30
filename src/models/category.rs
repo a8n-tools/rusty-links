@@ -45,7 +45,7 @@ impl Category {
         let (depth, parent_id) = if let Some(pid) = create.parent_id {
             // Validate parent exists and belongs to user
             let parent = sqlx::query_as::<_, Category>(
-                "SELECT * FROM categories WHERE id = $1 AND user_id = $2"
+                "SELECT * FROM categories WHERE id = $1 AND user_id = $2",
             )
             .bind(pid)
             .bind(user_id)
@@ -87,20 +87,18 @@ impl Category {
 
     /// Get a category by ID
     pub async fn get_by_id(pool: &PgPool, id: Uuid, user_id: Uuid) -> Result<Category, AppError> {
-        sqlx::query_as::<_, Category>(
-            "SELECT * FROM categories WHERE id = $1 AND user_id = $2"
-        )
-        .bind(id)
-        .bind(user_id)
-        .fetch_optional(pool)
-        .await?
-        .ok_or_else(|| AppError::not_found("category", &id.to_string()))
+        sqlx::query_as::<_, Category>("SELECT * FROM categories WHERE id = $1 AND user_id = $2")
+            .bind(id)
+            .bind(user_id)
+            .fetch_optional(pool)
+            .await?
+            .ok_or_else(|| AppError::not_found("category", &id.to_string()))
     }
 
     /// Get all categories for a user (flat list)
     pub async fn get_all_by_user(pool: &PgPool, user_id: Uuid) -> Result<Vec<Category>, AppError> {
         let categories = sqlx::query_as::<_, Category>(
-            "SELECT * FROM categories WHERE user_id = $1 ORDER BY depth, name"
+            "SELECT * FROM categories WHERE user_id = $1 ORDER BY depth, name",
         )
         .bind(user_id)
         .fetch_all(pool)
@@ -117,7 +115,7 @@ impl Category {
     ) -> Result<Category, AppError> {
         // Try to find existing category with this name
         let existing = sqlx::query_as::<_, Category>(
-            "SELECT * FROM categories WHERE user_id = $1 AND name = $2"
+            "SELECT * FROM categories WHERE user_id = $1 AND name = $2",
         )
         .bind(user_id)
         .bind(name)

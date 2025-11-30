@@ -72,17 +72,17 @@ pub struct UpdateLink {
 /// Search parameters for filtering links
 #[derive(Debug, Deserialize, Default)]
 pub struct LinkSearchParams {
-    pub query: Option<String>,        // Text search in title, description, url, domain
-    pub status: Option<String>,       // Filter by status
-    pub is_github: Option<bool>,      // Filter GitHub repos only
-    pub category_id: Option<Uuid>,    // Filter by category
-    pub tag_id: Option<Uuid>,         // Filter by tag
-    pub language_id: Option<Uuid>,    // Filter by programming language
-    pub license_id: Option<Uuid>,     // Filter by software license
-    pub sort_by: Option<String>,      // Sort field: created_at, title, github_stars, status, updated_at
-    pub sort_order: Option<String>,   // Sort order: asc, desc (default: desc)
-    pub page: Option<u32>,            // Page number (1-indexed)
-    pub per_page: Option<u32>,        // Items per page (default: 20, max: 100)
+    pub query: Option<String>, // Text search in title, description, url, domain
+    pub status: Option<String>, // Filter by status
+    pub is_github: Option<bool>, // Filter GitHub repos only
+    pub category_id: Option<Uuid>, // Filter by category
+    pub tag_id: Option<Uuid>,  // Filter by tag
+    pub language_id: Option<Uuid>, // Filter by programming language
+    pub license_id: Option<Uuid>, // Filter by software license
+    pub sort_by: Option<String>, // Sort field: created_at, title, github_stars, status, updated_at
+    pub sort_order: Option<String>, // Sort order: asc, desc (default: desc)
+    pub page: Option<u32>,     // Page number (1-indexed)
+    pub per_page: Option<u32>, // Items per page (default: 20, max: 100)
 }
 
 /// Paginated links response
@@ -105,9 +105,8 @@ impl Link {
         create_link: CreateLink,
     ) -> Result<Link, AppError> {
         // Parse and validate URL
-        let parsed_url = Url::parse(&create_link.url).map_err(|e| {
-            AppError::validation("url", &format!("Invalid URL: {}", e))
-        })?;
+        let parsed_url = Url::parse(&create_link.url)
+            .map_err(|e| AppError::validation("url", &format!("Invalid URL: {}", e)))?;
 
         // Extract domain and path
         let domain = parsed_url
@@ -194,7 +193,11 @@ impl Link {
     }
 
     /// Find a link by URL for a user, returns None if not found
-    pub async fn find_by_url(pool: &PgPool, user_id: Uuid, url: &str) -> Result<Option<Link>, AppError> {
+    pub async fn find_by_url(
+        pool: &PgPool,
+        user_id: Uuid,
+        url: &str,
+    ) -> Result<Option<Link>, AppError> {
         let link = sqlx::query_as::<_, Link>(
             r#"
             SELECT * FROM links WHERE user_id = $1 AND url = $2
@@ -242,7 +245,8 @@ impl Link {
         user_id: Uuid,
         params: &LinkSearchParams,
     ) -> Result<Vec<Link>, AppError> {
-        let query_pattern = params.query
+        let query_pattern = params
+            .query
             .as_ref()
             .map(|q| format!("%{}%", q.to_lowercase()));
 
@@ -252,12 +256,12 @@ impl Link {
             Some("github_stars") => "l.github_stars",
             Some("status") => "l.status",
             Some("updated_at") => "l.updated_at",
-            _ => "l.created_at",  // default
+            _ => "l.created_at", // default
         };
 
         let sort_order = match params.sort_order.as_deref() {
             Some("asc") => "ASC",
-            _ => "DESC",  // default
+            _ => "DESC", // default
         };
 
         // Build query with validated ORDER BY clause
@@ -316,7 +320,8 @@ impl Link {
         user_id: Uuid,
         params: &LinkSearchParams,
     ) -> Result<PaginatedLinks, AppError> {
-        let query_pattern = params.query
+        let query_pattern = params
+            .query
             .as_ref()
             .map(|q| format!("%{}%", q.to_lowercase()));
 
@@ -539,7 +544,11 @@ impl Link {
     }
 
     /// Update link categories (replaces all existing)
-    async fn update_categories(pool: &PgPool, link_id: Uuid, category_ids: &[Uuid]) -> Result<(), AppError> {
+    async fn update_categories(
+        pool: &PgPool,
+        link_id: Uuid,
+        category_ids: &[Uuid],
+    ) -> Result<(), AppError> {
         // Delete existing categories
         sqlx::query("DELETE FROM link_categories WHERE link_id = $1")
             .bind(link_id)
@@ -580,7 +589,11 @@ impl Link {
     }
 
     /// Update link languages (replaces all existing)
-    async fn update_languages(pool: &PgPool, link_id: Uuid, language_ids: &[Uuid]) -> Result<(), AppError> {
+    async fn update_languages(
+        pool: &PgPool,
+        link_id: Uuid,
+        language_ids: &[Uuid],
+    ) -> Result<(), AppError> {
         // Delete existing languages
         sqlx::query("DELETE FROM link_languages WHERE link_id = $1")
             .bind(link_id)
@@ -589,19 +602,25 @@ impl Link {
 
         // Insert new languages with order
         for (order, language_id) in language_ids.iter().enumerate() {
-            sqlx::query("INSERT INTO link_languages (link_id, language_id, order_num) VALUES ($1, $2, $3)")
-                .bind(link_id)
-                .bind(language_id)
-                .bind(order as i32)
-                .execute(pool)
-                .await?;
+            sqlx::query(
+                "INSERT INTO link_languages (link_id, language_id, order_num) VALUES ($1, $2, $3)",
+            )
+            .bind(link_id)
+            .bind(language_id)
+            .bind(order as i32)
+            .execute(pool)
+            .await?;
         }
 
         Ok(())
     }
 
     /// Update link licenses (replaces all existing)
-    async fn update_licenses(pool: &PgPool, link_id: Uuid, license_ids: &[Uuid]) -> Result<(), AppError> {
+    async fn update_licenses(
+        pool: &PgPool,
+        link_id: Uuid,
+        license_ids: &[Uuid],
+    ) -> Result<(), AppError> {
         // Delete existing licenses
         sqlx::query("DELETE FROM link_licenses WHERE link_id = $1")
             .bind(link_id)
@@ -610,12 +629,14 @@ impl Link {
 
         // Insert new licenses with order
         for (order, license_id) in license_ids.iter().enumerate() {
-            sqlx::query("INSERT INTO link_licenses (link_id, license_id, order_num) VALUES ($1, $2, $3)")
-                .bind(link_id)
-                .bind(license_id)
-                .bind(order as i32)
-                .execute(pool)
-                .await?;
+            sqlx::query(
+                "INSERT INTO link_licenses (link_id, license_id, order_num) VALUES ($1, $2, $3)",
+            )
+            .bind(link_id)
+            .bind(license_id)
+            .bind(order as i32)
+            .execute(pool)
+            .await?;
         }
 
         Ok(())
@@ -687,13 +708,11 @@ impl Link {
         // Verify link belongs to user
         let _ = Self::get_by_id(pool, link_id, user_id).await?;
 
-        sqlx::query(
-            "DELETE FROM link_categories WHERE link_id = $1 AND category_id = $2",
-        )
-        .bind(link_id)
-        .bind(category_id)
-        .execute(pool)
-        .await?;
+        sqlx::query("DELETE FROM link_categories WHERE link_id = $1 AND category_id = $2")
+            .bind(link_id)
+            .bind(category_id)
+            .execute(pool)
+            .await?;
 
         Ok(())
     }
@@ -998,18 +1017,12 @@ impl Link {
     /// - "archived": User has archived the link
     /// - "inaccessible": Link returned an error or non-success status
     /// - "repo_unavailable": GitHub repository is unavailable (404, etc.)
-    pub async fn update_status(
-        pool: &PgPool,
-        id: Uuid,
-        status: &str,
-    ) -> Result<(), AppError> {
-        sqlx::query(
-            "UPDATE links SET status = $1, updated_at = NOW() WHERE id = $2"
-        )
-        .bind(status)
-        .bind(id)
-        .execute(pool)
-        .await?;
+    pub async fn update_status(pool: &PgPool, id: Uuid, status: &str) -> Result<(), AppError> {
+        sqlx::query("UPDATE links SET status = $1, updated_at = NOW() WHERE id = $2")
+            .bind(status)
+            .bind(id)
+            .execute(pool)
+            .await?;
         Ok(())
     }
 
@@ -1032,7 +1045,7 @@ impl Link {
                 END,
                 updated_at = NOW()
             WHERE id = $1
-            "#
+            "#,
         )
         .bind(id)
         .execute(pool)
@@ -1049,12 +1062,10 @@ impl Link {
     /// * `pool` - Database connection pool
     /// * `id` - Link ID
     pub async fn reset_failures(pool: &PgPool, id: Uuid) -> Result<(), AppError> {
-        sqlx::query(
-            "UPDATE links SET consecutive_failures = 0, updated_at = NOW() WHERE id = $1"
-        )
-        .bind(id)
-        .execute(pool)
-        .await?;
+        sqlx::query("UPDATE links SET consecutive_failures = 0, updated_at = NOW() WHERE id = $1")
+            .bind(id)
+            .execute(pool)
+            .await?;
         Ok(())
     }
 
@@ -1075,7 +1086,8 @@ impl Link {
 
         // Check if this link has a GitHub source (main URL or source_code_url)
         let has_github_source = link.is_github_repo
-            || link.source_code_url
+            || link
+                .source_code_url
                 .as_ref()
                 .map(|url| url.starts_with("https://github.com/"))
                 .unwrap_or(false);
@@ -1179,7 +1191,13 @@ impl Link {
             .fetch_all(pool)
             .await?;
 
-            result.push(LinkWithCategories { link, categories, tags, languages, licenses });
+            result.push(LinkWithCategories {
+                link,
+                categories,
+                tags,
+                languages,
+                licenses,
+            });
         }
 
         Ok(result)

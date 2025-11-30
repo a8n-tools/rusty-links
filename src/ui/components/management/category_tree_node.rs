@@ -1,6 +1,6 @@
-use dioxus::prelude::*;
 use crate::ui::api_client::CategoryNode;
 use crate::ui::components::management::InlineEditInput;
+use dioxus::prelude::*;
 
 #[component]
 pub fn CategoryTreeNode(

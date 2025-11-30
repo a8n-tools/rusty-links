@@ -8,7 +8,7 @@ use sqlx::PgPool;
 
 // Import the global DB pool from auth module
 #[cfg(feature = "server")]
-use crate::server_functions::auth::{DB_POOL};
+use crate::server_functions::auth::DB_POOL;
 
 /// Link data for client
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
@@ -58,7 +58,10 @@ pub async fn get_links(
         let mut count_query = String::from("SELECT COUNT(*) FROM links WHERE 1=1");
 
         if let Some(ref s) = search {
-            let search_clause = format!(" AND (title ILIKE '%{}%' OR description ILIKE '%{}%')", s, s);
+            let search_clause = format!(
+                " AND (title ILIKE '%{}%' OR description ILIKE '%{}%')",
+                s, s
+            );
             query.push_str(&search_clause);
             count_query.push_str(&search_clause);
         }
@@ -69,7 +72,10 @@ pub async fn get_links(
             count_query.push_str(&cat_clause);
         }
 
-        query.push_str(&format!(" ORDER BY created_at DESC LIMIT {} OFFSET {}", limit, offset));
+        query.push_str(&format!(
+            " ORDER BY created_at DESC LIMIT {} OFFSET {}",
+            limit, offset
+        ));
 
         let links: Vec<DbLink> = sqlx::query_as(&query)
             .fetch_all(pool)
@@ -84,14 +90,13 @@ pub async fn get_links(
         (links, total.0)
     } else {
         // Get all links
-        let links: Vec<DbLink> = sqlx::query_as(
-            "SELECT * FROM links ORDER BY created_at DESC LIMIT $1 OFFSET $2"
-        )
-        .bind(limit)
-        .bind(offset)
-        .fetch_all(pool)
-        .await
-        .map_err(|e| ServerFnError::new(format!("Database error: {}", e)))?;
+        let links: Vec<DbLink> =
+            sqlx::query_as("SELECT * FROM links ORDER BY created_at DESC LIMIT $1 OFFSET $2")
+                .bind(limit)
+                .bind(offset)
+                .fetch_all(pool)
+                .await
+                .map_err(|e| ServerFnError::new(format!("Database error: {}", e)))?;
 
         let total: (i64,) = sqlx::query_as("SELECT COUNT(*) FROM links")
             .fetch_one(pool)
@@ -137,8 +142,8 @@ pub async fn create_link(request: CreateLinkRequest) -> Result<Link, ServerFnErr
 pub async fn delete_link(id: String) -> Result<(), ServerFnError> {
     let pool = extract_pool()?;
 
-    let uuid = uuid::Uuid::parse_str(&id)
-        .map_err(|e| ServerFnError::new(format!("Invalid ID: {}", e)))?;
+    let uuid =
+        uuid::Uuid::parse_str(&id).map_err(|e| ServerFnError::new(format!("Invalid ID: {}", e)))?;
 
     // TODO: Get user_id from session context
     let user_id = uuid::Uuid::new_v4(); // TEMPORARY
@@ -155,8 +160,8 @@ pub async fn delete_link(id: String) -> Result<(), ServerFnError> {
 pub async fn mark_link_active(id: String) -> Result<(), ServerFnError> {
     let pool = extract_pool()?;
 
-    let uuid = uuid::Uuid::parse_str(&id)
-        .map_err(|e| ServerFnError::new(format!("Invalid ID: {}", e)))?;
+    let uuid =
+        uuid::Uuid::parse_str(&id).map_err(|e| ServerFnError::new(format!("Invalid ID: {}", e)))?;
 
     DbLink::mark_as_active(pool, uuid)
         .await

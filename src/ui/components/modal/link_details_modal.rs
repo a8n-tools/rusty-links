@@ -1,13 +1,13 @@
+use crate::ui::components::category_select::CategorySelect;
+use crate::ui::components::language_select::LanguageSelect;
+use crate::ui::components::license_select::LicenseSelect;
+use crate::ui::components::metadata_badges::{CategoryInfo, LanguageInfo, LicenseInfo, TagInfo};
+use crate::ui::components::modal::{ConfirmDialog, ModalBase, ModalSection};
+use crate::ui::components::tag_select::TagSelect;
+use crate::ui::http;
 use dioxus::prelude::*;
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
-use crate::ui::components::modal::{ModalBase, ModalSection, ConfirmDialog};
-use crate::ui::components::metadata_badges::{CategoryInfo, TagInfo, LanguageInfo, LicenseInfo};
-use crate::ui::components::category_select::CategorySelect;
-use crate::ui::components::tag_select::TagSelect;
-use crate::ui::components::language_select::LanguageSelect;
-use crate::ui::components::license_select::LicenseSelect;
-use crate::ui::http;
 
 #[derive(Debug, Clone, PartialEq, Deserialize)]
 struct LinkDetails {
@@ -127,8 +127,10 @@ pub fn LinkDetailsModal(
                     Ok(link_data) => {
                         // Initialize form with current values
                         form_url.set(link_data.url.clone());
-                        form_source_code_url.set(link_data.source_code_url.clone().unwrap_or_default());
-                        form_documentation_url.set(link_data.documentation_url.clone().unwrap_or_default());
+                        form_source_code_url
+                            .set(link_data.source_code_url.clone().unwrap_or_default());
+                        form_documentation_url
+                            .set(link_data.documentation_url.clone().unwrap_or_default());
                         form_notes.set(link_data.notes.clone().unwrap_or_default());
                         form_categories.set(link_data.categories.iter().map(|c| c.id).collect());
                         form_tags.set(link_data.tags.iter().map(|t| t.id).collect());
@@ -138,7 +140,7 @@ pub fn LinkDetailsModal(
                         link.set(Some(link_data));
                         has_changes.set(false);
                         loading.set(false);
-                    },
+                    }
                     Err(err) => {
                         error.set(Some(err));
                         loading.set(false);
@@ -147,7 +149,6 @@ pub fn LinkDetailsModal(
             });
         }
     });
-
 
     // Handle save
     let handle_save = move |_| {
@@ -186,7 +187,7 @@ pub fn LinkDetailsModal(
                     saving.set(false);
                     on_save.call(());
                     on_close.call(());
-                },
+                }
                 Err(err) => {
                     save_error.set(Some(err));
                     saving.set(false);
@@ -206,7 +207,7 @@ pub fn LinkDetailsModal(
                     show_delete_confirm.set(false);
                     on_save.call(());
                     on_close.call(());
-                },
+                }
                 Err(err) => {
                     save_error.set(Some(err));
                     deleting.set(false);
@@ -226,7 +227,7 @@ pub fn LinkDetailsModal(
                 Ok(updated_link) => {
                     link.set(Some(updated_link));
                     refreshing.set(false);
-                },
+                }
                 Err(err) => {
                     save_error.set(Some(err));
                     refreshing.set(false);

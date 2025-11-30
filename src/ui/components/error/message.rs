@@ -47,9 +47,7 @@ pub fn ErrorMessage(
 }
 
 #[component]
-pub fn InlineError(
-    message: String,
-) -> Element {
+pub fn InlineError(message: String) -> Element {
     rsx! {
         span { class: "inline-error",
             span { class: "inline-error-icon", "⚠️" }
@@ -59,9 +57,7 @@ pub fn InlineError(
 }
 
 #[component]
-pub fn FieldError(
-    message: String,
-) -> Element {
+pub fn FieldError(message: String) -> Element {
     rsx! {
         div { class: "field-error",
             "{message}"

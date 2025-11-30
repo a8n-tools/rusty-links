@@ -24,8 +24,8 @@ use axum::{
     Router,
 };
 use sqlx::PgPool;
-use std::sync::Arc;
 use std::sync::atomic::AtomicBool;
+use std::sync::Arc;
 
 /// Shared application state
 #[derive(Clone)]

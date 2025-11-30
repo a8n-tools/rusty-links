@@ -1,6 +1,6 @@
+use crate::ui::components::search_filter::{FilterDropdown, FilterOption};
 use dioxus::prelude::*;
 use uuid::Uuid;
-use crate::ui::components::search_filter::{FilterDropdown, FilterOption};
 
 #[component]
 pub fn FiltersContainer(
@@ -27,11 +27,10 @@ pub fn FiltersContainer(
     // Reset
     on_reset: EventHandler<()>,
 ) -> Element {
-    let has_active_filters =
-        !selected_languages.is_empty() ||
-        !selected_licenses.is_empty() ||
-        !selected_categories.is_empty() ||
-        !selected_tags.is_empty();
+    let has_active_filters = !selected_languages.is_empty()
+        || !selected_licenses.is_empty()
+        || !selected_categories.is_empty()
+        || !selected_tags.is_empty();
 
     rsx! {
         div { class: "filters-container",

@@ -422,6 +422,9 @@ mod tests {
         assert_eq!(cookie.name(), SESSION_COOKIE_NAME);
         assert_eq!(cookie.value(), "");
         // Should have max_age of 0 to delete cookie
-        assert_eq!(cookie.max_age(), Some(Duration::from_secs(0).try_into().unwrap()));
+        assert_eq!(
+            cookie.max_age(),
+            Some(Duration::from_secs(0).try_into().unwrap())
+        );
     }
 }

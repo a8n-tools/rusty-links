@@ -10,8 +10,8 @@ use crate::models::Link;
 use crate::scraper;
 use rand::Rng;
 use sqlx::PgPool;
-use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::Arc;
 use std::time::Duration;
 
 /// Background task scheduler
@@ -168,7 +168,10 @@ impl Scheduler {
             return Ok(());
         }
 
-        tracing::info!(count = links_to_check.len(), "Checking and refreshing links");
+        tracing::info!(
+            count = links_to_check.len(),
+            "Checking and refreshing links"
+        );
 
         let mut successful = 0;
         let mut failed = 0;

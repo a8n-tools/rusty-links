@@ -2,14 +2,14 @@ use dioxus::prelude::*;
 use dioxus_router::RouterConfig;
 
 use crate::server_functions::auth::check_setup;
-use crate::ui::pages::setup::Setup;
-use crate::ui::pages::login::Login;
-use crate::ui::pages::links_list::LinksListPage;
+use crate::ui::http;
 use crate::ui::pages::categories::CategoriesPage;
-use crate::ui::pages::tags::TagsPage;
 use crate::ui::pages::languages::LanguagesPage;
 use crate::ui::pages::licenses::LicensesPage;
-use crate::ui::http;
+use crate::ui::pages::links_list::LinksListPage;
+use crate::ui::pages::login::Login;
+use crate::ui::pages::setup::Setup;
+use crate::ui::pages::tags::TagsPage;
 
 #[component]
 pub fn App() -> Element {

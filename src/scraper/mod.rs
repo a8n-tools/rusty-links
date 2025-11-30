@@ -42,9 +42,8 @@ impl Default for ScrapedMetadata {
 /// * `Err(AppError)` - Only returns error if the URL is completely invalid or unreachable
 pub async fn scrape_url(url: &str) -> Result<ScrapedMetadata, AppError> {
     // Parse URL to validate and use for absolute URL construction
-    let base_url = Url::parse(url).map_err(|e| {
-        AppError::validation("url", &format!("Invalid URL: {}", e))
-    })?;
+    let base_url =
+        Url::parse(url).map_err(|e| AppError::validation("url", &format!("Invalid URL: {}", e)))?;
 
     // Build HTTP client with timeout and redirects
     let client = reqwest::Client::builder()

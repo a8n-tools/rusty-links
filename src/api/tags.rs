@@ -18,7 +18,9 @@ use uuid::Uuid;
 /// Helper to get authenticated user
 async fn get_authenticated_user(pool: &PgPool, jar: &CookieJar) -> Result<User, AppError> {
     let session_id = get_session_from_cookies(jar).ok_or(AppError::SessionExpired)?;
-    let session = get_session(pool, &session_id).await?.ok_or(AppError::SessionExpired)?;
+    let session = get_session(pool, &session_id)
+        .await?
+        .ok_or(AppError::SessionExpired)?;
 
     sqlx::query_as::<_, User>(
         "SELECT id, email, password_hash, name, created_at FROM users WHERE id = $1",
@@ -82,7 +84,11 @@ async fn list_tags(
 
     let response: Vec<TagResponse> = tags
         .into_iter()
-        .map(|(id, name, link_count)| TagResponse { id, name, link_count })
+        .map(|(id, name, link_count)| TagResponse {
+            id,
+            name,
+            link_count,
+        })
         .collect();
 
     Ok(Json(response))

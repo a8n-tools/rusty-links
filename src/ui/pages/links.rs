@@ -1,15 +1,17 @@
+use crate::ui::components::category_select::CategorySelect;
+use crate::ui::components::language_select::LanguageSelect;
+use crate::ui::components::license_select::LicenseSelect;
+use crate::ui::components::metadata_badges::{
+    CategoryInfo, LanguageInfo, LicenseInfo, MetadataBadges, TagInfo,
+};
+use crate::ui::components::navbar::Navbar;
+use crate::ui::components::pagination::Pagination;
+use crate::ui::components::tag_select::TagSelect;
+use crate::ui::http;
 use dioxus::prelude::*;
 use serde::{Deserialize, Serialize};
 use std::collections::HashSet;
 use uuid::Uuid;
-use crate::ui::components::navbar::Navbar;
-use crate::ui::components::category_select::CategorySelect;
-use crate::ui::components::tag_select::TagSelect;
-use crate::ui::components::language_select::LanguageSelect;
-use crate::ui::components::license_select::LicenseSelect;
-use crate::ui::components::metadata_badges::{MetadataBadges, CategoryInfo, TagInfo, LanguageInfo, LicenseInfo};
-use crate::ui::components::pagination::Pagination;
-use crate::ui::http;
 
 #[derive(Debug, Clone, Deserialize, PartialEq)]
 struct Link {
@@ -280,8 +282,11 @@ pub fn Links() -> Element {
                     use wasm_bindgen::JsCast;
                     if let Some(window) = web_sys::window() {
                         if let Some(document) = window.document() {
-                            if let Some(search_input) = document.query_selector(".search-input").ok().flatten() {
-                                if let Some(input) = search_input.dyn_ref::<web_sys::HtmlElement>() {
+                            if let Some(search_input) =
+                                document.query_selector(".search-input").ok().flatten()
+                            {
+                                if let Some(input) = search_input.dyn_ref::<web_sys::HtmlElement>()
+                                {
                                     input.focus().ok();
                                 }
                             }
@@ -1054,7 +1059,10 @@ fn LinkForm(
         spawn(async move {
             form_scraping.set(true);
 
-            if let Ok(scraped) = http::post::<ScrapeResponse, _>("/api/scrape", &serde_json::json!({ "url": url })).await {
+            if let Ok(scraped) =
+                http::post::<ScrapeResponse, _>("/api/scrape", &serde_json::json!({ "url": url }))
+                    .await
+            {
                 // Only auto-fill if user hasn't manually edited
                 if !title_touched() {
                     if let Some(title) = scraped.title {
@@ -1104,16 +1112,32 @@ fn LinkForm(
 
             let response = if let Some(ref id) = edit_id_clone {
                 let request = UpdateLinkRequest {
-                    title: if title_val.trim().is_empty() { None } else { Some(title_val) },
-                    description: if desc_val.trim().is_empty() { None } else { Some(desc_val) },
+                    title: if title_val.trim().is_empty() {
+                        None
+                    } else {
+                        Some(title_val)
+                    },
+                    description: if desc_val.trim().is_empty() {
+                        None
+                    } else {
+                        Some(desc_val)
+                    },
                     status: Some(status_val),
                 };
                 http::put::<Link, _>(&format!("/api/links/{}", id), &request).await
             } else {
                 let request = CreateLinkRequest {
                     url: url_val,
-                    title: if title_val.trim().is_empty() { None } else { Some(title_val) },
-                    description: if desc_val.trim().is_empty() { None } else { Some(desc_val) },
+                    title: if title_val.trim().is_empty() {
+                        None
+                    } else {
+                        Some(title_val)
+                    },
+                    description: if desc_val.trim().is_empty() {
+                        None
+                    } else {
+                        Some(desc_val)
+                    },
                 };
                 http::post::<Link, _>("/api/links", &request).await
             };
@@ -1126,22 +1150,38 @@ fn LinkForm(
 
                     // Save categories
                     for cat_id in &categories_val {
-                        let _ = http::post_response(&format!("/api/links/{}/categories", link_id), &serde_json::json!({ "category_id": cat_id })).await;
+                        let _ = http::post_response(
+                            &format!("/api/links/{}/categories", link_id),
+                            &serde_json::json!({ "category_id": cat_id }),
+                        )
+                        .await;
                     }
 
                     // Save tags
                     for tag_id in &tags_val {
-                        let _ = http::post_response(&format!("/api/links/{}/tags", link_id), &serde_json::json!({ "tag_id": tag_id })).await;
+                        let _ = http::post_response(
+                            &format!("/api/links/{}/tags", link_id),
+                            &serde_json::json!({ "tag_id": tag_id }),
+                        )
+                        .await;
                     }
 
                     // Save languages
                     for lang_id in &languages_val {
-                        let _ = http::post_response(&format!("/api/links/{}/languages", link_id), &serde_json::json!({ "language_id": lang_id })).await;
+                        let _ = http::post_response(
+                            &format!("/api/links/{}/languages", link_id),
+                            &serde_json::json!({ "language_id": lang_id }),
+                        )
+                        .await;
                     }
 
                     // Save licenses
                     for lic_id in &licenses_val {
-                        let _ = http::post_response(&format!("/api/links/{}/licenses", link_id), &serde_json::json!({ "license_id": lic_id })).await;
+                        let _ = http::post_response(
+                            &format!("/api/links/{}/licenses", link_id),
+                            &serde_json::json!({ "license_id": lic_id }),
+                        )
+                        .await;
                     }
 
                     // Refetch link to get updated metadata

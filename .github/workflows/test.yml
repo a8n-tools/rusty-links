@@ -1,10 +1,11 @@
+---
 name: Tests
 
 on:
   push:
-    branches: [main, develop]
+    branches: [ main, develop ]
   pull_request:
-    branches: [main, develop]
+    branches: [ main, develop ]
   workflow_dispatch:
 
 env:
@@ -18,7 +19,7 @@ jobs:
 
     services:
       postgres:
-        image: postgres:16-alpine
+        image: postgres:17.2-alpine
         env:
           POSTGRES_USER: rustylinks
           POSTGRES_PASSWORD: test_password
@@ -98,7 +99,7 @@ jobs:
 
     services:
       postgres:
-        image: postgres:16-alpine
+        image: postgres:17.2-alpine
         env:
           POSTGRES_USER: rustylinks
           POSTGRES_PASSWORD: test_password

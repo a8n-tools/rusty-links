@@ -28,17 +28,19 @@ impl Config {
 
         // Load required variables
         let database_url = std::env::var("DATABASE_URL").map_err(|_| {
-            AppError::Configuration("Missing required environment variable: DATABASE_URL".to_string())
+            AppError::Configuration(
+                "Missing required environment variable: DATABASE_URL".to_string(),
+            )
         })?;
 
         let app_port = std::env::var("APP_PORT")
             .map_err(|_| {
-                AppError::Configuration("Missing required environment variable: APP_PORT".to_string())
+                AppError::Configuration(
+                    "Missing required environment variable: APP_PORT".to_string(),
+                )
             })?
             .parse::<u16>()
-            .map_err(|e| {
-                AppError::Configuration(format!("Failed to parse APP_PORT: {}", e))
-            })?;
+            .map_err(|e| AppError::Configuration(format!("Failed to parse APP_PORT: {}", e)))?;
 
         // Load optional variables with defaults
         let update_interval_days = std::env::var("UPDATE_INTERVAL_DAYS")
@@ -58,8 +60,7 @@ impl Config {
             ));
         }
 
-        let log_level = std::env::var("RUST_LOG")
-            .unwrap_or_else(|_| "info".to_string());
+        let log_level = std::env::var("RUST_LOG").unwrap_or_else(|_| "info".to_string());
 
         // Load scheduler configuration
         let update_interval_hours = std::env::var("UPDATE_INTERVAL_HOURS")

@@ -1,3 +1,3 @@
 pub mod message;
 
-pub use message::{ErrorMessage, InlineError, FieldError, ErrorSeverity};
+pub use message::{ErrorMessage, ErrorSeverity, FieldError, InlineError};

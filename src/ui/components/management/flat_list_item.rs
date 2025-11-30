@@ -1,5 +1,5 @@
-use dioxus::prelude::*;
 use crate::ui::components::management::InlineEditInput;
+use dioxus::prelude::*;
 
 #[component]
 pub fn FlatListItem(

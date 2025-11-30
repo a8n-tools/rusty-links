@@ -1,6 +1,6 @@
-use serde::{Deserialize, Serialize};
 use crate::ui::components::table::links_table::Link;
 use crate::ui::http;
+use serde::{Deserialize, Serialize};
 use std::future::Future;
 
 #[derive(Serialize)]
@@ -26,7 +26,9 @@ const MAX_RETRIES: u32 = 3;
 const RETRY_DELAY_MS: u64 = 1000;
 
 // Re-export http module functions as the preferred API
-pub use crate::ui::http::{get, get_response, post, post_response, post_empty, put, patch, delete, HttpResponse};
+pub use crate::ui::http::{
+    delete, get, get_response, patch, post, post_empty, post_response, put, HttpResponse,
+};
 
 /// Retry a future with exponential backoff
 pub async fn retry_with_backoff<F, Fut, T>(mut f: F) -> Result<T, String>
@@ -93,7 +95,9 @@ pub async fn create_link_request(url: &str) -> Result<Link, String> {
 }
 
 /// Create a new link with initial categorization
-pub async fn create_link_with_categories(request: &CreateLinkWithCategoriesRequest) -> Result<Link, String> {
+pub async fn create_link_with_categories(
+    request: &CreateLinkWithCategoriesRequest,
+) -> Result<Link, String> {
     http::post("/api/links", request).await
 }
 
@@ -129,7 +133,10 @@ pub async fn fetch_category(id: &str) -> Result<CategoryNode, String> {
 }
 
 /// Create a new category
-pub async fn create_category(name: &str, parent_id: Option<String>) -> Result<CategoryNode, String> {
+pub async fn create_category(
+    name: &str,
+    parent_id: Option<String>,
+) -> Result<CategoryNode, String> {
     let body = serde_json::json!({
         "name": name,
         "parent_id": parent_id,
@@ -151,7 +158,10 @@ pub async fn delete_category(id: &str) -> Result<(), String> {
 }
 
 /// Move a category to a new parent
-pub async fn move_category(id: &str, new_parent_id: Option<String>) -> Result<CategoryNode, String> {
+pub async fn move_category(
+    id: &str,
+    new_parent_id: Option<String>,
+) -> Result<CategoryNode, String> {
     let url = format!("/api/categories/{}/move", id);
     let body = serde_json::json!({ "parent_id": new_parent_id });
     http::put(&url, &body).await
@@ -266,7 +276,11 @@ pub async fn create_license(name: &str, acronym: Option<String>) -> Result<Licen
 }
 
 /// Update a license
-pub async fn update_license(id: &str, name: &str, acronym: Option<String>) -> Result<LicenseItem, String> {
+pub async fn update_license(
+    id: &str,
+    name: &str,
+    acronym: Option<String>,
+) -> Result<LicenseItem, String> {
     let url = format!("/api/licenses/{}", id);
     let body = serde_json::json!({
         "name": name,

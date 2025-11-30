@@ -85,10 +85,7 @@ pub fn ToastContainer(mut toasts: Signal<Vec<Toast>>) -> Element {
 }
 
 #[component]
-fn ToastItem(
-    toast: Toast,
-    mut toasts: Signal<Vec<Toast>>,
-) -> Element {
+fn ToastItem(toast: Toast, mut toasts: Signal<Vec<Toast>>) -> Element {
     let toast_id = toast.id.clone();
     let duration = toast.duration_ms;
 
