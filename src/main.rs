@@ -117,7 +117,7 @@ async fn main() {
         .route_service(
             "/tailwind.css",
             tower::util::service_fn(|_req: axum::http::Request<axum::body::Body>| async {
-                let css = include_str!("../assets/tailwind.css");
+                let css = include_str!("../tailwind.css");
                 Ok::<_, std::convert::Infallible>(
                     axum::response::Response::builder()
                         .header("Content-Type", "text/css")
