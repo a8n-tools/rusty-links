@@ -72,7 +72,14 @@ pub async fn cleanup_test_db(pool: &PgPool) {
         .execute(pool)
         .await
         .ok();
-    sqlx::query("DELETE FROM sessions").execute(pool).await.ok();
+    sqlx::query("DELETE FROM refresh_tokens")
+        .execute(pool)
+        .await
+        .ok();
+    sqlx::query("DELETE FROM login_attempts")
+        .execute(pool)
+        .await
+        .ok();
     sqlx::query("DELETE FROM users").execute(pool).await.ok();
 }
 
