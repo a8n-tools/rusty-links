@@ -92,7 +92,7 @@ async fn main() {
     tracing::info!("Background scheduler started");
 
     // Create API router
-    let api_router = api::create_router(pool.clone(), scheduler_shutdown);
+    let api_router = api::create_router(pool.clone(), config.clone(), scheduler_shutdown);
 
     // Get the fullstack address from CLI or use localhost
     let address = dioxus::cli_config::fullstack_address_or_localhost();

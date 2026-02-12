@@ -6,11 +6,11 @@
 //! - PUT /api/links/:id - Update a link
 //! - DELETE /api/links/:id - Delete a link
 
-use crate::auth::{get_session, get_session_from_cookies};
+use crate::auth::middleware::AuthenticatedUser;
 use crate::error::AppError;
 use crate::models::{
     Category, CreateLink, Language, License, Link, LinkSearchParams, LinkWithCategories, Tag,
-    UpdateLink, User,
+    UpdateLink,
 };
 use crate::scraper;
 use axum::{
@@ -20,33 +20,10 @@ use axum::{
     routing::{post, put},
     Json, Router,
 };
-use axum_extra::extract::CookieJar;
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 use sqlx::PgPool;
 use uuid::Uuid;
-
-/// Helper function to get authenticated user from session cookie
-async fn get_authenticated_user(pool: &PgPool, jar: &CookieJar) -> Result<User, AppError> {
-    let session_id = get_session_from_cookies(jar).ok_or_else(|| {
-        tracing::debug!("Request without session cookie");
-        AppError::SessionExpired
-    })?;
-
-    let session = get_session(pool, &session_id).await?.ok_or_else(|| {
-        tracing::debug!(session_id = %session_id, "Invalid session");
-        AppError::SessionExpired
-    })?;
-
-    let user = sqlx::query_as::<_, User>(
-        "SELECT id, email, password_hash, name, created_at FROM users WHERE id = $1",
-    )
-    .bind(session.user_id)
-    .fetch_one(pool)
-    .await?;
-
-    Ok(user)
-}
 
 /// Request body for creating a link with optional categorization
 #[derive(Debug, Deserialize)]
@@ -88,13 +65,13 @@ struct CreateLinkWithCategories {
 /// - 401 Unauthorized: No valid session
 async fn create_link_handler(
     State(pool): State<PgPool>,
-    jar: CookieJar,
+    auth: AuthenticatedUser,
     Json(request): Json<CreateLinkWithCategories>,
 ) -> Result<impl IntoResponse, AppError> {
-    let user = get_authenticated_user(&pool, &jar).await?;
+    let user_id = auth.user_id;
 
     tracing::info!(
-        user_id = %user.id,
+        user_id = %user_id,
         url = %request.url,
         categories = request.category_ids.len(),
         tags = request.tag_ids.len(),
@@ -167,11 +144,11 @@ async fn create_link_handler(
     }
 
     // Create the link
-    let link = Link::create(&pool, user.id, create_link).await?;
+    let link = Link::create(&pool, user_id, create_link).await?;
 
     // If we have GitHub metadata, update the link with it
     if let Some(metadata) = github_metadata {
-        if let Err(e) = Link::update_github_metadata(&pool, link.id, user.id, metadata).await {
+        if let Err(e) = Link::update_github_metadata(&pool, link.id, user_id, metadata).await {
             tracing::warn!(
                 link_id = %link.id,
                 error = %e,
@@ -182,7 +159,7 @@ async fn create_link_handler(
 
     // Add initial categorization
     for category_id in &request.category_ids {
-        if let Err(e) = Link::add_category(&pool, link.id, *category_id, user.id).await {
+        if let Err(e) = Link::add_category(&pool, link.id, *category_id, user_id).await {
             tracing::warn!(
                 link_id = %link.id,
                 category_id = %category_id,
@@ -193,7 +170,7 @@ async fn create_link_handler(
     }
 
     for tag_id in &request.tag_ids {
-        if let Err(e) = Link::add_tag(&pool, link.id, *tag_id, user.id).await {
+        if let Err(e) = Link::add_tag(&pool, link.id, *tag_id, user_id).await {
             tracing::warn!(
                 link_id = %link.id,
                 tag_id = %tag_id,
@@ -204,7 +181,7 @@ async fn create_link_handler(
     }
 
     for language_id in &request.language_ids {
-        if let Err(e) = Link::add_language(&pool, link.id, *language_id, user.id).await {
+        if let Err(e) = Link::add_language(&pool, link.id, *language_id, user_id).await {
             tracing::warn!(
                 link_id = %link.id,
                 language_id = %language_id,
@@ -215,7 +192,7 @@ async fn create_link_handler(
     }
 
     for license_id in &request.license_ids {
-        if let Err(e) = Link::add_license(&pool, link.id, *license_id, user.id).await {
+        if let Err(e) = Link::add_license(&pool, link.id, *license_id, user_id).await {
             tracing::warn!(
                 link_id = %link.id,
                 license_id = %license_id,
@@ -226,7 +203,7 @@ async fn create_link_handler(
     }
 
     // Fetch the updated link to return with GitHub metadata
-    let updated_link = Link::get_by_id(&pool, link.id, user.id).await?;
+    let updated_link = Link::get_by_id(&pool, link.id, user_id).await?;
 
     Ok((StatusCode::CREATED, Json(updated_link)))
 }
@@ -275,13 +252,13 @@ struct PaginatedResponse {
 /// - 401 Unauthorized: No valid session
 async fn list_links_handler(
     State(pool): State<PgPool>,
-    jar: CookieJar,
+    auth: AuthenticatedUser,
     Query(params): Query<LinkSearchParams>,
 ) -> Result<Json<PaginatedResponse>, AppError> {
-    let user = get_authenticated_user(&pool, &jar).await?;
+    let user_id = auth.user_id;
 
     tracing::debug!(
-        user_id = %user.id,
+        user_id = %user_id,
         query = ?params.query,
         status = ?params.status,
         is_github = ?params.is_github,
@@ -297,10 +274,10 @@ async fn list_links_handler(
     );
 
     // Use search_paginated function which handles all filtering and pagination
-    let paginated = Link::search_paginated(&pool, user.id, &params).await?;
+    let paginated = Link::search_paginated(&pool, user_id, &params).await?;
 
     tracing::debug!(
-        user_id = %user.id,
+        user_id = %user_id,
         count = paginated.links.len(),
         total = paginated.total,
         page = paginated.page,
@@ -311,10 +288,10 @@ async fn list_links_handler(
     // Enrich links with categories, tags, languages, and licenses
     let mut links_with_metadata = Vec::with_capacity(paginated.links.len());
     for link in paginated.links {
-        let categories = Link::get_categories(&pool, link.id, user.id).await?;
-        let tags = Link::get_tags(&pool, link.id, user.id).await?;
-        let languages = Link::get_languages(&pool, link.id, user.id).await?;
-        let licenses = Link::get_licenses(&pool, link.id, user.id).await?;
+        let categories = Link::get_categories(&pool, link.id, user_id).await?;
+        let tags = Link::get_tags(&pool, link.id, user_id).await?;
+        let languages = Link::get_languages(&pool, link.id, user_id).await?;
+        let licenses = Link::get_licenses(&pool, link.id, user_id).await?;
 
         links_with_metadata.push(LinkWithCategories {
             link,
@@ -344,22 +321,22 @@ async fn list_links_handler(
 /// - 404 Not Found: Link not found or doesn't belong to user
 async fn get_link_handler(
     State(pool): State<PgPool>,
-    jar: CookieJar,
+    auth: AuthenticatedUser,
     Path(id): Path<Uuid>,
 ) -> Result<Json<LinkWithCategories>, AppError> {
-    let user = get_authenticated_user(&pool, &jar).await?;
+    let user_id = auth.user_id;
 
     tracing::debug!(
-        user_id = %user.id,
+        user_id = %user_id,
         link_id = %id,
         "Fetching link"
     );
 
-    let link = Link::get_by_id(&pool, id, user.id).await?;
-    let categories = Link::get_categories(&pool, id, user.id).await?;
-    let tags = Link::get_tags(&pool, id, user.id).await?;
-    let languages = Link::get_languages(&pool, id, user.id).await?;
-    let licenses = Link::get_licenses(&pool, id, user.id).await?;
+    let link = Link::get_by_id(&pool, id, user_id).await?;
+    let categories = Link::get_categories(&pool, id, user_id).await?;
+    let tags = Link::get_tags(&pool, id, user_id).await?;
+    let languages = Link::get_languages(&pool, id, user_id).await?;
+    let licenses = Link::get_licenses(&pool, id, user_id).await?;
 
     Ok(Json(LinkWithCategories {
         link,
@@ -390,19 +367,19 @@ async fn get_link_handler(
 /// - 404 Not Found: Link not found or doesn't belong to user
 async fn update_link_handler(
     State(pool): State<PgPool>,
-    jar: CookieJar,
+    auth: AuthenticatedUser,
     Path(id): Path<Uuid>,
     Json(request): Json<UpdateLink>,
 ) -> Result<Json<Link>, AppError> {
-    let user = get_authenticated_user(&pool, &jar).await?;
+    let user_id = auth.user_id;
 
     tracing::info!(
-        user_id = %user.id,
+        user_id = %user_id,
         link_id = %id,
         "Updating link"
     );
 
-    let link = Link::update(&pool, id, user.id, request).await?;
+    let link = Link::update(&pool, id, user_id, request).await?;
 
     Ok(Json(link))
 }
@@ -417,18 +394,18 @@ async fn update_link_handler(
 /// - 404 Not Found: Link not found or doesn't belong to user
 async fn delete_link_handler(
     State(pool): State<PgPool>,
-    jar: CookieJar,
+    auth: AuthenticatedUser,
     Path(id): Path<Uuid>,
 ) -> Result<StatusCode, AppError> {
-    let user = get_authenticated_user(&pool, &jar).await?;
+    let user_id = auth.user_id;
 
     tracing::info!(
-        user_id = %user.id,
+        user_id = %user_id,
         link_id = %id,
         "Deleting link"
     );
 
-    Link::delete(&pool, id, user.id).await?;
+    Link::delete(&pool, id, user_id).await?;
 
     Ok(StatusCode::NO_CONTENT)
 }
@@ -441,36 +418,36 @@ struct AddCategoryRequest {
 /// POST /api/links/:id/categories
 async fn add_category_handler(
     State(pool): State<PgPool>,
-    jar: CookieJar,
+    auth: AuthenticatedUser,
     Path(id): Path<uuid::Uuid>,
     Json(request): Json<AddCategoryRequest>,
 ) -> Result<Json<Vec<Category>>, AppError> {
-    let user = get_authenticated_user(&pool, &jar).await?;
-    Link::add_category(&pool, id, request.category_id, user.id).await?;
-    let categories = Link::get_categories(&pool, id, user.id).await?;
+    let user_id = auth.user_id;
+    Link::add_category(&pool, id, request.category_id, user_id).await?;
+    let categories = Link::get_categories(&pool, id, user_id).await?;
     Ok(Json(categories))
 }
 
 /// DELETE /api/links/:id/categories/:category_id
 async fn remove_category_handler(
     State(pool): State<PgPool>,
-    jar: CookieJar,
+    auth: AuthenticatedUser,
     Path((id, category_id)): Path<(uuid::Uuid, uuid::Uuid)>,
 ) -> Result<Json<Vec<Category>>, AppError> {
-    let user = get_authenticated_user(&pool, &jar).await?;
-    Link::remove_category(&pool, id, category_id, user.id).await?;
-    let categories = Link::get_categories(&pool, id, user.id).await?;
+    let user_id = auth.user_id;
+    Link::remove_category(&pool, id, category_id, user_id).await?;
+    let categories = Link::get_categories(&pool, id, user_id).await?;
     Ok(Json(categories))
 }
 
 /// GET /api/links/:id/categories
 async fn get_categories_handler(
     State(pool): State<PgPool>,
-    jar: CookieJar,
+    auth: AuthenticatedUser,
     Path(id): Path<uuid::Uuid>,
 ) -> Result<Json<Vec<Category>>, AppError> {
-    let user = get_authenticated_user(&pool, &jar).await?;
-    let categories = Link::get_categories(&pool, id, user.id).await?;
+    let user_id = auth.user_id;
+    let categories = Link::get_categories(&pool, id, user_id).await?;
     Ok(Json(categories))
 }
 
@@ -482,36 +459,36 @@ struct AddTagRequest {
 /// POST /api/links/:id/tags
 async fn add_tag_handler(
     State(pool): State<PgPool>,
-    jar: CookieJar,
+    auth: AuthenticatedUser,
     Path(id): Path<uuid::Uuid>,
     Json(request): Json<AddTagRequest>,
 ) -> Result<Json<Vec<Tag>>, AppError> {
-    let user = get_authenticated_user(&pool, &jar).await?;
-    Link::add_tag(&pool, id, request.tag_id, user.id).await?;
-    let tags = Link::get_tags(&pool, id, user.id).await?;
+    let user_id = auth.user_id;
+    Link::add_tag(&pool, id, request.tag_id, user_id).await?;
+    let tags = Link::get_tags(&pool, id, user_id).await?;
     Ok(Json(tags))
 }
 
 /// DELETE /api/links/:id/tags/:tag_id
 async fn remove_tag_handler(
     State(pool): State<PgPool>,
-    jar: CookieJar,
+    auth: AuthenticatedUser,
     Path((id, tag_id)): Path<(uuid::Uuid, uuid::Uuid)>,
 ) -> Result<Json<Vec<Tag>>, AppError> {
-    let user = get_authenticated_user(&pool, &jar).await?;
-    Link::remove_tag(&pool, id, tag_id, user.id).await?;
-    let tags = Link::get_tags(&pool, id, user.id).await?;
+    let user_id = auth.user_id;
+    Link::remove_tag(&pool, id, tag_id, user_id).await?;
+    let tags = Link::get_tags(&pool, id, user_id).await?;
     Ok(Json(tags))
 }
 
 /// GET /api/links/:id/tags
 async fn get_tags_handler(
     State(pool): State<PgPool>,
-    jar: CookieJar,
+    auth: AuthenticatedUser,
     Path(id): Path<uuid::Uuid>,
 ) -> Result<Json<Vec<Tag>>, AppError> {
-    let user = get_authenticated_user(&pool, &jar).await?;
-    let tags = Link::get_tags(&pool, id, user.id).await?;
+    let user_id = auth.user_id;
+    let tags = Link::get_tags(&pool, id, user_id).await?;
     Ok(Json(tags))
 }
 
@@ -523,36 +500,36 @@ struct AddLanguageRequest {
 /// POST /api/links/:id/languages
 async fn add_language_handler(
     State(pool): State<PgPool>,
-    jar: CookieJar,
+    auth: AuthenticatedUser,
     Path(id): Path<uuid::Uuid>,
     Json(request): Json<AddLanguageRequest>,
 ) -> Result<Json<Vec<Language>>, AppError> {
-    let user = get_authenticated_user(&pool, &jar).await?;
-    Link::add_language(&pool, id, request.language_id, user.id).await?;
-    let languages = Link::get_languages(&pool, id, user.id).await?;
+    let user_id = auth.user_id;
+    Link::add_language(&pool, id, request.language_id, user_id).await?;
+    let languages = Link::get_languages(&pool, id, user_id).await?;
     Ok(Json(languages))
 }
 
 /// DELETE /api/links/:id/languages/:language_id
 async fn remove_language_handler(
     State(pool): State<PgPool>,
-    jar: CookieJar,
+    auth: AuthenticatedUser,
     Path((id, language_id)): Path<(uuid::Uuid, uuid::Uuid)>,
 ) -> Result<Json<Vec<Language>>, AppError> {
-    let user = get_authenticated_user(&pool, &jar).await?;
-    Link::remove_language(&pool, id, language_id, user.id).await?;
-    let languages = Link::get_languages(&pool, id, user.id).await?;
+    let user_id = auth.user_id;
+    Link::remove_language(&pool, id, language_id, user_id).await?;
+    let languages = Link::get_languages(&pool, id, user_id).await?;
     Ok(Json(languages))
 }
 
 /// GET /api/links/:id/languages
 async fn get_languages_handler(
     State(pool): State<PgPool>,
-    jar: CookieJar,
+    auth: AuthenticatedUser,
     Path(id): Path<uuid::Uuid>,
 ) -> Result<Json<Vec<Language>>, AppError> {
-    let user = get_authenticated_user(&pool, &jar).await?;
-    let languages = Link::get_languages(&pool, id, user.id).await?;
+    let user_id = auth.user_id;
+    let languages = Link::get_languages(&pool, id, user_id).await?;
     Ok(Json(languages))
 }
 
@@ -564,36 +541,36 @@ struct AddLicenseRequest {
 /// POST /api/links/:id/licenses
 async fn add_license_handler(
     State(pool): State<PgPool>,
-    jar: CookieJar,
+    auth: AuthenticatedUser,
     Path(id): Path<uuid::Uuid>,
     Json(request): Json<AddLicenseRequest>,
 ) -> Result<Json<Vec<License>>, AppError> {
-    let user = get_authenticated_user(&pool, &jar).await?;
-    Link::add_license(&pool, id, request.license_id, user.id).await?;
-    let licenses = Link::get_licenses(&pool, id, user.id).await?;
+    let user_id = auth.user_id;
+    Link::add_license(&pool, id, request.license_id, user_id).await?;
+    let licenses = Link::get_licenses(&pool, id, user_id).await?;
     Ok(Json(licenses))
 }
 
 /// DELETE /api/links/:id/licenses/:license_id
 async fn remove_license_handler(
     State(pool): State<PgPool>,
-    jar: CookieJar,
+    auth: AuthenticatedUser,
     Path((id, license_id)): Path<(uuid::Uuid, uuid::Uuid)>,
 ) -> Result<Json<Vec<License>>, AppError> {
-    let user = get_authenticated_user(&pool, &jar).await?;
-    Link::remove_license(&pool, id, license_id, user.id).await?;
-    let licenses = Link::get_licenses(&pool, id, user.id).await?;
+    let user_id = auth.user_id;
+    Link::remove_license(&pool, id, license_id, user_id).await?;
+    let licenses = Link::get_licenses(&pool, id, user_id).await?;
     Ok(Json(licenses))
 }
 
 /// GET /api/links/:id/licenses
 async fn get_licenses_handler(
     State(pool): State<PgPool>,
-    jar: CookieJar,
+    auth: AuthenticatedUser,
     Path(id): Path<uuid::Uuid>,
 ) -> Result<Json<Vec<License>>, AppError> {
-    let user = get_authenticated_user(&pool, &jar).await?;
-    let licenses = Link::get_licenses(&pool, id, user.id).await?;
+    let user_id = auth.user_id;
+    let licenses = Link::get_licenses(&pool, id, user_id).await?;
     Ok(Json(licenses))
 }
 
@@ -607,19 +584,19 @@ async fn get_licenses_handler(
 /// - 404 Not Found: Link not found or doesn't belong to user
 async fn refresh_link_handler(
     State(pool): State<PgPool>,
-    jar: CookieJar,
+    auth: AuthenticatedUser,
     Path(id): Path<uuid::Uuid>,
 ) -> Result<Json<Link>, AppError> {
-    let user = get_authenticated_user(&pool, &jar).await?;
+    let user_id = auth.user_id;
 
     tracing::info!(
-        user_id = %user.id,
+        user_id = %user_id,
         link_id = %id,
         "Refreshing metadata for link"
     );
 
     // Verify link exists and belongs to user
-    let link = Link::get_by_id(&pool, id, user.id).await?;
+    let link = Link::get_by_id(&pool, id, user_id).await?;
 
     // Determine the GitHub URL to use (main URL or source_code_url)
     // Only accept URLs that start with https://github.com/
@@ -645,7 +622,7 @@ async fn refresh_link_handler(
                         "Successfully fetched GitHub metadata"
                     );
 
-                    if let Err(e) = Link::update_github_metadata(&pool, id, user.id, metadata).await
+                    if let Err(e) = Link::update_github_metadata(&pool, id, user_id, metadata).await
                     {
                         tracing::warn!(
                             link_id = %id,
@@ -678,7 +655,7 @@ async fn refresh_link_handler(
                     "Successfully scraped metadata"
                 );
 
-                if let Err(e) = Link::update_scraped_metadata(&pool, id, user.id, metadata).await {
+                if let Err(e) = Link::update_scraped_metadata(&pool, id, user_id, metadata).await {
                     tracing::warn!(
                         link_id = %id,
                         error = %e,
@@ -697,10 +674,10 @@ async fn refresh_link_handler(
     }
 
     // Mark the link as refreshed
-    Link::mark_refreshed(&pool, id, user.id).await?;
+    Link::mark_refreshed(&pool, id, user_id).await?;
 
     // Fetch and return updated link
-    let updated_link = Link::get_by_id(&pool, id, user.id).await?;
+    let updated_link = Link::get_by_id(&pool, id, user_id).await?;
 
     tracing::info!(
         link_id = %id,
@@ -722,19 +699,19 @@ async fn refresh_link_handler(
 /// - 502 Bad Gateway: GitHub API request failed
 async fn refresh_github_handler(
     State(pool): State<PgPool>,
-    jar: CookieJar,
+    auth: AuthenticatedUser,
     Path(id): Path<uuid::Uuid>,
 ) -> Result<Json<Link>, AppError> {
-    let user = get_authenticated_user(&pool, &jar).await?;
+    let user_id = auth.user_id;
 
     tracing::info!(
-        user_id = %user.id,
+        user_id = %user_id,
         link_id = %id,
         "Refreshing GitHub metadata for link"
     );
 
     // Verify link exists and belongs to user
-    let link = Link::get_by_id(&pool, id, user.id).await?;
+    let link = Link::get_by_id(&pool, id, user_id).await?;
 
     // Verify it's a GitHub repository
     if !link.is_github_repo {
@@ -763,10 +740,10 @@ async fn refresh_github_handler(
     let metadata = crate::github::fetch_repo_metadata(&owner, &repo).await?;
 
     // Update the link with fresh metadata
-    Link::update_github_metadata(&pool, id, user.id, metadata).await?;
+    Link::update_github_metadata(&pool, id, user_id, metadata).await?;
 
     // Fetch and return updated link
-    let updated_link = Link::get_by_id(&pool, id, user.id).await?;
+    let updated_link = Link::get_by_id(&pool, id, user_id).await?;
 
     tracing::info!(
         link_id = %id,
@@ -814,24 +791,24 @@ struct BulkTagRequest {
 /// - 404 Not Found: One or more links not found or don't belong to user
 async fn bulk_delete_handler(
     State(pool): State<PgPool>,
-    jar: CookieJar,
+    auth: AuthenticatedUser,
     Json(req): Json<BulkDeleteRequest>,
 ) -> Result<StatusCode, AppError> {
-    let user = get_authenticated_user(&pool, &jar).await?;
+    let user_id = auth.user_id;
 
     tracing::info!(
-        user_id = %user.id,
+        user_id = %user_id,
         count = req.link_ids.len(),
         "Bulk deleting links"
     );
 
     // Verify all links belong to user and delete
     for link_id in req.link_ids {
-        Link::delete(&pool, link_id, user.id).await?;
+        Link::delete(&pool, link_id, user_id).await?;
     }
 
     tracing::info!(
-        user_id = %user.id,
+        user_id = %user_id,
         "Bulk delete completed"
     );
 
@@ -857,13 +834,13 @@ async fn bulk_delete_handler(
 /// - 401 Unauthorized: No valid session
 async fn bulk_category_handler(
     State(pool): State<PgPool>,
-    jar: CookieJar,
+    auth: AuthenticatedUser,
     Json(req): Json<BulkCategoryRequest>,
 ) -> Result<StatusCode, AppError> {
-    let user = get_authenticated_user(&pool, &jar).await?;
+    let user_id = auth.user_id;
 
     tracing::info!(
-        user_id = %user.id,
+        user_id = %user_id,
         count = req.link_ids.len(),
         category_id = %req.category_id,
         action = %req.action,
@@ -872,14 +849,14 @@ async fn bulk_category_handler(
 
     for link_id in &req.link_ids {
         match req.action.as_str() {
-            "add" => Link::add_category(&pool, *link_id, req.category_id, user.id).await?,
-            "remove" => Link::remove_category(&pool, *link_id, req.category_id, user.id).await?,
+            "add" => Link::add_category(&pool, *link_id, req.category_id, user_id).await?,
+            "remove" => Link::remove_category(&pool, *link_id, req.category_id, user_id).await?,
             _ => return Err(AppError::validation("action", "Must be 'add' or 'remove'")),
         }
     }
 
     tracing::info!(
-        user_id = %user.id,
+        user_id = %user_id,
         "Bulk category operation completed"
     );
 
@@ -905,13 +882,13 @@ async fn bulk_category_handler(
 /// - 401 Unauthorized: No valid session
 async fn bulk_tag_handler(
     State(pool): State<PgPool>,
-    jar: CookieJar,
+    auth: AuthenticatedUser,
     Json(req): Json<BulkTagRequest>,
 ) -> Result<StatusCode, AppError> {
-    let user = get_authenticated_user(&pool, &jar).await?;
+    let user_id = auth.user_id;
 
     tracing::info!(
-        user_id = %user.id,
+        user_id = %user_id,
         count = req.link_ids.len(),
         tag_id = %req.tag_id,
         action = %req.action,
@@ -920,14 +897,14 @@ async fn bulk_tag_handler(
 
     for link_id in &req.link_ids {
         match req.action.as_str() {
-            "add" => Link::add_tag(&pool, *link_id, req.tag_id, user.id).await?,
-            "remove" => Link::remove_tag(&pool, *link_id, req.tag_id, user.id).await?,
+            "add" => Link::add_tag(&pool, *link_id, req.tag_id, user_id).await?,
+            "remove" => Link::remove_tag(&pool, *link_id, req.tag_id, user_id).await?,
             _ => return Err(AppError::validation("action", "Must be 'add' or 'remove'")),
         }
     }
 
     tracing::info!(
-        user_id = %user.id,
+        user_id = %user_id,
         "Bulk tag operation completed"
     );
 
@@ -968,25 +945,25 @@ struct ExportLink {
 /// - 401 Unauthorized: No valid session
 async fn export_links_handler(
     State(pool): State<PgPool>,
-    jar: CookieJar,
+    auth: AuthenticatedUser,
 ) -> Result<Json<ExportData>, AppError> {
-    let user = get_authenticated_user(&pool, &jar).await?;
+    let user_id = auth.user_id;
 
-    tracing::info!(user_id = %user.id, "Exporting links");
+    tracing::info!(user_id = %user_id, "Exporting links");
 
     // Fetch all user data
-    let links = Link::get_all_by_user(&pool, user.id).await?;
-    let categories = Category::get_all_by_user(&pool, user.id).await?;
-    let tags = Tag::get_all_by_user(&pool, user.id).await?;
+    let links = Link::get_all_by_user(&pool, user_id).await?;
+    let categories = Category::get_all_by_user(&pool, user_id).await?;
+    let tags = Tag::get_all_by_user(&pool, user_id).await?;
 
     // Convert links to export format
     let mut export_links = Vec::new();
     for link in links {
         // Get associated metadata
-        let link_categories = Link::get_categories(&pool, link.id, user.id).await?;
-        let link_tags = Link::get_tags(&pool, link.id, user.id).await?;
-        let link_languages = Link::get_languages(&pool, link.id, user.id).await?;
-        let link_licenses = Link::get_licenses(&pool, link.id, user.id).await?;
+        let link_categories = Link::get_categories(&pool, link.id, user_id).await?;
+        let link_tags = Link::get_tags(&pool, link.id, user_id).await?;
+        let link_languages = Link::get_languages(&pool, link.id, user_id).await?;
+        let link_licenses = Link::get_licenses(&pool, link.id, user_id).await?;
 
         export_links.push(ExportLink {
             url: link.url,
@@ -1004,7 +981,7 @@ async fn export_links_handler(
     }
 
     tracing::info!(
-        user_id = %user.id,
+        user_id = %user_id,
         link_count = export_links.len(),
         "Export completed"
     );
@@ -1068,13 +1045,13 @@ struct ImportResult {
 /// - 401 Unauthorized: No valid session
 async fn import_links_handler(
     State(pool): State<PgPool>,
-    jar: CookieJar,
+    auth: AuthenticatedUser,
     Json(data): Json<ImportData>,
 ) -> Result<Json<ImportResult>, AppError> {
-    let user = get_authenticated_user(&pool, &jar).await?;
+    let user_id = auth.user_id;
 
     tracing::info!(
-        user_id = %user.id,
+        user_id = %user_id,
         link_count = data.links.len(),
         "Starting import"
     );
@@ -1085,7 +1062,7 @@ async fn import_links_handler(
 
     for link_data in data.links {
         // Check if URL already exists
-        match Link::exists_by_url(&pool, user.id, &link_data.url).await {
+        match Link::exists_by_url(&pool, user_id, &link_data.url).await {
             Ok(true) => {
                 skipped += 1;
                 continue;
@@ -1108,14 +1085,14 @@ async fn import_links_handler(
             logo: None,
         };
 
-        match Link::create(&pool, user.id, create_link).await {
+        match Link::create(&pool, user_id, create_link).await {
             Ok(link) => {
                 // Add categories by name
                 if let Some(cats) = link_data.categories {
                     for cat_name in cats {
-                        match Category::get_or_create_by_name(&pool, user.id, &cat_name).await {
+                        match Category::get_or_create_by_name(&pool, user_id, &cat_name).await {
                             Ok(cat) => {
-                                let _ = Link::add_category(&pool, link.id, cat.id, user.id).await;
+                                let _ = Link::add_category(&pool, link.id, cat.id, user_id).await;
                             }
                             Err(e) => {
                                 tracing::warn!(
@@ -1132,9 +1109,9 @@ async fn import_links_handler(
                 // Add tags by name
                 if let Some(tag_names) = link_data.tags {
                     for tag_name in tag_names {
-                        match Tag::get_or_create_by_name(&pool, user.id, &tag_name).await {
+                        match Tag::get_or_create_by_name(&pool, user_id, &tag_name).await {
                             Ok(tag) => {
-                                let _ = Link::add_tag(&pool, link.id, tag.id, user.id).await;
+                                let _ = Link::add_tag(&pool, link.id, tag.id, user_id).await;
                             }
                             Err(e) => {
                                 tracing::warn!(
@@ -1160,7 +1137,7 @@ async fn import_links_handler(
     }
 
     tracing::info!(
-        user_id = %user.id,
+        user_id = %user_id,
         imported = imported,
         skipped = skipped,
         errors = errors.len(),
@@ -1213,18 +1190,18 @@ struct PreviewResponse {
 /// - 401 Unauthorized: No valid session
 async fn check_duplicate_handler(
     State(pool): State<PgPool>,
-    jar: CookieJar,
+    auth: AuthenticatedUser,
     Query(query): Query<CheckDuplicateQuery>,
 ) -> Result<Json<Option<Link>>, AppError> {
-    let user = get_authenticated_user(&pool, &jar).await?;
+    let user_id = auth.user_id;
 
     tracing::debug!(
-        user_id = %user.id,
+        user_id = %user_id,
         url = %query.url,
         "Checking for duplicate URL"
     );
 
-    let existing = Link::find_by_url(&pool, user.id, &query.url).await?;
+    let existing = Link::find_by_url(&pool, user_id, &query.url).await?;
 
     Ok(Json(existing))
 }
@@ -1247,10 +1224,10 @@ async fn check_duplicate_handler(
 /// - 400 Bad Request: Invalid URL format
 async fn preview_link_handler(
     State(pool): State<PgPool>,
-    jar: CookieJar,
+    auth: AuthenticatedUser,
     Json(request): Json<PreviewRequest>,
 ) -> Result<Json<PreviewResponse>, AppError> {
-    let _user = get_authenticated_user(&pool, &jar).await?;
+    let _user_id = auth.user_id;
 
     tracing::info!(url = %request.url, "Previewing link metadata");
 
@@ -1315,7 +1292,7 @@ async fn preview_link_handler(
 }
 
 /// Create the links router
-pub fn create_router() -> Router<PgPool> {
+pub fn create_router() -> Router<super::AppState> {
     Router::new()
         .route("/", post(create_link_handler).get(list_links_handler))
         .route(

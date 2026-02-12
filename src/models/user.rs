@@ -8,19 +8,9 @@
 //!
 //! # Security
 //!
-//! Passwords are hashed using Argon2id with recommended parameters:
-//! - Memory cost: 19456 KiB (19 MiB)
-//! - Time cost: 2 iterations
-//! - Parallelism: 1 thread
-//! - Output length: 32 bytes
-//!
-//! These parameters are based on OWASP recommendations for password storage.
+//! Passwords are hashed using bcrypt with a cost factor of 12.
 
 use crate::error::AppError;
-use argon2::{
-    password_hash::{rand_core::OsRng, PasswordHash, PasswordHasher, PasswordVerifier, SaltString},
-    Argon2,
-};
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 use sqlx::PgPool;
@@ -36,11 +26,13 @@ pub struct User {
     pub id: Uuid,
     /// User's email address (unique)
     pub email: String,
-    /// Argon2 password hash (never send to frontend)
+    /// Password hash (never send to frontend)
     #[serde(skip_serializing)]
     pub password_hash: String,
     /// User's display name
     pub name: String,
+    /// Whether the user has admin privileges
+    pub is_admin: bool,
     /// Timestamp when user was created
     pub created_at: DateTime<Utc>,
 }
@@ -58,26 +50,31 @@ impl User {
 
         tracing::info!(email = %email, "Creating new user");
 
-        // Hash password using Argon2
+        // Hash password
         let password_hash = hash_password(password)?;
+
+        // Check if this is the first user (make them admin)
+        let is_first_user = !check_user_exists(pool).await?;
 
         // Insert user into database
         let user = sqlx::query_as::<_, User>(
             r#"
-            INSERT INTO users (email, password_hash, name)
-            VALUES ($1, $2, $3)
-            RETURNING id, email, password_hash, name, created_at
+            INSERT INTO users (email, password_hash, name, is_admin)
+            VALUES ($1, $2, $3, $4)
+            RETURNING id, email, password_hash, name, is_admin, created_at
             "#,
         )
         .bind(email)
         .bind(&password_hash)
         .bind(name)
+        .bind(is_first_user)
         .fetch_one(pool)
         .await?;
 
         tracing::info!(
             user_id = %user.id,
             email = %user.email,
+            is_admin = is_first_user,
             "User created successfully"
         );
 
@@ -95,7 +92,7 @@ impl User {
 
         let user = sqlx::query_as::<_, User>(
             r#"
-            SELECT id, email, password_hash, name, created_at
+            SELECT id, email, password_hash, name, is_admin, created_at
             FROM users
             WHERE id = $1
             "#,
@@ -132,71 +129,37 @@ pub struct CreateUser {
 }
 
 /// Create a new user with secure password hashing
-///
-/// This function:
-/// 1. Validates the email format
-/// 2. Hashes the password using Argon2id
-/// 3. Inserts the user into the database
-/// 4. Returns the created user
-///
-/// # Arguments
-///
-/// * `pool` - Database connection pool
-/// * `create_user` - User data (email and plain-text password)
-///
-/// # Returns
-///
-/// Returns the created `User` on success, or an `AppError` on failure.
-///
-/// # Errors
-///
-/// - `AppError::Validation` - Email format is invalid
-/// - `AppError::Duplicate` - Email already exists in database
-/// - `AppError::Internal` - Password hashing failed
-/// - `AppError::Database` - Database operation failed
-///
-/// # Security
-///
-/// - Password is never logged or stored in plain text
-/// - Uses Argon2id with OWASP-recommended parameters
-/// - Email is logged for audit purposes
-///
-/// # Example
-///
-/// ```rust
-/// let create_user = CreateUser {
-///     email: "user@example.com".to_string(),
-///     password: "secure_password".to_string(),
-/// };
-///
-/// let user = create_user(&pool, create_user).await?;
-/// ```
 pub async fn create_user(pool: &PgPool, create_user: CreateUser) -> Result<User, AppError> {
     // Validate email format
     validate_email(&create_user.email)?;
 
     tracing::info!(email = %create_user.email, "Creating new user");
 
-    // Hash password using Argon2
+    // Hash password
     let password_hash = hash_password(&create_user.password)?;
+
+    // Check if this is the first user (make them admin)
+    let is_first_user = !check_user_exists(pool).await?;
 
     // Insert user into database
     let user = sqlx::query_as::<_, User>(
         r#"
-        INSERT INTO users (email, password_hash, name)
-        VALUES ($1, $2, $3)
-        RETURNING id, email, password_hash, name, created_at
+        INSERT INTO users (email, password_hash, name, is_admin)
+        VALUES ($1, $2, $3, $4)
+        RETURNING id, email, password_hash, name, is_admin, created_at
         "#,
     )
     .bind(&create_user.email)
     .bind(&password_hash)
     .bind("") // Default empty name for legacy function
+    .bind(is_first_user)
     .fetch_one(pool)
-    .await?; // Automatic conversion: unique violation → AppError::Duplicate
+    .await?;
 
     tracing::info!(
         user_id = %user.id,
         email = %user.email,
+        is_admin = is_first_user,
         "User created successfully"
     );
 
@@ -204,36 +167,12 @@ pub async fn create_user(pool: &PgPool, create_user: CreateUser) -> Result<User,
 }
 
 /// Find a user by email address
-///
-/// Performs a case-insensitive search for a user by email.
-///
-/// # Arguments
-///
-/// * `pool` - Database connection pool
-/// * `email` - Email address to search for
-///
-/// # Returns
-///
-/// Returns `Some(User)` if found, `None` if not found, or an `AppError` on failure.
-///
-/// # Errors
-///
-/// - `AppError::Database` - Database operation failed
-///
-/// # Example
-///
-/// ```rust
-/// match find_user_by_email(&pool, "user@example.com").await? {
-///     Some(user) => println!("Found user: {}", user.email),
-///     None => println!("User not found"),
-/// }
-/// ```
 pub async fn find_user_by_email(pool: &PgPool, email: &str) -> Result<Option<User>, AppError> {
     tracing::debug!(email = %email, "Looking up user by email");
 
     let user = sqlx::query_as::<_, User>(
         r#"
-        SELECT id, email, password_hash, name, created_at
+        SELECT id, email, password_hash, name, is_admin, created_at
         FROM users
         WHERE LOWER(email) = LOWER($1)
         "#,
@@ -251,88 +190,36 @@ pub async fn find_user_by_email(pool: &PgPool, email: &str) -> Result<Option<Use
     Ok(user)
 }
 
-/// Verify a password against a hash
-///
-/// Uses Argon2 to verify that a plain-text password matches a hashed password.
-///
-/// # Arguments
-///
-/// * `password` - Plain-text password to verify
-/// * `hash` - Argon2 password hash to verify against
-///
-/// # Returns
-///
-/// Returns `true` if the password matches, `false` if it doesn't, or an `AppError` on failure.
-///
-/// # Errors
-///
-/// - `AppError::Internal` - Hash parsing or verification failed
-///
-/// # Security
-///
-/// - Uses constant-time comparison to prevent timing attacks
-/// - Never logs the password or hash
-///
-/// # Example
-///
-/// ```rust
-/// let is_valid = verify_password("user_password", &user.password_hash)?;
-/// if is_valid {
-///     println!("Password is correct");
-/// } else {
-///     println!("Password is incorrect");
-/// }
-/// ```
+/// Verify a password against a bcrypt hash
 pub fn verify_password(password: &str, hash: &str) -> Result<bool, AppError> {
     tracing::debug!("Verifying password");
 
-    // Parse the stored hash
-    let parsed_hash = PasswordHash::new(hash).map_err(|e| {
-        tracing::error!(error = %e, "Failed to parse password hash");
-        AppError::Internal(format!("Failed to parse password hash: {}", e))
-    })?;
+    #[cfg(feature = "standalone")]
+    {
+        let result = bcrypt::verify(password, hash).map_err(|e| {
+            tracing::error!(error = %e, "Failed to verify password");
+            AppError::Internal(format!("Failed to verify password: {}", e))
+        })?;
 
-    // Verify the password
-    let result = Argon2::default()
-        .verify_password(password.as_bytes(), &parsed_hash)
-        .is_ok();
+        if result {
+            tracing::debug!("Password verification successful");
+        } else {
+            tracing::debug!("Password verification failed");
+        }
 
-    if result {
-        tracing::debug!("Password verification successful");
-    } else {
-        tracing::debug!("Password verification failed");
+        Ok(result)
     }
 
-    Ok(result)
+    #[cfg(not(feature = "standalone"))]
+    {
+        let _ = (password, hash);
+        Err(AppError::Internal(
+            "Password verification not available in saas mode".to_string(),
+        ))
+    }
 }
 
 /// Check if any user exists in the database
-///
-/// Used to determine if initial setup is required. If no users exist,
-/// the application should show the setup page.
-///
-/// # Arguments
-///
-/// * `pool` - Database connection pool
-///
-/// # Returns
-///
-/// Returns `true` if at least one user exists, `false` if no users exist,
-/// or an `AppError` on failure.
-///
-/// # Errors
-///
-/// - `AppError::Database` - Database operation failed
-///
-/// # Example
-///
-/// ```rust
-/// if !check_user_exists(&pool).await? {
-///     println!("No users exist - setup required");
-/// } else {
-///     println!("Users exist - setup complete");
-/// }
-/// ```
 pub async fn check_user_exists(pool: &PgPool) -> Result<bool, AppError> {
     tracing::debug!("Checking if any users exist");
 
@@ -352,26 +239,11 @@ pub async fn check_user_exists(pool: &PgPool) -> Result<bool, AppError> {
 // Private helper functions
 
 /// Validate email format
-///
-/// Checks that the email:
-/// 1. Contains an @ symbol
-/// 2. Has content before the @
-/// 3. Has a domain after the @
-/// 4. Domain contains a dot
-///
-/// This is a basic validation - RFC-compliant email validation is extremely
-/// complex and not necessary for this application.
-///
-/// # Errors
-///
-/// Returns `AppError::Validation` if the email format is invalid.
 fn validate_email(email: &str) -> Result<(), AppError> {
-    // Check if email contains @
     if !email.contains('@') {
         return Err(AppError::validation("email", "Email must contain @ symbol"));
     }
 
-    // Split on @ and validate parts
     let parts: Vec<&str> = email.split('@').collect();
     if parts.len() != 2 {
         return Err(AppError::validation("email", "Email format is invalid"));
@@ -380,7 +252,6 @@ fn validate_email(email: &str) -> Result<(), AppError> {
     let local = parts[0];
     let domain = parts[1];
 
-    // Check local part (before @)
     if local.is_empty() {
         return Err(AppError::validation(
             "email",
@@ -388,7 +259,6 @@ fn validate_email(email: &str) -> Result<(), AppError> {
         ));
     }
 
-    // Check domain part (after @)
     if domain.is_empty() {
         return Err(AppError::validation(
             "email",
@@ -396,7 +266,6 @@ fn validate_email(email: &str) -> Result<(), AppError> {
         ));
     }
 
-    // Check domain has at least one dot
     if !domain.contains('.') {
         return Err(AppError::validation(
             "email",
@@ -407,39 +276,28 @@ fn validate_email(email: &str) -> Result<(), AppError> {
     Ok(())
 }
 
-/// Hash a password using Argon2
-///
-/// Uses Argon2id with OWASP-recommended parameters for password hashing.
-///
-/// # Security Parameters
-///
-/// - Algorithm: Argon2id (hybrid of Argon2i and Argon2d)
-/// - Memory cost: 19456 KiB (default)
-/// - Time cost: 2 iterations (default)
-/// - Parallelism: 1 thread (default)
-/// - Salt: 128-bit random salt (generated using OsRng)
-///
-/// # Errors
-///
-/// Returns `AppError::Internal` if password hashing fails.
+/// Hash a password using bcrypt
 fn hash_password(password: &str) -> Result<String, AppError> {
     tracing::debug!("Hashing password");
 
-    // Generate a random salt
-    let salt = SaltString::generate(&mut OsRng);
-
-    // Hash the password with Argon2
-    let password_hash = Argon2::default()
-        .hash_password(password.as_bytes(), &salt)
-        .map_err(|e| {
+    #[cfg(feature = "standalone")]
+    {
+        let hash = bcrypt::hash(password, 12).map_err(|e| {
             tracing::error!(error = %e, "Failed to hash password");
             AppError::Internal(format!("Failed to hash password: {}", e))
-        })?
-        .to_string();
+        })?;
 
-    tracing::debug!("Password hashed successfully");
+        tracing::debug!("Password hashed successfully");
+        Ok(hash)
+    }
 
-    Ok(password_hash)
+    #[cfg(not(feature = "standalone"))]
+    {
+        let _ = password;
+        Err(AppError::Internal(
+            "Password hashing not available in saas mode".to_string(),
+        ))
+    }
 }
 
 #[cfg(test)]
@@ -455,54 +313,41 @@ mod tests {
 
     #[test]
     fn test_validate_email_invalid() {
-        // Missing @
         assert!(validate_email("userexample.com").is_err());
-
-        // Empty local part
         assert!(validate_email("@example.com").is_err());
-
-        // Empty domain
         assert!(validate_email("user@").is_err());
-
-        // Domain without dot
         assert!(validate_email("user@example").is_err());
-
-        // Multiple @ symbols
         assert!(validate_email("user@@example.com").is_err());
     }
 
+    #[cfg(feature = "standalone")]
     #[test]
     fn test_password_hashing_and_verification() {
         let password = "my_secure_password_123";
 
-        // Hash the password
         let hash = hash_password(password).expect("Hashing should succeed");
 
-        // Verify correct password
         assert!(
             verify_password(password, &hash).expect("Verification should succeed"),
             "Correct password should verify"
         );
 
-        // Verify incorrect password
         assert!(
             !verify_password("wrong_password", &hash).expect("Verification should succeed"),
             "Incorrect password should not verify"
         );
     }
 
+    #[cfg(feature = "standalone")]
     #[test]
     fn test_password_hash_uniqueness() {
         let password = "same_password";
 
-        // Hash the same password twice
         let hash1 = hash_password(password).expect("Hashing should succeed");
         let hash2 = hash_password(password).expect("Hashing should succeed");
 
-        // Hashes should be different (due to random salt)
         assert_ne!(hash1, hash2, "Hashes should be different due to salt");
 
-        // Both hashes should verify the same password
         assert!(verify_password(password, &hash1).expect("Verification should succeed"));
         assert!(verify_password(password, &hash2).expect("Verification should succeed"));
     }

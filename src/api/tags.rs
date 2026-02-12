@@ -1,8 +1,8 @@
 //! Tag management API endpoints
 
-use crate::auth::{get_session, get_session_from_cookies};
+use crate::auth::middleware::AuthenticatedUser;
 use crate::error::AppError;
-use crate::models::{Tag, User};
+use crate::models::Tag;
 use axum::{
     extract::{Path, State},
     http::StatusCode,
@@ -10,26 +10,9 @@ use axum::{
     routing::post,
     Json, Router,
 };
-use axum_extra::extract::CookieJar;
 use serde::{Deserialize, Serialize};
 use sqlx::PgPool;
 use uuid::Uuid;
-
-/// Helper to get authenticated user
-async fn get_authenticated_user(pool: &PgPool, jar: &CookieJar) -> Result<User, AppError> {
-    let session_id = get_session_from_cookies(jar).ok_or(AppError::SessionExpired)?;
-    let session = get_session(pool, &session_id)
-        .await?
-        .ok_or(AppError::SessionExpired)?;
-
-    sqlx::query_as::<_, User>(
-        "SELECT id, email, password_hash, name, created_at FROM users WHERE id = $1",
-    )
-    .bind(session.user_id)
-    .fetch_one(pool)
-    .await
-    .map_err(AppError::from)
-}
 
 #[derive(Debug, Serialize)]
 struct TagResponse {
@@ -46,15 +29,14 @@ struct CreateTagRequest {
 /// POST /api/tags
 async fn create_tag(
     State(pool): State<PgPool>,
-    jar: CookieJar,
+    auth: AuthenticatedUser,
     Json(request): Json<CreateTagRequest>,
 ) -> Result<impl IntoResponse, AppError> {
-    let user = get_authenticated_user(&pool, &jar).await?;
-    let tag = Tag::create(&pool, user.id, &request.name).await?;
+    let tag = Tag::create(&pool, auth.user_id, &request.name).await?;
     let response = TagResponse {
         id: tag.id,
         name: tag.name,
-        link_count: 0, // New tag has no links yet
+        link_count: 0,
     };
     Ok((StatusCode::CREATED, Json(response)))
 }
@@ -62,11 +44,8 @@ async fn create_tag(
 /// GET /api/tags
 async fn list_tags(
     State(pool): State<PgPool>,
-    jar: CookieJar,
+    auth: AuthenticatedUser,
 ) -> Result<Json<Vec<TagResponse>>, AppError> {
-    let user = get_authenticated_user(&pool, &jar).await?;
-
-    // Fetch tags with link counts
     let tags = sqlx::query_as::<_, (Uuid, String, i64)>(
         r#"
         SELECT t.id, t.name, COUNT(lt.link_id) as link_count
@@ -78,7 +57,7 @@ async fn list_tags(
         ORDER BY t.name
         "#,
     )
-    .bind(user.id)
+    .bind(auth.user_id)
     .fetch_all(&pool)
     .await?;
 
@@ -97,16 +76,15 @@ async fn list_tags(
 /// DELETE /api/tags/:id
 async fn delete_tag(
     State(pool): State<PgPool>,
-    jar: CookieJar,
+    auth: AuthenticatedUser,
     Path(id): Path<Uuid>,
 ) -> Result<StatusCode, AppError> {
-    let user = get_authenticated_user(&pool, &jar).await?;
-    Tag::delete(&pool, id, user.id).await?;
+    Tag::delete(&pool, id, auth.user_id).await?;
     Ok(StatusCode::NO_CONTENT)
 }
 
 /// Create the tags router
-pub fn create_router() -> Router<PgPool> {
+pub fn create_router() -> Router<super::AppState> {
     Router::new()
         .route("/", post(create_tag).get(list_tags))
         .route("/{id}", axum::routing::delete(delete_tag))

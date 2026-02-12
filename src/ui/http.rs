@@ -1,6 +1,8 @@
 //! HTTP client abstraction for cross-platform compatibility
 //!
 //! Uses `gloo-net` for WASM (browser) and `reqwest` for native (server).
+//! In standalone mode, adds Authorization: Bearer header from localStorage.
+//! In saas mode, uses RequestCredentials::Include for cookie-based auth.
 
 use serde::{de::DeserializeOwned, Serialize};
 
@@ -9,10 +11,23 @@ pub async fn get<T: DeserializeOwned>(url: &str) -> Result<T, String> {
     #[cfg(target_arch = "wasm32")]
     {
         use gloo_net::http::Request;
-        use web_sys::RequestCredentials;
 
-        let response = Request::get(url)
-            .credentials(RequestCredentials::Include)
+        let mut request = Request::get(url);
+
+        #[cfg(feature = "standalone")]
+        {
+            if let Some(token) = crate::ui::auth_state::get_token() {
+                request = request.header("Authorization", &format!("Bearer {}", token));
+            }
+        }
+
+        #[cfg(not(feature = "standalone"))]
+        {
+            use web_sys::RequestCredentials;
+            request = request.credentials(RequestCredentials::Include);
+        }
+
+        let response = request
             .send()
             .await
             .map_err(|e| format!("Network error: {}", e))?;
@@ -52,10 +67,23 @@ pub async fn get_response(url: &str) -> Result<HttpResponse, String> {
     #[cfg(target_arch = "wasm32")]
     {
         use gloo_net::http::Request;
-        use web_sys::RequestCredentials;
 
-        let response = Request::get(url)
-            .credentials(RequestCredentials::Include)
+        let mut request = Request::get(url);
+
+        #[cfg(feature = "standalone")]
+        {
+            if let Some(token) = crate::ui::auth_state::get_token() {
+                request = request.header("Authorization", &format!("Bearer {}", token));
+            }
+        }
+
+        #[cfg(not(feature = "standalone"))]
+        {
+            use web_sys::RequestCredentials;
+            request = request.credentials(RequestCredentials::Include);
+        }
+
+        let response = request
             .send()
             .await
             .map_err(|e| format!("Network error: {}", e))?;
@@ -93,10 +121,23 @@ pub async fn post<T: DeserializeOwned, B: Serialize>(url: &str, body: &B) -> Res
     #[cfg(target_arch = "wasm32")]
     {
         use gloo_net::http::Request;
-        use web_sys::RequestCredentials;
 
-        let response = Request::post(url)
-            .credentials(RequestCredentials::Include)
+        let mut request = Request::post(url);
+
+        #[cfg(feature = "standalone")]
+        {
+            if let Some(token) = crate::ui::auth_state::get_token() {
+                request = request.header("Authorization", &format!("Bearer {}", token));
+            }
+        }
+
+        #[cfg(not(feature = "standalone"))]
+        {
+            use web_sys::RequestCredentials;
+            request = request.credentials(RequestCredentials::Include);
+        }
+
+        let response = request
             .json(body)
             .map_err(|e| format!("Serialize error: {}", e))?
             .send()
@@ -141,10 +182,23 @@ pub async fn post_response<B: Serialize>(url: &str, body: &B) -> Result<HttpResp
     #[cfg(target_arch = "wasm32")]
     {
         use gloo_net::http::Request;
-        use web_sys::RequestCredentials;
 
-        let response = Request::post(url)
-            .credentials(RequestCredentials::Include)
+        let mut request = Request::post(url);
+
+        #[cfg(feature = "standalone")]
+        {
+            if let Some(token) = crate::ui::auth_state::get_token() {
+                request = request.header("Authorization", &format!("Bearer {}", token));
+            }
+        }
+
+        #[cfg(not(feature = "standalone"))]
+        {
+            use web_sys::RequestCredentials;
+            request = request.credentials(RequestCredentials::Include);
+        }
+
+        let response = request
             .json(body)
             .map_err(|e| format!("Serialize error: {}", e))?
             .send()
@@ -185,10 +239,23 @@ pub async fn post_empty(url: &str) -> Result<HttpResponse, String> {
     #[cfg(target_arch = "wasm32")]
     {
         use gloo_net::http::Request;
-        use web_sys::RequestCredentials;
 
-        let response = Request::post(url)
-            .credentials(RequestCredentials::Include)
+        let mut request = Request::post(url);
+
+        #[cfg(feature = "standalone")]
+        {
+            if let Some(token) = crate::ui::auth_state::get_token() {
+                request = request.header("Authorization", &format!("Bearer {}", token));
+            }
+        }
+
+        #[cfg(not(feature = "standalone"))]
+        {
+            use web_sys::RequestCredentials;
+            request = request.credentials(RequestCredentials::Include);
+        }
+
+        let response = request
             .send()
             .await
             .map_err(|e| format!("Network error: {}", e))?;
@@ -226,10 +293,23 @@ pub async fn put<T: DeserializeOwned, B: Serialize>(url: &str, body: &B) -> Resu
     #[cfg(target_arch = "wasm32")]
     {
         use gloo_net::http::Request;
-        use web_sys::RequestCredentials;
 
-        let response = Request::put(url)
-            .credentials(RequestCredentials::Include)
+        let mut request = Request::put(url);
+
+        #[cfg(feature = "standalone")]
+        {
+            if let Some(token) = crate::ui::auth_state::get_token() {
+                request = request.header("Authorization", &format!("Bearer {}", token));
+            }
+        }
+
+        #[cfg(not(feature = "standalone"))]
+        {
+            use web_sys::RequestCredentials;
+            request = request.credentials(RequestCredentials::Include);
+        }
+
+        let response = request
             .json(body)
             .map_err(|e| format!("Serialize error: {}", e))?
             .send()
@@ -274,10 +354,23 @@ pub async fn patch<T: DeserializeOwned, B: Serialize>(url: &str, body: &B) -> Re
     #[cfg(target_arch = "wasm32")]
     {
         use gloo_net::http::Request;
-        use web_sys::RequestCredentials;
 
-        let response = Request::patch(url)
-            .credentials(RequestCredentials::Include)
+        let mut request = Request::patch(url);
+
+        #[cfg(feature = "standalone")]
+        {
+            if let Some(token) = crate::ui::auth_state::get_token() {
+                request = request.header("Authorization", &format!("Bearer {}", token));
+            }
+        }
+
+        #[cfg(not(feature = "standalone"))]
+        {
+            use web_sys::RequestCredentials;
+            request = request.credentials(RequestCredentials::Include);
+        }
+
+        let response = request
             .json(body)
             .map_err(|e| format!("Serialize error: {}", e))?
             .send()
@@ -322,10 +415,23 @@ pub async fn delete(url: &str) -> Result<(), String> {
     #[cfg(target_arch = "wasm32")]
     {
         use gloo_net::http::Request;
-        use web_sys::RequestCredentials;
 
-        let response = Request::delete(url)
-            .credentials(RequestCredentials::Include)
+        let mut request = Request::delete(url);
+
+        #[cfg(feature = "standalone")]
+        {
+            if let Some(token) = crate::ui::auth_state::get_token() {
+                request = request.header("Authorization", &format!("Bearer {}", token));
+            }
+        }
+
+        #[cfg(not(feature = "standalone"))]
+        {
+            use web_sys::RequestCredentials;
+            request = request.credentials(RequestCredentials::Include);
+        }
+
+        let response = request
             .send()
             .await
             .map_err(|e| format!("Network error: {}", e))?;

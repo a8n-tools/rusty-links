@@ -70,6 +70,14 @@ async fn check_home_state() -> HomeState {
         Err(e) => return HomeState::Error(e.to_string()),
     }
 
+    // In standalone mode, skip the network call if no token is stored
+    #[cfg(feature = "standalone")]
+    {
+        if !crate::ui::auth_state::is_authenticated() {
+            return HomeState::NeedsLogin;
+        }
+    }
+
     // Check if user is logged in by calling /api/auth/me
     match http::get_response("/api/auth/me").await {
         Ok(response) if response.is_success() => HomeState::LoggedIn,

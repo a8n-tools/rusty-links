@@ -130,6 +130,9 @@ pub enum AppError {
     /// Wraps serde_json::Error for JSON parsing failures.
     Json(serde_json::Error),
 
+    /// Account is locked due to too many failed login attempts
+    AccountLocked,
+
     /// Internal server error
     ///
     /// Used for unexpected errors that don't fit other categories.
@@ -238,6 +241,7 @@ impl AppError {
             AppError::Forbidden(_) => 403,
             AppError::NotFound { .. } => 404,
             AppError::Duplicate { .. } => 409,
+            AppError::AccountLocked => 429,
             AppError::Database(_) => 500,
             AppError::Io(_) => 500,
             AppError::Json(_) => 500,
@@ -262,6 +266,7 @@ impl AppError {
             AppError::Forbidden(_) => "FORBIDDEN",
             AppError::NotFound { .. } => "NOT_FOUND",
             AppError::Duplicate { .. } => "DUPLICATE_FIELD",
+            AppError::AccountLocked => "ACCOUNT_LOCKED",
             AppError::ExternalService(_) => "EXTERNAL_SERVICE_ERROR",
             AppError::Io(_) => "IO_ERROR",
             AppError::Json(_) => "JSON_ERROR",
@@ -305,6 +310,9 @@ impl AppError {
             }
             AppError::Duplicate { field } => {
                 format!("{} already exists.", capitalize_first(field))
+            }
+            AppError::AccountLocked => {
+                "Account is temporarily locked due to too many failed login attempts. Please try again later.".to_string()
             }
             AppError::ExternalService(msg) => {
                 format!("External service error: {}", msg)
@@ -483,6 +491,9 @@ impl axum::response::IntoResponse for AppError {
             }
             AppError::NotFound { resource, id } => {
                 tracing::debug!(resource = %resource, id = %id, "Resource not found");
+            }
+            AppError::AccountLocked => {
+                tracing::warn!("Account locked due to too many failed attempts");
             }
             AppError::Database(e) => {
                 tracing::error!(error = %e, "Database error");
