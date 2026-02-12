@@ -18,10 +18,10 @@ struct CreateLanguageRequest {
 
 #[component]
 pub fn LanguageSelect(selected_ids: Vec<Uuid>, on_change: EventHandler<Vec<Uuid>>) -> Element {
-    let mut languages = use_signal(|| Vec::<Language>::new());
+    let mut languages = use_signal(Vec::<Language>::new);
     let mut loading = use_signal(|| true);
     let mut expanded = use_signal(|| false);
-    let mut search = use_signal(|| String::new());
+    let mut search = use_signal(String::new);
     let mut creating = use_signal(|| false);
 
     use_effect(move || {

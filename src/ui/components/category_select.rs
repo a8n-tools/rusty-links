@@ -20,7 +20,7 @@ pub struct CategoryWithChildren {
 
 #[component]
 pub fn CategorySelect(selected_ids: Vec<Uuid>, on_change: EventHandler<Vec<Uuid>>) -> Element {
-    let mut categories = use_signal(|| Vec::<CategoryWithChildren>::new());
+    let mut categories = use_signal(Vec::<CategoryWithChildren>::new);
     let mut loading = use_signal(|| true);
     let mut expanded = use_signal(|| false);
 

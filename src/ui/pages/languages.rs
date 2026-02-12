@@ -10,7 +10,7 @@ use dioxus::prelude::*;
 
 #[component]
 pub fn LanguagesPage() -> Element {
-    let mut languages = use_signal(|| Vec::<LanguageItem>::new());
+    let mut languages = use_signal(Vec::<LanguageItem>::new);
     let mut loading = use_signal(|| true);
     let mut error = use_signal(|| Option::<String>::None);
 

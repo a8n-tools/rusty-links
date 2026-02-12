@@ -16,7 +16,7 @@ pub fn FilterDropdown(
     #[props(default = true)] searchable: bool,
 ) -> Element {
     let mut is_open = use_signal(|| false);
-    let mut search_query = use_signal(|| String::new());
+    let mut search_query = use_signal(String::new);
 
     // Clone options for use in closures
     let options_for_filter = options.clone();

@@ -5,9 +5,9 @@ use dioxus::prelude::*;
 
 #[component]
 pub fn Setup() -> Element {
-    let mut email = use_signal(|| String::new());
-    let mut password = use_signal(|| String::new());
-    let mut name = use_signal(|| String::new());
+    let mut email = use_signal(String::new);
+    let mut password = use_signal(String::new);
+    let mut name = use_signal(String::new);
     let mut loading = use_signal(|| false);
     let mut error = use_signal(|| Option::<String>::None);
     let nav = navigator();

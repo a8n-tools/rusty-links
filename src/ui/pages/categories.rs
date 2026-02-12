@@ -10,7 +10,7 @@ use dioxus::prelude::*;
 
 #[component]
 pub fn CategoriesPage() -> Element {
-    let mut categories = use_signal(|| Vec::<CategoryNode>::new());
+    let mut categories = use_signal(Vec::<CategoryNode>::new);
     let mut loading = use_signal(|| true);
     let mut error = use_signal(|| Option::<String>::None);
 
