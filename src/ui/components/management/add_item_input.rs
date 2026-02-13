@@ -6,7 +6,7 @@ pub fn AddItemInput(
     on_add: EventHandler<String>,
     on_cancel: EventHandler<()>,
 ) -> Element {
-    let mut name = use_signal(|| String::new());
+    let mut name = use_signal(String::new);
     let mut error = use_signal(|| Option::<String>::None);
 
     let mut handle_submit = move || {

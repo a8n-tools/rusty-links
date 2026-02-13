@@ -20,7 +20,7 @@ pub struct CategoryWithChildren {
 
 #[component]
 pub fn CategorySelect(selected_ids: Vec<Uuid>, on_change: EventHandler<Vec<Uuid>>) -> Element {
-    let mut categories = use_signal(|| Vec::<CategoryWithChildren>::new());
+    let mut categories = use_signal(Vec::<CategoryWithChildren>::new);
     let mut loading = use_signal(|| true);
     let mut expanded = use_signal(|| false);
 
@@ -35,7 +35,7 @@ pub fn CategorySelect(selected_ids: Vec<Uuid>, on_change: EventHandler<Vec<Uuid>
 
     let all_cats: Vec<Category> = categories()
         .iter()
-        .flat_map(|c| get_all_categories(c))
+        .flat_map(get_all_categories)
         .collect();
 
     let selected_names: Vec<String> = all_cats

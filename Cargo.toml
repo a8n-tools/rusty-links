@@ -44,12 +44,17 @@ urlencoding = "2.1"
 chrono = { version = "0.4.42", features = ["serde"] }
 regex = "1.12.2"
 
-# Password hashing
-argon2 = "0.5.3"
+# Password hashing (standalone mode)
+bcrypt = { version = "0.15", optional = true }
+
+# JWT authentication
+jsonwebtoken = { version = "9.2", optional = true }
+
+# Base64 (for saas JWT payload decoding)
+base64 = "0.22"
 
 # Session management
 rand = "0.9.2"
-hex = "0.4.3"
 
 # WASM compatibility - must be in main dependencies to propagate to all transitive deps
 getrandom = "0.3.4"
@@ -80,10 +85,13 @@ web-sys = { version = "0.3", features = [
     "Url",
     "FileList",
     "File",
+    "Storage",
 ] }
 
 [features]
-default = []
+default = ["standalone"]
+standalone = ["dep:bcrypt"]
+saas = []
 server = [
     "dioxus/server",
     "dep:axum",
@@ -93,6 +101,7 @@ server = [
     "dep:tokio",
     "dep:sqlx",
     "dep:http",
+    "dep:jsonwebtoken",
 ]
 web = [
     "dioxus/web",

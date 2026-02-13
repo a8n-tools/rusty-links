@@ -4,6 +4,8 @@
 //! These tests are disabled by default (using #[ignore]) to avoid requiring a test database
 //! in CI until the test suite is fully set up.
 
+#![cfg(feature = "server")]
+
 mod common;
 
 use rusty_links::models::create_user;

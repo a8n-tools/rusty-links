@@ -103,6 +103,9 @@ fn ToastItem(toast: Toast, mut toasts: Signal<Vec<Toast>>) -> Element {
                 tokio::time::sleep(std::time::Duration::from_millis(duration)).await;
             }
 
+            #[cfg(not(any(target_arch = "wasm32", feature = "server")))]
+            let _ = duration;
+
             let mut current_toasts = toasts();
             current_toasts.retain(|t| t.id != id);
             toasts.set(current_toasts);

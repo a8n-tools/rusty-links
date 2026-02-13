@@ -35,6 +35,22 @@ pub struct UserInfo {
     pub id: String,
     pub email: String,
     pub name: String,
+    pub is_admin: bool,
+}
+
+/// Authentication response with JWT tokens (standalone mode)
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct AuthResponse {
+    pub token: String,
+    pub refresh_token: String,
+    pub email: String,
+    pub is_admin: bool,
+}
+
+/// Refresh token request
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct RefreshRequest {
+    pub refresh_token: String,
 }
 
 /// Check if setup is required (no users exist)

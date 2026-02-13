@@ -9,7 +9,7 @@ use dioxus::prelude::*;
 
 #[component]
 pub fn LicensesPage() -> Element {
-    let mut licenses = use_signal(|| Vec::<LicenseItem>::new());
+    let mut licenses = use_signal(Vec::<LicenseItem>::new);
     let mut loading = use_signal(|| true);
     let mut error = use_signal(|| Option::<String>::None);
 
@@ -244,8 +244,8 @@ fn AddLicenseInput(
     on_add: EventHandler<(String, Option<String>)>,
     on_cancel: EventHandler<()>,
 ) -> Element {
-    let mut name = use_signal(|| String::new());
-    let mut acronym = use_signal(|| String::new());
+    let mut name = use_signal(String::new);
+    let mut acronym = use_signal(String::new);
     let mut error = use_signal(|| Option::<String>::None);
 
     let mut handle_submit = move || {

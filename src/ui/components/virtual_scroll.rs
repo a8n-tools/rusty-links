@@ -1,10 +1,10 @@
-/// Virtual scrolling utilities and helper functions
-///
-/// Note: Virtual scrolling is implemented via server-side pagination in this app.
-/// This module provides utilities for calculating visible ranges for future use.
-///
-/// For tables with > 1000 items, server-side pagination (20 items/page) is already
-/// handling performance optimization.
+//! Virtual scrolling utilities and helper functions
+//!
+//! Note: Virtual scrolling is implemented via server-side pagination in this app.
+//! This module provides utilities for calculating visible ranges for future use.
+//!
+//! For tables with > 1000 items, server-side pagination (20 items/page) is already
+//! handling performance optimization.
 
 /// Helper struct for virtual scroll calculations
 #[derive(Clone, Debug, PartialEq)]

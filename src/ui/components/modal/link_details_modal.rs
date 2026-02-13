@@ -92,14 +92,14 @@ pub fn LinkDetailsModal(
     let mut error = use_signal(|| Option::<String>::None);
 
     // Form state (editable fields)
-    let mut form_url = use_signal(|| String::new());
-    let mut form_source_code_url = use_signal(|| String::new());
-    let mut form_documentation_url = use_signal(|| String::new());
-    let mut form_notes = use_signal(|| String::new());
-    let mut form_categories = use_signal(|| Vec::<Uuid>::new());
-    let mut form_tags = use_signal(|| Vec::<Uuid>::new());
-    let mut form_languages = use_signal(|| Vec::<Uuid>::new());
-    let mut form_licenses = use_signal(|| Vec::<Uuid>::new());
+    let mut form_url = use_signal(String::new);
+    let mut form_source_code_url = use_signal(String::new);
+    let mut form_documentation_url = use_signal(String::new);
+    let mut form_notes = use_signal(String::new);
+    let mut form_categories = use_signal(Vec::<Uuid>::new);
+    let mut form_tags = use_signal(Vec::<Uuid>::new);
+    let mut form_languages = use_signal(Vec::<Uuid>::new);
+    let mut form_licenses = use_signal(Vec::<Uuid>::new);
 
     // Edit tracking
     let mut has_changes = use_signal(|| false);

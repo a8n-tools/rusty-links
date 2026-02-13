@@ -19,6 +19,8 @@ pub mod models;
 pub mod scheduler;
 #[cfg(feature = "server")]
 pub mod scraper;
+#[cfg(all(feature = "server", feature = "standalone"))]
+pub mod security;
 
 // Server functions (available on both client and server)
 pub mod server_functions;

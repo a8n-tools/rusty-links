@@ -6,7 +6,7 @@ pub fn AddCategoryInput(
     on_add: EventHandler<(String, Option<String>)>,
     on_cancel: EventHandler<()>,
 ) -> Element {
-    let mut name = use_signal(|| String::new());
+    let mut name = use_signal(String::new);
     let mut error = use_signal(|| Option::<String>::None);
 
     // Clone parent_id for use in closures

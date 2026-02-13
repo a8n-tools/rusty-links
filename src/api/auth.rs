@@ -1,31 +1,13 @@
 //! Authentication API endpoints
 //!
-//! This module provides REST API endpoints for user authentication:
-//! - POST /api/auth/setup - Create first user (initial setup)
-//! - POST /api/auth/login - Authenticate user and create session
-//! - POST /api/auth/logout - End session and clear cookie
-//! - GET /api/auth/me - Get current authenticated user
-//! - GET /api/auth/check-setup - Check if initial setup is required
+//! Standalone mode: JWT-based auth with register, login, refresh, me, check-setup
+//! SaaS mode: Minimal auth (parent app handles authentication)
 
-use crate::auth::{
-    create_clear_session_cookie, create_session, create_session_cookie, delete_session,
-    get_session, get_session_from_cookies,
-};
 use crate::error::AppError;
-use crate::models::{
-    check_user_exists, create_user, find_user_by_email, verify_password, CreateUser, User,
-};
+use crate::models::{check_user_exists, User};
 use axum::{extract::State, response::IntoResponse, Json};
-use axum_extra::extract::CookieJar;
-use serde::{Deserialize, Serialize};
+use serde::Serialize;
 use sqlx::PgPool;
-
-/// Request body for login endpoint
-#[derive(Debug, Deserialize)]
-pub struct LoginRequest {
-    pub email: String,
-    pub password: String,
-}
 
 /// Response for check-setup endpoint
 #[derive(Debug, Serialize)]
@@ -33,45 +15,45 @@ pub struct CheckSetupResponse {
     pub setup_required: bool,
 }
 
-/// Response for successful authentication
-#[derive(Debug, Serialize)]
-pub struct AuthResponse {
-    pub message: String,
+/// GET /api/auth/check-setup
+pub async fn check_setup_handler(
+    State(pool): State<PgPool>,
+) -> Result<Json<CheckSetupResponse>, AppError> {
+    let user_exists = check_user_exists(&pool).await?;
+
+    tracing::debug!(user_exists = user_exists, "Setup check");
+
+    Ok(Json(CheckSetupResponse {
+        setup_required: !user_exists,
+    }))
 }
 
-/// POST /api/auth/setup
+// ── Standalone mode handlers ──────────────────────────────────────────
+
+#[cfg(feature = "standalone")]
+use crate::auth::jwt::{create_jwt, generate_refresh_token};
+#[cfg(feature = "standalone")]
+use crate::auth::middleware::Claims;
+#[cfg(feature = "standalone")]
+use crate::config::Config;
+#[cfg(feature = "standalone")]
+use crate::models::{create_user, find_user_by_email, verify_password, CreateUser};
+#[cfg(feature = "standalone")]
+use crate::security;
+#[cfg(feature = "standalone")]
+use crate::server_functions::auth::{
+    AuthResponse, LoginRequest, RefreshRequest, SetupRequest,
+};
+
+/// POST /api/auth/setup (standalone)
 ///
 /// Creates the first user account during initial application setup.
-///
-/// # Request Body
-/// ```json
-/// {
-///     "email": "admin@example.com",
-///     "password": "secure_password"
-/// }
-/// ```
-///
-/// # Response
-/// - 201 Created: Returns user object and sets session cookie
-/// - 403 Forbidden: Setup already completed (user exists)
-/// - 400 Bad Request: Invalid email or password
-/// - 409 Conflict: Email already exists
-///
-/// # Security
-/// - Can only be called once (before first user is created)
-/// - After setup, returns 403 Forbidden
-/// - Automatically creates session for new user
-///
-/// # Example
-/// ```bash
-/// curl -X POST http://localhost:8080/api/auth/setup \
-///   -H "Content-Type: application/json" \
-///   -d '{"email":"admin@example.com","password":"secure123"}'
-/// ```
+/// The first user is automatically an admin.
+#[cfg(feature = "standalone")]
 pub async fn setup_handler(
     State(pool): State<PgPool>,
-    jar: CookieJar,
-    Json(request): Json<CreateUser>,
+    State(config): State<Config>,
+    Json(request): Json<SetupRequest>,
 ) -> Result<impl IntoResponse, AppError> {
     tracing::info!(email = %request.email, "Setup request received");
 
@@ -81,61 +63,140 @@ pub async fn setup_handler(
         return Err(AppError::Unauthorized);
     }
 
-    // Create the first user
-    let user = create_user(&pool, request).await?;
+    // Validate password complexity
+    security::validate_password(&request.password).map_err(|msg| {
+        AppError::Validation {
+            field: "password".to_string(),
+            message: msg,
+        }
+    })?;
+
+    // Create the first user (will automatically be admin)
+    let user = User::create(&pool, &request.email, &request.password, &request.name).await?;
     tracing::info!(user_id = %user.id, email = %user.email, "First user created");
 
-    // Create session for the new user
-    let session = create_session(&pool, user.id).await?;
-    let cookie = create_session_cookie(&session.id);
+    // Create JWT + refresh token
+    let token = create_jwt(
+        &user.email,
+        user.id,
+        user.is_admin,
+        &config.jwt_secret,
+        config.jwt_expiry_hours,
+    )
+    .map_err(|e| AppError::Internal(format!("Failed to create JWT: {}", e)))?;
 
-    tracing::info!(
-        user_id = %user.id,
-        session_id = %session.id,
-        "Setup completed successfully"
-    );
+    let refresh_token = generate_refresh_token();
 
-    // Return user info with session cookie
-    // Note: Using (CookieJar, Json) returns 200 OK by default
-    // For 201 CREATED, we'd need to use Response::builder()
-    Ok((jar.add(cookie), Json(user)))
+    // Store refresh token in database
+    let expires_at =
+        chrono::Utc::now() + chrono::Duration::days(config.refresh_token_expiry_days);
+    sqlx::query("INSERT INTO refresh_tokens (user_id, token, expires_at) VALUES ($1, $2, $3)")
+        .bind(user.id)
+        .bind(&refresh_token)
+        .bind(expires_at)
+        .execute(&pool)
+        .await?;
+
+    tracing::info!(user_id = %user.id, "Setup completed successfully");
+
+    Ok(Json(AuthResponse {
+        token,
+        refresh_token,
+        email: user.email,
+        is_admin: user.is_admin,
+    }))
 }
 
-/// POST /api/auth/login
+/// POST /api/auth/register (standalone)
 ///
-/// Authenticates a user with email and password.
+/// Register a new user account.
+#[cfg(feature = "standalone")]
+pub async fn register_handler(
+    State(pool): State<PgPool>,
+    State(config): State<Config>,
+    Json(request): Json<LoginRequest>,
+) -> Result<impl IntoResponse, AppError> {
+    tracing::info!(email = %request.email, "Registration attempt");
+
+    // Check if registration is allowed
+    if !config.allow_registration {
+        return Err(AppError::Forbidden(
+            "Registration is disabled".to_string(),
+        ));
+    }
+
+    // Validate password complexity
+    security::validate_password(&request.password).map_err(|msg| {
+        AppError::Validation {
+            field: "password".to_string(),
+            message: msg,
+        }
+    })?;
+
+    // Create user
+    let user = create_user(
+        &pool,
+        CreateUser {
+            email: request.email.clone(),
+            password: request.password,
+        },
+    )
+    .await?;
+
+    // Create JWT + refresh token
+    let token = create_jwt(
+        &user.email,
+        user.id,
+        user.is_admin,
+        &config.jwt_secret,
+        config.jwt_expiry_hours,
+    )
+    .map_err(|e| AppError::Internal(format!("Failed to create JWT: {}", e)))?;
+
+    let refresh_token = generate_refresh_token();
+
+    let expires_at =
+        chrono::Utc::now() + chrono::Duration::days(config.refresh_token_expiry_days);
+    sqlx::query("INSERT INTO refresh_tokens (user_id, token, expires_at) VALUES ($1, $2, $3)")
+        .bind(user.id)
+        .bind(&refresh_token)
+        .bind(expires_at)
+        .execute(&pool)
+        .await?;
+
+    tracing::info!(user_id = %user.id, email = %user.email, "Registration successful");
+
+    Ok(Json(AuthResponse {
+        token,
+        refresh_token,
+        email: user.email,
+        is_admin: user.is_admin,
+    }))
+}
+
+/// POST /api/auth/login (standalone)
 ///
-/// # Request Body
-/// ```json
-/// {
-///     "email": "user@example.com",
-///     "password": "user_password"
-/// }
-/// ```
-///
-/// # Response
-/// - 200 OK: Returns user object and sets session cookie
-/// - 401 Unauthorized: Invalid email or password
-///
-/// # Security
-/// - Uses constant-time password comparison
-/// - Generic error message to prevent email enumeration
-/// - Logs authentication attempts for security monitoring
-/// - Creates new session on successful login
-///
-/// # Example
-/// ```bash
-/// curl -X POST http://localhost:8080/api/auth/login \
-///   -H "Content-Type: application/json" \
-///   -d '{"email":"user@example.com","password":"password123"}' \
-///   -c cookies.txt
-/// ```
+/// Authenticate user with email and password.
+#[cfg(feature = "standalone")]
 pub async fn login_handler(
     State(pool): State<PgPool>,
-    jar: CookieJar,
+    State(config): State<Config>,
     Json(request): Json<LoginRequest>,
 ) -> Result<impl IntoResponse, AppError> {
     tracing::info!(email = %request.email, "Login attempt");
+
+    // Check account lockout
+    if security::is_account_locked(
+        &pool,
+        &request.email,
+        config.account_lockout_attempts,
+        config.account_lockout_duration_minutes,
+    )
+    .await
+    {
+        tracing::warn!(email = %request.email, "Login attempt on locked account");
+        return Err(AppError::AccountLocked);
+    }
 
     // Find user by email
     let user = find_user_by_email(&pool, &request.email)
@@ -147,6 +208,8 @@ pub async fn login_handler(
 
     // Verify password
     if !verify_password(&request.password, &user.password_hash)? {
+        // Record failed attempt
+        security::record_login_attempt(&pool, &request.email, false).await;
         tracing::warn!(
             email = %request.email,
             user_id = %user.id,
@@ -155,159 +218,161 @@ pub async fn login_handler(
         return Err(AppError::InvalidCredentials);
     }
 
-    // Create new session
-    let session = create_session(&pool, user.id).await?;
-    let cookie = create_session_cookie(&session.id);
+    // Record successful attempt
+    security::record_login_attempt(&pool, &request.email, true).await;
+
+    // Create JWT + refresh token
+    let token = create_jwt(
+        &user.email,
+        user.id,
+        user.is_admin,
+        &config.jwt_secret,
+        config.jwt_expiry_hours,
+    )
+    .map_err(|e| AppError::Internal(format!("Failed to create JWT: {}", e)))?;
+
+    let refresh_token = generate_refresh_token();
+
+    let expires_at =
+        chrono::Utc::now() + chrono::Duration::days(config.refresh_token_expiry_days);
+    sqlx::query("INSERT INTO refresh_tokens (user_id, token, expires_at) VALUES ($1, $2, $3)")
+        .bind(user.id)
+        .bind(&refresh_token)
+        .bind(expires_at)
+        .execute(&pool)
+        .await?;
 
     tracing::info!(
         user_id = %user.id,
         email = %user.email,
-        session_id = %session.id,
         "Login successful"
     );
 
-    // Return user info with session cookie
-    Ok((jar.add(cookie), Json(user)))
+    Ok(Json(AuthResponse {
+        token,
+        refresh_token,
+        email: user.email,
+        is_admin: user.is_admin,
+    }))
 }
 
-/// POST /api/auth/logout
+/// POST /api/auth/refresh (standalone)
 ///
-/// Ends the current session and clears the session cookie.
-///
-/// # Response
-/// - 200 OK: Session deleted successfully
-/// - 401 Unauthorized: No valid session
-///
-/// # Security
-/// - Requires valid session cookie
-/// - Deletes session from database
-/// - Clears session cookie on client
-///
-/// # Example
-/// ```bash
-/// curl -X POST http://localhost:8080/api/auth/logout \
-///   -b cookies.txt \
-///   -c cookies.txt
-/// ```
-pub async fn logout_handler(
+/// Rotate refresh token and issue a new JWT.
+#[cfg(feature = "standalone")]
+pub async fn refresh_handler(
     State(pool): State<PgPool>,
-    jar: CookieJar,
+    State(config): State<Config>,
+    Json(request): Json<RefreshRequest>,
 ) -> Result<impl IntoResponse, AppError> {
-    // Get session ID from cookie
-    let session_id = get_session_from_cookies(&jar).ok_or_else(|| {
-        tracing::debug!("Logout attempt without session cookie");
-        AppError::SessionExpired
-    })?;
+    // Look up the refresh token
+    let row = sqlx::query_as::<_, (uuid::Uuid, uuid::Uuid, chrono::DateTime<chrono::Utc>)>(
+        "SELECT id, user_id, expires_at FROM refresh_tokens WHERE token = $1",
+    )
+    .bind(&request.refresh_token)
+    .fetch_optional(&pool)
+    .await?
+    .ok_or(AppError::SessionExpired)?;
 
-    // Verify session exists
-    let session = get_session(&pool, &session_id).await?.ok_or_else(|| {
-        tracing::debug!(session_id = %session_id, "Logout attempt with invalid session");
-        AppError::SessionExpired
-    })?;
+    let (token_id, user_id, expires_at) = row;
 
-    tracing::info!(
-        user_id = %session.user_id,
-        session_id = %session_id,
-        "Logout request"
-    );
+    // Check expiration
+    if expires_at < chrono::Utc::now() {
+        // Delete expired token
+        sqlx::query("DELETE FROM refresh_tokens WHERE id = $1")
+            .bind(token_id)
+            .execute(&pool)
+            .await?;
+        return Err(AppError::SessionExpired);
+    }
 
-    // Delete session from database
-    delete_session(&pool, &session_id).await?;
+    // Delete old refresh token
+    sqlx::query("DELETE FROM refresh_tokens WHERE id = $1")
+        .bind(token_id)
+        .execute(&pool)
+        .await?;
 
-    // Clear session cookie
-    let cookie = create_clear_session_cookie();
+    // Load user
+    let user = User::find_by_id(&pool, user_id)
+        .await?
+        .ok_or(AppError::SessionExpired)?;
 
-    tracing::info!(
-        user_id = %session.user_id,
-        session_id = %session_id,
-        "Logout successful"
-    );
+    // Create new JWT + refresh token
+    let token = create_jwt(
+        &user.email,
+        user.id,
+        user.is_admin,
+        &config.jwt_secret,
+        config.jwt_expiry_hours,
+    )
+    .map_err(|e| AppError::Internal(format!("Failed to create JWT: {}", e)))?;
 
-    Ok((
-        jar.add(cookie),
-        Json(AuthResponse {
-            message: "Logged out successfully".to_string(),
-        }),
-    ))
+    let new_refresh_token = generate_refresh_token();
+
+    let new_expires_at =
+        chrono::Utc::now() + chrono::Duration::days(config.refresh_token_expiry_days);
+    sqlx::query("INSERT INTO refresh_tokens (user_id, token, expires_at) VALUES ($1, $2, $3)")
+        .bind(user.id)
+        .bind(&new_refresh_token)
+        .bind(new_expires_at)
+        .execute(&pool)
+        .await?;
+
+    Ok(Json(AuthResponse {
+        token,
+        refresh_token: new_refresh_token,
+        email: user.email,
+        is_admin: user.is_admin,
+    }))
 }
 
-/// GET /api/auth/me
+/// GET /api/auth/me (standalone)
 ///
 /// Returns information about the currently authenticated user.
-///
-/// # Response
-/// - 200 OK: Returns user object
-/// - 401 Unauthorized: No valid session
-///
-/// # Security
-/// - Requires valid session cookie
-/// - Verifies session exists in database
-/// - Loads fresh user data from database
-///
-/// # Example
-/// ```bash
-/// curl http://localhost:8080/api/auth/me \
-///   -b cookies.txt
-/// ```
+#[cfg(feature = "standalone")]
 pub async fn me_handler(
     State(pool): State<PgPool>,
-    jar: CookieJar,
-) -> Result<Json<User>, AppError> {
-    // Get session ID from cookie
-    let session_id = get_session_from_cookies(&jar).ok_or_else(|| {
-        tracing::debug!("Request to /me without session cookie");
-        AppError::SessionExpired
-    })?;
+    claims: Claims,
+) -> Result<Json<crate::server_functions::auth::UserInfo>, AppError> {
+    let user_id: uuid::Uuid = claims
+        .user_id
+        .parse()
+        .map_err(|_| AppError::SessionExpired)?;
 
-    // Verify session exists
-    let session = get_session(&pool, &session_id).await?.ok_or_else(|| {
-        tracing::debug!(session_id = %session_id, "Invalid session");
-        AppError::SessionExpired
-    })?;
-
-    // Load user from database
-    let user = sqlx::query_as::<_, User>(
-        "SELECT id, email, password_hash, name, created_at FROM users WHERE id = $1",
-    )
-    .bind(session.user_id)
-    .fetch_one(&pool)
-    .await?;
+    let user = User::find_by_id(&pool, user_id)
+        .await?
+        .ok_or(AppError::SessionExpired)?;
 
     tracing::debug!(user_id = %user.id, "User info requested");
 
-    Ok(Json(user))
+    Ok(Json(crate::server_functions::auth::UserInfo {
+        id: user.id.to_string(),
+        email: user.email,
+        name: user.name,
+        is_admin: user.is_admin,
+    }))
 }
 
-/// GET /api/auth/check-setup
-///
-/// Checks if initial application setup is required.
-///
-/// # Response
-/// ```json
-/// {
-///     "setup_required": true
-/// }
-/// ```
-///
-/// Returns `setup_required: true` if no users exist (setup needed).
-/// Returns `setup_required: false` if at least one user exists (setup complete).
-///
-/// # Usage
-/// Frontend can call this endpoint to determine whether to show
-/// the setup page or the login page.
-///
-/// # Example
-/// ```bash
-/// curl http://localhost:8080/api/auth/check-setup
-/// ```
-pub async fn check_setup_handler(
-    State(pool): State<PgPool>,
-) -> Result<Json<CheckSetupResponse>, AppError> {
-    let user_exists = check_user_exists(&pool).await?;
+// ── SaaS mode handlers ───────────────────────────────────────────────
 
-    tracing::debug!(user_exists = user_exists, "Setup check");
+#[cfg(feature = "saas")]
+use crate::auth::saas_auth;
+#[cfg(feature = "saas")]
+use axum_extra::extract::CookieJar;
 
-    Ok(Json(CheckSetupResponse {
-        setup_required: !user_exists,
+/// GET /api/auth/me (saas)
+///
+/// Returns user info from the parent app's cookie.
+#[cfg(feature = "saas")]
+pub async fn me_handler(
+    jar: CookieJar,
+) -> Result<Json<crate::server_functions::auth::UserInfo>, AppError> {
+    let claims = saas_auth::get_user_from_cookie(&jar).ok_or(AppError::SessionExpired)?;
+
+    Ok(Json(crate::server_functions::auth::UserInfo {
+        id: claims.user_id,
+        email: claims.email.unwrap_or_default(),
+        name: String::new(),
+        is_admin: false,
     }))
 }

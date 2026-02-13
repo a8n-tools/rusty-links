@@ -184,10 +184,10 @@ pub fn AddLinkPage(initial_url: Option<String>) -> Element {
     let mut can_retry_preview = use_signal(|| false);
 
     // Categorization state
-    let mut selected_categories = use_signal(|| Vec::<Uuid>::new());
-    let mut selected_tags = use_signal(|| Vec::<Uuid>::new());
-    let mut selected_languages = use_signal(|| Vec::<Uuid>::new());
-    let mut selected_licenses = use_signal(|| Vec::<Uuid>::new());
+    let mut selected_categories = use_signal(Vec::<Uuid>::new);
+    let mut selected_tags = use_signal(Vec::<Uuid>::new);
+    let mut selected_languages = use_signal(Vec::<Uuid>::new);
+    let mut selected_licenses = use_signal(Vec::<Uuid>::new);
 
     // Track auto-suggested items
     let mut auto_suggested_languages = use_signal(|| false);
@@ -289,7 +289,7 @@ pub fn AddLinkPage(initial_url: Option<String>) -> Element {
         }
 
         let url = url_input();
-        let nav = nav.clone();
+        let nav = nav;
 
         spawn(async move {
             error.set(None);
@@ -346,7 +346,7 @@ pub fn AddLinkPage(initial_url: Option<String>) -> Element {
         let tags = selected_tags();
         let languages = selected_languages();
         let licenses = selected_licenses();
-        let nav = nav.clone();
+        let nav = nav;
 
         spawn(async move {
             creating.set(true);

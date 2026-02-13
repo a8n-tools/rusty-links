@@ -62,6 +62,9 @@ where
                 {
                     tokio::time::sleep(std::time::Duration::from_millis(delay)).await;
                 }
+
+                #[cfg(not(any(target_arch = "wasm32", feature = "server")))]
+                let _ = delay;
             }
         }
     }

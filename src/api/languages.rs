@@ -1,8 +1,8 @@
 //! Language management API endpoints
 
-use crate::auth::{get_session, get_session_from_cookies};
+use crate::auth::middleware::AuthenticatedUser;
 use crate::error::AppError;
-use crate::models::{Language, User};
+use crate::models::Language;
 use axum::{
     extract::{Path, State},
     http::StatusCode,
@@ -10,25 +10,9 @@ use axum::{
     routing::get,
     Json, Router,
 };
-use axum_extra::extract::CookieJar;
 use serde::{Deserialize, Serialize};
 use sqlx::PgPool;
 use uuid::Uuid;
-
-async fn get_authenticated_user(pool: &PgPool, jar: &CookieJar) -> Result<User, AppError> {
-    let session_id = get_session_from_cookies(jar).ok_or(AppError::SessionExpired)?;
-    let session = get_session(pool, &session_id)
-        .await?
-        .ok_or(AppError::SessionExpired)?;
-
-    sqlx::query_as::<_, User>(
-        "SELECT id, email, password_hash, name, created_at FROM users WHERE id = $1",
-    )
-    .bind(session.user_id)
-    .fetch_one(pool)
-    .await
-    .map_err(AppError::from)
-}
 
 #[derive(Debug, Serialize)]
 struct LanguageResponse {
@@ -40,11 +24,8 @@ struct LanguageResponse {
 /// GET /api/languages
 async fn list_languages(
     State(pool): State<PgPool>,
-    jar: CookieJar,
+    auth: AuthenticatedUser,
 ) -> Result<Json<Vec<LanguageResponse>>, AppError> {
-    let user = get_authenticated_user(&pool, &jar).await?;
-
-    // Fetch languages with link counts
     let languages = sqlx::query_as::<_, (Uuid, String, i64)>(
         r#"
         SELECT l.id, l.name, COUNT(ll.link_id) as link_count
@@ -56,7 +37,7 @@ async fn list_languages(
         ORDER BY l.name
         "#,
     )
-    .bind(user.id)
+    .bind(auth.user_id)
     .fetch_all(&pool)
     .await?;
 
@@ -80,15 +61,14 @@ struct CreateLanguageRequest {
 /// POST /api/languages
 async fn create_language(
     State(pool): State<PgPool>,
-    jar: CookieJar,
+    auth: AuthenticatedUser,
     Json(request): Json<CreateLanguageRequest>,
 ) -> Result<impl IntoResponse, AppError> {
-    let user = get_authenticated_user(&pool, &jar).await?;
-    let language = Language::create(&pool, user.id, &request.name).await?;
+    let language = Language::create(&pool, auth.user_id, &request.name).await?;
     let response = LanguageResponse {
         id: language.id,
         name: language.name,
-        link_count: 0, // New language has no links yet
+        link_count: 0,
     };
     Ok((StatusCode::CREATED, Json(response)))
 }
@@ -96,12 +76,9 @@ async fn create_language(
 /// DELETE /api/languages/:id
 async fn delete_language(
     State(pool): State<PgPool>,
-    jar: CookieJar,
+    auth: AuthenticatedUser,
     Path(id): Path<Uuid>,
 ) -> Result<StatusCode, AppError> {
-    let user = get_authenticated_user(&pool, &jar).await?;
-
-    // Check if it's a global language
     let lang = sqlx::query_as::<_, Language>("SELECT * FROM languages WHERE id = $1")
         .bind(id)
         .fetch_optional(&pool)
@@ -112,11 +89,11 @@ async fn delete_language(
         return Err(AppError::forbidden("Cannot delete global language"));
     }
 
-    Language::delete(&pool, id, user.id).await?;
+    Language::delete(&pool, id, auth.user_id).await?;
     Ok(StatusCode::NO_CONTENT)
 }
 
-pub fn create_router() -> Router<PgPool> {
+pub fn create_router() -> Router<super::AppState> {
     Router::new()
         .route("/", get(list_languages).post(create_language))
         .route("/{id}", axum::routing::delete(delete_language))

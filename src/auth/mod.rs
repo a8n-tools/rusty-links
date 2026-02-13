@@ -1,19 +1,15 @@
 //! Authentication module for Rusty Links
 //!
-//! This module provides authentication and session management functionality.
+//! This module provides authentication functionality using JWT tokens.
 //!
 //! # Modules
 //!
-//! - `session` - Session management with secure cookies
-//!
-//! Future modules will include:
-//! - `middleware` - Authentication middleware for protected routes
-//! - `handlers` - Authentication API endpoints (login, logout, etc.)
+//! - `jwt` - JWT token creation and validation (standalone mode)
+//! - `middleware` - Axum extractors for authentication
+//! - `saas_auth` - SaaS mode authentication via parent app cookies
 
-pub mod session;
-
-// Re-export commonly used types for convenience
-pub use session::{
-    create_clear_session_cookie, create_session, create_session_cookie, delete_session,
-    get_session, get_session_from_cookies,
-};
+#[cfg(feature = "standalone")]
+pub mod jwt;
+pub mod middleware;
+#[cfg(feature = "saas")]
+pub mod saas_auth;

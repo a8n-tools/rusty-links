@@ -11,6 +11,19 @@ pub struct Config {
     pub update_interval_hours: u32,
     pub batch_size: usize,
     pub jitter_percent: u8,
+    // JWT configuration (standalone mode)
+    #[cfg(feature = "standalone")]
+    pub jwt_secret: String,
+    #[cfg(feature = "standalone")]
+    pub jwt_expiry_hours: i64,
+    #[cfg(feature = "standalone")]
+    pub refresh_token_expiry_days: i64,
+    #[cfg(feature = "standalone")]
+    pub account_lockout_attempts: i32,
+    #[cfg(feature = "standalone")]
+    pub account_lockout_duration_minutes: i64,
+    #[cfg(feature = "standalone")]
+    pub allow_registration: bool,
 }
 
 impl Config {
@@ -112,6 +125,73 @@ impl Config {
             ));
         }
 
+        // JWT configuration (standalone mode only)
+        #[cfg(feature = "standalone")]
+        let jwt_secret = std::env::var("JWT_SECRET").unwrap_or_else(|_| {
+            tracing::warn!(
+                "JWT_SECRET not set - using random secret (tokens will not survive restarts)"
+            );
+            use rand::Rng;
+            let bytes: [u8; 32] = rand::thread_rng().gen();
+            base64::Engine::encode(&base64::engine::general_purpose::URL_SAFE_NO_PAD, bytes)
+        });
+
+        #[cfg(feature = "standalone")]
+        let jwt_expiry_hours = std::env::var("JWT_EXPIRY")
+            .ok()
+            .map(|v| {
+                v.parse::<i64>().map_err(|e| {
+                    AppError::Configuration(format!("Failed to parse JWT_EXPIRY: {}", e))
+                })
+            })
+            .transpose()?
+            .unwrap_or(1);
+
+        #[cfg(feature = "standalone")]
+        let refresh_token_expiry_days = std::env::var("REFRESH_TOKEN_EXPIRY")
+            .ok()
+            .map(|v| {
+                v.parse::<i64>().map_err(|e| {
+                    AppError::Configuration(format!("Failed to parse REFRESH_TOKEN_EXPIRY: {}", e))
+                })
+            })
+            .transpose()?
+            .unwrap_or(7);
+
+        #[cfg(feature = "standalone")]
+        let account_lockout_attempts = std::env::var("ACCOUNT_LOCKOUT_ATTEMPTS")
+            .ok()
+            .map(|v| {
+                v.parse::<i32>().map_err(|e| {
+                    AppError::Configuration(format!(
+                        "Failed to parse ACCOUNT_LOCKOUT_ATTEMPTS: {}",
+                        e
+                    ))
+                })
+            })
+            .transpose()?
+            .unwrap_or(5);
+
+        #[cfg(feature = "standalone")]
+        let account_lockout_duration_minutes = std::env::var("ACCOUNT_LOCKOUT_DURATION")
+            .ok()
+            .map(|v| {
+                v.parse::<i64>().map_err(|e| {
+                    AppError::Configuration(format!(
+                        "Failed to parse ACCOUNT_LOCKOUT_DURATION: {}",
+                        e
+                    ))
+                })
+            })
+            .transpose()?
+            .unwrap_or(30);
+
+        #[cfg(feature = "standalone")]
+        let allow_registration = std::env::var("ALLOW_REGISTRATION")
+            .ok()
+            .map(|v| v == "true" || v == "1")
+            .unwrap_or(true);
+
         Ok(Config {
             database_url,
             app_port,
@@ -120,6 +200,18 @@ impl Config {
             update_interval_hours,
             batch_size,
             jitter_percent,
+            #[cfg(feature = "standalone")]
+            jwt_secret,
+            #[cfg(feature = "standalone")]
+            jwt_expiry_hours,
+            #[cfg(feature = "standalone")]
+            refresh_token_expiry_days,
+            #[cfg(feature = "standalone")]
+            account_lockout_attempts,
+            #[cfg(feature = "standalone")]
+            account_lockout_duration_minutes,
+            #[cfg(feature = "standalone")]
+            allow_registration,
         })
     }
 
@@ -152,6 +244,18 @@ mod tests {
             update_interval_hours: 24,
             batch_size: 50,
             jitter_percent: 20,
+            #[cfg(feature = "standalone")]
+            jwt_secret: "test_secret".to_string(),
+            #[cfg(feature = "standalone")]
+            jwt_expiry_hours: 1,
+            #[cfg(feature = "standalone")]
+            refresh_token_expiry_days: 7,
+            #[cfg(feature = "standalone")]
+            account_lockout_attempts: 5,
+            #[cfg(feature = "standalone")]
+            account_lockout_duration_minutes: 30,
+            #[cfg(feature = "standalone")]
+            allow_registration: true,
         };
 
         let masked = config.masked_database_url();

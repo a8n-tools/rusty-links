@@ -20,7 +20,7 @@ pub fn App() -> Element {
         // The Stylesheet component inserts a style link into the head of the document
         Stylesheet {
             // Urls are relative to your Cargo.toml file
-            href: asset!("/assets/tailwind.css")
+            href: asset!("/tailwind.css")
         }
         Router::<Route> {
             config: || RouterConfig::default().on_update(|_| None)
@@ -70,6 +70,14 @@ async fn check_home_state() -> HomeState {
         Err(e) => return HomeState::Error(e.to_string()),
     }
 
+    // In standalone mode, skip the network call if no token is stored
+    #[cfg(feature = "standalone")]
+    {
+        if !crate::ui::auth_state::is_authenticated() {
+            return HomeState::NeedsLogin;
+        }
+    }
+
     // Check if user is logged in by calling /api/auth/me
     match http::get_response("/api/auth/me").await {
         Ok(response) if response.is_success() => HomeState::LoggedIn,
@@ -80,7 +88,7 @@ async fn check_home_state() -> HomeState {
 #[component]
 fn Home() -> Element {
     let nav = navigator();
-    let home_state = use_resource(|| check_home_state());
+    let home_state = use_resource(check_home_state);
 
     let result = home_state.read().clone();
 

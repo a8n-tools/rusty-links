@@ -8,7 +8,7 @@ use dioxus::prelude::*;
 
 #[component]
 pub fn TagsPage() -> Element {
-    let mut tags = use_signal(|| Vec::<TagItem>::new());
+    let mut tags = use_signal(Vec::<TagItem>::new);
     let mut loading = use_signal(|| true);
     let mut error = use_signal(|| Option::<String>::None);
 

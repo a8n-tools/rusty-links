@@ -24,6 +24,7 @@ struct PaginatedLinksResponse {
     total_pages: u32,
 }
 
+#[allow(clippy::too_many_arguments)]
 fn build_links_query(
     page: u32,
     per_page: u32,
@@ -66,6 +67,7 @@ fn build_links_query(
     format!("/api/links?{}", params.join("&"))
 }
 
+#[allow(clippy::too_many_arguments)]
 async fn fetch_links(
     page: u32,
     per_page: u32,
@@ -147,7 +149,7 @@ pub fn LinksListPage() -> Element {
     let nav = navigator();
 
     // State for links data
-    let mut links = use_signal(|| Vec::<Link>::new());
+    let mut links = use_signal(Vec::<Link>::new);
     let mut initial_load = use_signal(|| true); // Only true for first load
     let mut error = use_signal(|| Option::<String>::None);
 
@@ -162,20 +164,20 @@ pub fn LinksListPage() -> Element {
     let mut sort_order = use_signal(|| "desc".to_string());
 
     // Search state with debouncing (300ms delay)
-    let mut search_query = use_signal(|| String::new());
+    let mut search_query = use_signal(String::new);
     let debounced_search = use_debounced(search_query, 300);
 
     // Filter state
-    let mut selected_languages = use_signal(|| Vec::<Uuid>::new());
-    let mut selected_licenses = use_signal(|| Vec::<Uuid>::new());
-    let mut selected_categories = use_signal(|| Vec::<Uuid>::new());
-    let mut selected_tags = use_signal(|| Vec::<Uuid>::new());
+    let mut selected_languages = use_signal(Vec::<Uuid>::new);
+    let mut selected_licenses = use_signal(Vec::<Uuid>::new);
+    let mut selected_categories = use_signal(Vec::<Uuid>::new);
+    let mut selected_tags = use_signal(Vec::<Uuid>::new);
 
     // Filter options - memoized to prevent unnecessary updates
-    let mut languages = use_signal(|| Vec::<FilterOption>::new());
-    let mut licenses = use_signal(|| Vec::<FilterOption>::new());
-    let mut categories = use_signal(|| Vec::<FilterOption>::new());
-    let mut tags = use_signal(|| Vec::<FilterOption>::new());
+    let mut languages = use_signal(Vec::<FilterOption>::new);
+    let mut licenses = use_signal(Vec::<FilterOption>::new);
+    let mut categories = use_signal(Vec::<FilterOption>::new);
+    let mut tags = use_signal(Vec::<FilterOption>::new);
 
     // Global paste handler - listen for paste events anywhere in the document
     // Navigates to /links/add when a URL is pasted (except when in an input field)

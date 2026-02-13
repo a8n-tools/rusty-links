@@ -5,9 +5,9 @@ use dioxus::prelude::*;
 
 #[component]
 pub fn Setup() -> Element {
-    let mut email = use_signal(|| String::new());
-    let mut password = use_signal(|| String::new());
-    let mut name = use_signal(|| String::new());
+    let mut email = use_signal(String::new);
+    let mut password = use_signal(String::new);
+    let mut name = use_signal(String::new);
     let mut loading = use_signal(|| false);
     let mut error = use_signal(|| Option::<String>::None);
     let nav = navigator();
@@ -45,12 +45,24 @@ pub fn Setup() -> Element {
                 name: name_val.clone(),
             };
 
-            // Use REST API for setup (it properly sets cookies)
             let response = http::post_response("/api/auth/setup", &request).await;
 
             match response {
                 Ok(resp) => {
                     if resp.is_success() {
+                        // Parse auth response and store tokens
+                        #[cfg(feature = "standalone")]
+                        {
+                            if let Ok(auth_resp) =
+                                resp.json::<crate::server_functions::auth::AuthResponse>()
+                            {
+                                crate::ui::auth_state::save_auth(
+                                    &auth_resp.token,
+                                    &auth_resp.refresh_token,
+                                    &auth_resp.email,
+                                );
+                            }
+                        }
                         // Setup successful, redirect to links page
                         nav.push(Route::LinksPage {});
                     } else {

@@ -76,21 +76,21 @@ struct Filters {
 
 #[component]
 pub fn Links() -> Element {
-    let mut links = use_signal(|| Vec::<Link>::new());
+    let mut links = use_signal(Vec::<Link>::new);
     let mut loading = use_signal(|| true);
     let mut error = use_signal(|| Option::<String>::None);
 
     // Form state
     let mut show_form = use_signal(|| false);
     let mut editing_link_id = use_signal(|| Option::<String>::None);
-    let mut form_url = use_signal(|| String::new());
-    let mut form_title = use_signal(|| String::new());
-    let mut form_description = use_signal(|| String::new());
+    let mut form_url = use_signal(String::new);
+    let mut form_title = use_signal(String::new);
+    let mut form_description = use_signal(String::new);
     let mut form_status = use_signal(|| "active".to_string());
-    let mut form_categories = use_signal(|| Vec::<Uuid>::new());
-    let mut form_tags = use_signal(|| Vec::<Uuid>::new());
-    let mut form_languages = use_signal(|| Vec::<Uuid>::new());
-    let mut form_licenses = use_signal(|| Vec::<Uuid>::new());
+    let mut form_categories = use_signal(Vec::<Uuid>::new);
+    let mut form_tags = use_signal(Vec::<Uuid>::new);
+    let mut form_languages = use_signal(Vec::<Uuid>::new);
+    let mut form_licenses = use_signal(Vec::<Uuid>::new);
     let form_loading = use_signal(|| false);
     let form_scraping = use_signal(|| false);
     let mut form_error = use_signal(|| Option::<String>::None);
@@ -107,13 +107,13 @@ pub fn Links() -> Element {
     let mut show_filters = use_signal(|| false);
 
     // Filter options
-    let mut categories = use_signal(|| Vec::<CategoryInfo>::new());
-    let mut tags = use_signal(|| Vec::<TagInfo>::new());
-    let mut languages = use_signal(|| Vec::<LanguageInfo>::new());
-    let mut licenses = use_signal(|| Vec::<LicenseInfo>::new());
+    let mut categories = use_signal(Vec::<CategoryInfo>::new);
+    let mut tags = use_signal(Vec::<TagInfo>::new);
+    let mut languages = use_signal(Vec::<LanguageInfo>::new);
+    let mut licenses = use_signal(Vec::<LicenseInfo>::new);
 
     // Search state
-    let mut search_query = use_signal(|| String::new());
+    let mut search_query = use_signal(String::new);
 
     // Sort state
     let mut sort_by = use_signal(|| "created_at".to_string());
@@ -126,7 +126,7 @@ pub fn Links() -> Element {
 
     // Selection state
     let mut selection_mode = use_signal(|| false);
-    let mut selected_ids = use_signal(|| HashSet::<String>::new());
+    let mut selected_ids = use_signal(HashSet::<String>::new);
 
     // Keyboard shortcuts state
     let mut show_shortcuts_help = use_signal(|| false);
@@ -373,7 +373,7 @@ pub fn Links() -> Element {
                                 option { value: "repo_unavailable", "Repo Unavailable" }
                             }
                             button {
-                                class: if selection_mode() { "btn btn-secondary" } else { "btn btn-secondary" },
+                                class: "btn btn-secondary",
                                 onclick: move |_| {
                                     selection_mode.set(!selection_mode());
                                     if !selection_mode() {
@@ -1018,6 +1018,7 @@ pub fn Links() -> Element {
 }
 
 #[derive(Debug, Deserialize)]
+#[allow(dead_code)]
 struct ScrapeResponse {
     title: Option<String>,
     description: Option<String>,

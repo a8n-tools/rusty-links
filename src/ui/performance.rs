@@ -33,6 +33,7 @@ pub fn use_debounced<T: Clone + PartialEq + 'static>(
     source: Signal<T>,
     delay_ms: u64,
 ) -> Signal<T> {
+    #[allow(clippy::redundant_closure)]
     let mut debounced = use_signal(|| source());
 
     use_effect(move || {

@@ -1,15 +1,7 @@
 //! API endpoints for Rusty Links
-//!
-//! This module provides REST API endpoints for the application.
-//!
-//! # Modules
-//!
-//! - `auth` - Authentication endpoints (login, logout, setup, etc.)
-//! - `links` - Link management endpoints
-//! - `categories` - Category management endpoints
-//! - `tags` - Tag management endpoints
-//! - `health` - Health check endpoints
 
+#[cfg(feature = "standalone")]
+pub mod admin;
 pub mod auth;
 pub mod categories;
 pub mod health;
@@ -20,56 +12,42 @@ pub mod scrape;
 pub mod tags;
 
 use axum::{
-    routing::{get, post},
+    routing::{delete, get, post},
     Router,
 };
 use sqlx::PgPool;
 use std::sync::atomic::AtomicBool;
 use std::sync::Arc;
 
+use crate::config::Config;
+
 /// Shared application state
 #[derive(Clone)]
 pub struct AppState {
     pub pool: PgPool,
+    pub config: Config,
     pub scheduler_shutdown: Arc<AtomicBool>,
 }
 
-// Allow extracting PgPool from AppState for routes that only need the pool
+// Allow extracting PgPool from AppState
 impl axum::extract::FromRef<AppState> for PgPool {
     fn from_ref(state: &AppState) -> PgPool {
         state.pool.clone()
     }
 }
 
+// Allow extracting Config from AppState (needed by JWT middleware)
+impl axum::extract::FromRef<AppState> for Config {
+    fn from_ref(state: &AppState) -> Config {
+        state.config.clone()
+    }
+}
+
 /// Create the main API router with all endpoints
-///
-/// This function creates an Axum router with all API endpoints
-/// mounted at their respective paths.
-///
-/// # Routes
-///
-/// ## Authentication (`/api/auth`)
-/// - POST /api/auth/setup - Create first user
-/// - POST /api/auth/login - Login with email/password
-/// - POST /api/auth/logout - Logout and clear session
-/// - GET /api/auth/me - Get current user
-/// - GET /api/auth/check-setup - Check if setup is required
-///
-/// ## Links (`/api/links`)
-/// - POST /api/links - Create a new link
-/// - GET /api/links - List all links
-///
-/// ## Health (`/api/health`)
-/// - GET /api/health - General health check
-/// - GET /api/health/database - Database connectivity check
-/// - GET /api/health/scheduler - Scheduler status check
-///
-/// # State
-///
-/// The router requires an `AppState` containing database pool and scheduler shutdown handle.
-pub fn create_router(pool: PgPool, scheduler_shutdown: Arc<AtomicBool>) -> Router {
+pub fn create_router(pool: PgPool, config: Config, scheduler_shutdown: Arc<AtomicBool>) -> Router {
     let state = AppState {
         pool: pool.clone(),
+        config,
         scheduler_shutdown,
     };
 
@@ -78,19 +56,41 @@ pub fn create_router(pool: PgPool, scheduler_shutdown: Arc<AtomicBool>) -> Route
         .route("/health", get(health::health))
         .route("/health/database", get(health::database_health))
         .route("/health/scheduler", get(health::scheduler_health))
-        .with_state(state);
+        .with_state(state.clone());
 
-    // Create auth router
-    let auth_router = Router::new()
-        .route("/setup", post(auth::setup_handler))
-        .route("/login", post(auth::login_handler))
-        .route("/logout", post(auth::logout_handler))
-        .route("/me", get(auth::me_handler))
-        .route("/check-setup", get(auth::check_setup_handler));
+    // Create auth router (feature-gated)
+    #[cfg(feature = "standalone")]
+    let auth_router = {
+        Router::new()
+            .route("/setup", post(auth::setup_handler))
+            .route("/register", post(auth::register_handler))
+            .route("/login", post(auth::login_handler))
+            .route("/refresh", post(auth::refresh_handler))
+            .route("/me", get(auth::me_handler))
+            .route("/check-setup", get(auth::check_setup_handler))
+    };
+
+    #[cfg(all(feature = "saas", not(feature = "standalone")))]
+    let auth_router = {
+        Router::new()
+            .route("/me", get(auth::me_handler))
+            .route("/check-setup", get(auth::check_setup_handler))
+    };
+
+    #[cfg(not(any(feature = "standalone", feature = "saas")))]
+    let auth_router = {
+        Router::new().route("/check-setup", get(auth::check_setup_handler))
+    };
+
+    // Create admin router (standalone only)
+    #[cfg(feature = "standalone")]
+    let admin_router = Router::new()
+        .route("/users", get(admin::list_users))
+        .route("/users/{user_id}", delete(admin::delete_user))
+        .route("/users/{user_id}/promote", post(admin::promote_user));
 
     // Create main API router
-    // Health routes use AppState, other routes use PgPool
-    Router::new()
+    let mut router = Router::new()
         .merge(health_router)
         .nest("/auth", auth_router)
         .nest("/links", links::create_router())
@@ -98,6 +98,12 @@ pub fn create_router(pool: PgPool, scheduler_shutdown: Arc<AtomicBool>) -> Route
         .nest("/tags", tags::create_router())
         .nest("/languages", languages::create_router())
         .nest("/licenses", licenses::create_router())
-        .nest("/scrape", scrape::create_router())
-        .with_state(pool)
+        .nest("/scrape", scrape::create_router());
+
+    #[cfg(feature = "standalone")]
+    {
+        router = router.nest("/admin", admin_router);
+    }
+
+    router.with_state(state)
 }
