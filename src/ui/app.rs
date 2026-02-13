@@ -20,7 +20,7 @@ pub fn App() -> Element {
         // The Stylesheet component inserts a style link into the head of the document
         Stylesheet {
             // Urls are relative to your Cargo.toml file
-            href: asset!("/tailwind.css")
+            href: asset!("/assets/tailwind.css")
         }
         Router::<Route> {
             config: || RouterConfig::default().on_update(|_| None)

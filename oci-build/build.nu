@@ -76,7 +76,7 @@ def build-stage []: any -> any {
     ^buildah copy $builder ($project_root | path join "src") ($build_dir | path join "src")
 
     # Copy additional files if they exist
-    ["build.rs", ".cargo", "benches", "examples", "tests", "templates", "migrations"]
+    ["build.rs", ".cargo", "benches", "examples", "tests", "templates", "migrations", "tailwind.css"]
     | each {|it|
         let item_path = ($project_root | path join $it)
         if ($item_path | path exists) {
@@ -84,6 +84,9 @@ def build-stage []: any -> any {
             ^buildah copy $builder $item_path ($build_dir | path join $it)
         }
     }
+
+    # Ensure assets/tailwind.css exists for asset!() macro
+    ^buildah run $builder -- sh -c $"mkdir -p ($build_dir)/assets && cp ($build_dir)/tailwind.css ($build_dir)/assets/tailwind.css"
 
     # Build the application
     log info $"[build-stage] Building Rust application with flags: ($cargo_flags)..."
