@@ -88,7 +88,7 @@ async fn check_home_state() -> HomeState {
 #[component]
 fn Home() -> Element {
     let nav = navigator();
-    let home_state = use_resource(|| check_home_state());
+    let home_state = use_resource(check_home_state);
 
     let result = home_state.read().clone();
 

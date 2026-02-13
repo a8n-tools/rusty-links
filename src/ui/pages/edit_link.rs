@@ -189,7 +189,7 @@ pub fn EditLinkPage(link_id: Uuid) -> Element {
 
     // Handle save
     let do_save = move || {
-        let nav = nav.clone();
+        let nav = nav;
         spawn(async move {
             saving.set(true);
             save_error.set(None);

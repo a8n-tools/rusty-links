@@ -289,7 +289,7 @@ pub fn AddLinkPage(initial_url: Option<String>) -> Element {
         }
 
         let url = url_input();
-        let nav = nav.clone();
+        let nav = nav;
 
         spawn(async move {
             error.set(None);
@@ -346,7 +346,7 @@ pub fn AddLinkPage(initial_url: Option<String>) -> Element {
         let tags = selected_tags();
         let languages = selected_languages();
         let licenses = selected_licenses();
-        let nav = nav.clone();
+        let nav = nav;
 
         spawn(async move {
             creating.set(true);

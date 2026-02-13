@@ -186,7 +186,7 @@ pub fn LinksTable(
                             key: "{link.id}",
                             class: "link-row",
                             onclick: move |_| {
-                                on_row_click.call(link.id.clone());
+                                on_row_click.call(link.id);
                             },
 
                             // Link icon/logo

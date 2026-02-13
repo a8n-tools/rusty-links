@@ -373,7 +373,7 @@ pub fn Links() -> Element {
                                 option { value: "repo_unavailable", "Repo Unavailable" }
                             }
                             button {
-                                class: if selection_mode() { "btn btn-secondary" } else { "btn btn-secondary" },
+                                class: "btn btn-secondary",
                                 onclick: move |_| {
                                     selection_mode.set(!selection_mode());
                                     if !selection_mode() {
@@ -1018,6 +1018,7 @@ pub fn Links() -> Element {
 }
 
 #[derive(Debug, Deserialize)]
+#[allow(dead_code)]
 struct ScrapeResponse {
     title: Option<String>,
     description: Option<String>,

@@ -24,6 +24,7 @@ struct PaginatedLinksResponse {
     total_pages: u32,
 }
 
+#[allow(clippy::too_many_arguments)]
 fn build_links_query(
     page: u32,
     per_page: u32,
@@ -66,6 +67,7 @@ fn build_links_query(
     format!("/api/links?{}", params.join("&"))
 }
 
+#[allow(clippy::too_many_arguments)]
 async fn fetch_links(
     page: u32,
     per_page: u32,
