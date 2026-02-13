@@ -204,18 +204,14 @@ def publish-image []: any -> any {
     let runtime = $config.runtime.id
 
     log info "========================================\n"
-    log info "[publish-image] Committing and publishing image"
+    log info "[publish-image] Committing image to local buildah storage"
 
     let image_name = $"($config.published.name):($config.published.version)"
-    let docker_image_name = $"docker-daemon:($image_name)"
 
-    # Commit the container as an image
+    # Commit the container as an image in buildah's local storage
+    # The redhat-actions/push-to-registry action will push it to the registry
     let image = (^buildah commit --format docker $runtime $image_name)
     log info $"[publish-image] Committed image: ($image_name)"
-
-    # Push to Docker daemon
-    ^buildah push $image $docker_image_name
-    log info $"[publish-image] Pushed image to Docker: ($docker_image_name)"
 
     # Cleanup runtime container
     ^buildah rm $runtime
