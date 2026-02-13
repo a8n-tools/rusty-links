@@ -47,8 +47,8 @@ WORKDIR /app
 # Copy binary from builder stage
 COPY --from=builder /app/target/release/rusty-links .
 
-# Copy static assets
-COPY --from=builder /app/assets ./assets
+# Create assets directory (populated at runtime by Dioxus)
+RUN mkdir -p assets
 
 # Copy migrations directory (needed for SQLx)
 COPY --from=builder /app/migrations ./migrations
