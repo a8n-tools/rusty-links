@@ -1,6 +1,6 @@
 #!/usr/bin/env nu
 
-# Build script for Rust applications using buildah and Alpine
+# Build script for Rust applications using buildah
 
 export-env {
     # Set the log level and file.
@@ -40,7 +40,9 @@ def build-stage []: any -> any {
 
     # Install build dependencies
     log info "[build-stage] Installing build dependencies..."
-    ^buildah run $builder -- apk add --no-cache musl-dev pkgconfig openssl-dev openssl-libs-static
+    ^buildah run $builder -- apt-get update
+    ^buildah run $builder -- apt-get install -y pkg-config libssl-dev
+    ^buildah run $builder -- rm -rf /var/lib/apt/lists/*
 
     # Copy source files into builder
     let project_root = ($env.FILE_PWD | path dirname)
@@ -55,10 +57,19 @@ def build-stage []: any -> any {
         ^buildah copy $builder $cargo_lock_path ($build_dir | path join "Cargo.lock")
     }
 
+    # Get features from config (default to "server")
+    let features = ($config.builder.features? | default "server")
+    let no_default = ($config.builder.no_default_features? | default false)
+    let cargo_flags = if $no_default {
+        $"--release --no-default-features --features ($features)"
+    } else {
+        $"--release --features ($features)"
+    }
+
     # Create dummy source to cache dependencies
     log info "[build-stage] Caching dependencies..."
     ^buildah run $builder -- sh -c $"mkdir -p ($build_dir)/src && echo 'fn main\(\) {}' > ($build_dir)/src/main.rs"
-    ^buildah run $builder -- cargo build --release
+    ^buildah run $builder -- sh -c $"cargo build ($cargo_flags)"
     ^buildah run $builder -- rm -rf $"($build_dir)/src"
 
     # Copy the actual source code
@@ -75,14 +86,14 @@ def build-stage []: any -> any {
     }
 
     # Build the application
-    log info "[build-stage] Building Rust application..."
-    ^buildah run $builder -- cargo build --release
+    log info $"[build-stage] Building Rust application with flags: ($cargo_flags)..."
+    ^buildah run $builder -- sh -c $"cargo build ($cargo_flags)"
 
     # Return config
     $config
 }
 
-# Runtime stage - create the final slim Alpine image
+# Runtime stage - create the final slim runtime image
 def runtime-stage []: any -> any {
     use std log
     mut config = $in
@@ -100,11 +111,13 @@ def runtime-stage []: any -> any {
 
     # Install runtime dependencies
     log info "[runtime-stage] Installing runtime dependencies..."
-    ^buildah run $runtime -- apk add --no-cache ca-certificates tzdata
+    ^buildah run $runtime -- apt-get update
+    ^buildah run $runtime -- apt-get install -y ca-certificates libssl3
+    ^buildah run $runtime -- rm -rf /var/lib/apt/lists/*
 
     # Create non-root user
     log info "[runtime-stage] Creating appuser..."
-    ^buildah run $runtime -- adduser -D -u 1001 appuser
+    ^buildah run $runtime -- useradd -m -u 1001 appuser
 
     # Mount builder to copy build artifacts
     log info "[runtime-stage] Copying build artifacts from builder..."
@@ -142,7 +155,7 @@ def runtime-stage []: any -> any {
     }
 
     # Copy any additional runtime assets if they exist
-    ["assets", "config", "templates", "static"]
+    ["migrations", "assets", "config", "templates", "static"]
     | each {|dir|
         let src = ($project_root | path join $dir)
         if ($src | path exists) {
@@ -217,7 +230,10 @@ def publish-image []: any -> any {
 }
 
 # Main entry point
-def main [] {
+# Usage: ./build.nu [config-file]
+# Default config: config.yml
+# For saas build: ./build.nu config.saas.yml
+def main [config_file?: string] {
     use std log
     log info "Starting Rust container build..."
 
@@ -227,7 +243,7 @@ def main [] {
     check-environment
 
     # Run the build pipeline
-    load-config
+    ($config_file | default "config.yml" | load-config)
     | build-stage
     | runtime-stage
     | publish-image

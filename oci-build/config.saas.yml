@@ -1,12 +1,13 @@
 ---
 
-# Docker image for building the application
+# Docker image for building the application (SaaS mode)
 builder:
   name: rust-slim
   url: "docker.io/library/rust"
   version: "1.91-slim"
   dir: /build
-  features: "server"
+  features: "server,saas"
+  no_default_features: true
 
 # Docker image for running the application
 runtime:
@@ -24,5 +25,5 @@ runtime:
 
 # Published image configuration
 published:
-  name: "rusty-links"
+  name: "rusty-links-saas"
   version: "v0.1.0"

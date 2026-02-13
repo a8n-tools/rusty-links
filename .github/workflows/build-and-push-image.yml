@@ -18,6 +18,11 @@ on:
         required: false
         default: base
         type: string
+      config-file:
+        description: 'Config file to use for the build (default: config.yml)'
+        required: false
+        default: ''
+        type: string
     outputs:
       registry-paths:
         description: 'Registry paths where the image was pushed'
@@ -80,7 +85,7 @@ jobs:
         # TODO: Build a dev image?
         run: |
           cd ${{ inputs.dir-name }}
-          ./build.nu
+          ./build.nu ${{ inputs.config-file }}
 
       # Example to push to GHCR: https://github.com/redhat-actions/push-to-registry/blob/main/.github/workflows/ghcr-push.yaml
       - name: Push image to GitHub Container Repository
