@@ -35,7 +35,7 @@ pub fn CategorySelect(selected_ids: Vec<Uuid>, on_change: EventHandler<Vec<Uuid>
 
     let all_cats: Vec<Category> = categories()
         .iter()
-        .flat_map(|c| get_all_categories(c))
+        .flat_map(get_all_categories)
         .collect();
 
     let selected_names: Vec<String> = all_cats
