@@ -1,0 +1,33 @@
+---
+# Build OCI images and push to GHCR.
+name: Build OCI containers
+
+on:
+  push:
+    paths:
+      - "oci-build/**"
+      - ".github/workflows/build-oci-image.yml"
+
+jobs:
+  build-standalone:
+    name: Build standalone OCI image
+    uses: ./.github/workflows/build-and-push-image.yml
+    permissions:
+      contents: read
+      packages: write
+    with:
+      dir-name: oci-build
+      image-name: rusty-links
+      image-type: base
+
+  build-saas:
+    name: Build SaaS OCI image
+    uses: ./.github/workflows/build-and-push-image.yml
+    permissions:
+      contents: read
+      packages: write
+    with:
+      dir-name: oci-build
+      image-name: rusty-links-saas
+      image-type: base
+      config-file: config.saas.yml

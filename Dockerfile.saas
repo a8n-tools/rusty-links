@@ -24,6 +24,9 @@ RUN mkdir src && \
 # Copy entire source code
 COPY . .
 
+# Ensure assets directory exists with tailwind.css for asset!() macro
+RUN mkdir -p assets && cp tailwind.css assets/tailwind.css
+
 # Force rebuild of the application (dependencies are cached)
 RUN touch src/main.rs && \
     cargo build --release --no-default-features --features server,saas

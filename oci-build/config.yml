@@ -1,0 +1,28 @@
+---
+
+# Docker image for building the application
+builder:
+  name: rust-slim
+  url: "docker.io/library/rust"
+  version: "1.91-slim"
+  dir: /build
+  features: "server"
+
+# Docker image for running the application
+runtime:
+  name: debian-slim
+  url: "docker.io/library/debian"
+  version: "bookworm-slim"
+  dir: /app
+  cfg:
+    port: 8080
+    env:
+      - HOSTNAME=0.0.0.0
+      - RUST_LOG=info
+    labels:
+      - org.opencontainers.image.source=https://github.com/a8n-tools/rusty-links
+
+# Published image configuration
+published:
+  name: "rusty-links"
+  version: "v0.1.0"
