@@ -35,7 +35,12 @@ def "main build" [] {
     # Copy binary out of the cache mount directory into a stable location.
     # When using --mount=type=cache on the target dir, the contents aren't
     # part of the layer, so we must copy the binary within the same RUN step.
-    let binary = "target/release/rusty-links"
+    # The binary location depends on whether .cargo/config.toml sets an explicit
+    # target (e.g. target/x86_64-unknown-linux-gnu/release/) or uses the default
+    # (target/release/).
+    let binary = (glob "target/**/release/rusty-links"
+        | where {|p| not ($p | str contains "/deps/") and not ($p | str ends-with ".d") }
+        | first)
     let dest = "/build/app"
     print $"Copying ($binary) -> ($dest)"
     cp $binary $dest
