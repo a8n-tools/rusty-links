@@ -50,5 +50,6 @@ script = []
 script = []
 
 [bundle]
+# Desktop bundle configuration (if building native apps)
 identifier = "com.rustylinks.app"
 publisher = "Rusty Links"

@@ -24,6 +24,12 @@ docker-compose.yml
 compose.yml
 compose.dev.yml
 
+# OCI build files (only setup.nu should enter the build context)
+oci-build/build.nu
+oci-build/config.yml
+oci-build/config.saas.yml
+oci-build/buildah-wrapper.nu
+
 # IDE
 .idea/
 .vscode/

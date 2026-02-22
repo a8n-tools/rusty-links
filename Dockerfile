@@ -1,73 +1,72 @@
-# ===== Builder Stage =====
-# Use official Rust image for building
-FROM docker.io/rust:1.91-slim AS builder
+# syntax=docker/dockerfile:1
+
+# ===== Stage 1: Nushell binary =====
+FROM ghcr.io/nushell/nushell:latest-bookworm AS nushell
+
+# ===== Stage 2: Builder =====
+ARG RUST_VERSION=1.91
+ARG DEBIAN_VERSION=bookworm
+FROM docker.io/rust:${RUST_VERSION}-slim AS builder
+
+ARG CARGO_FEATURES=server
+ARG NO_DEFAULT_FEATURES=false
+
+ENV CARGO_FEATURES=${CARGO_FEATURES}
+ENV NO_DEFAULT_FEATURES=${NO_DEFAULT_FEATURES}
+
+# Copy nushell and setup script
+COPY --from=nushell /usr/bin/nu /usr/local/bin/nu
+COPY oci-build/setup.nu /usr/local/bin/setup.nu
 
 # Install build dependencies
-RUN apt-get update && apt-get install -y \
-    pkg-config \
-    libssl-dev \
-    && rm -rf /var/lib/apt/lists/*
+RUN nu /usr/local/bin/setup.nu install-build-deps
 
-# Set working directory
-WORKDIR /app
+WORKDIR /build
 
-# Copy dependency files first (for layer caching)
+# Copy dependency files and source
 COPY Cargo.toml Cargo.lock ./
+COPY .cargo/ .cargo/
+COPY src/ src/
+COPY migrations/ migrations/
+COPY tailwind.css tailwind.css
 
-# Build dependencies only (cached layer)
-# This creates a dummy project to cache dependencies
-RUN mkdir src && \
-    echo "fn main() {}" > src/main.rs && \
-    cargo build --release --features server && \
-    rm -rf src
+# Build with BuildKit cache mounts for cargo registry and target directory.
+# The cache mount on /build/target persists across builds but its contents
+# are NOT part of the image layer -- setup.nu copies the binary to /build/app.
+RUN --mount=type=cache,target=/usr/local/cargo/registry \
+    --mount=type=cache,target=/usr/local/cargo/git \
+    --mount=type=cache,target=/build/target \
+    nu /usr/local/bin/setup.nu build
 
-# Copy entire source code
-COPY . .
+# ===== Stage 3: Runtime =====
+FROM debian:${DEBIAN_VERSION}-slim
 
-# Ensure assets directory exists with tailwind.css for asset!() macro
-RUN mkdir -p assets && cp tailwind.css assets/tailwind.css
+COPY --from=nushell /usr/bin/nu /usr/local/bin/nu
+COPY oci-build/setup.nu /usr/local/bin/setup.nu
 
-# Force rebuild of the application (dependencies are cached)
-RUN touch src/main.rs && \
-    cargo build --release --features server
+# Install runtime dependencies and create appuser
+RUN nu /usr/local/bin/setup.nu install-runtime-deps
 
-# ===== Runtime Stage =====
-# Use minimal Debian image for runtime
-FROM debian:bookworm-slim
-
-# Install runtime dependencies only
-RUN apt-get update && apt-get install -y \
-    ca-certificates \
-    libssl3 \
-    && rm -rf /var/lib/apt/lists/*
-
-# Create non-root user for security
-RUN useradd -m -u 1000 rustylinks
-
-# Set working directory
 WORKDIR /app
 
-# Copy binary from builder stage
-COPY --from=builder /app/target/release/rusty-links .
+# Copy binary and migrations from builder
+COPY --from=builder /build/app ./app
+COPY --from=builder /build/migrations ./migrations
 
 # Create assets directory (populated at runtime by Dioxus)
 RUN mkdir -p assets
 
-# Copy migrations directory (needed for SQLx)
-COPY --from=builder /app/migrations ./migrations
+# Set ownership
+RUN nu /usr/local/bin/setup.nu finalize /app
 
-# Change ownership to non-root user
-RUN chown -R rustylinks:rustylinks /app
+# Remove nushell from the final image (~40MB savings)
+RUN rm /usr/local/bin/nu /usr/local/bin/setup.nu
 
-# Switch to non-root user
-USER rustylinks
+USER appuser
 
-# Expose application port
 EXPOSE 8080
 
-# Health check
 HEALTHCHECK --interval=30s --timeout=3s --start-period=5s --retries=3 \
     CMD ["/bin/sh", "-c", "command -v curl > /dev/null && curl -f http://localhost:8080/api/health || exit 0"]
 
-# Run the application
-CMD ["./rusty-links"]
+CMD ["/app/app"]
