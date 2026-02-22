@@ -9,6 +9,16 @@ on:
       - "main"
     tags:
       - "v*"
+    paths:
+      - "src/**"
+      - "migrations/**"
+      - ".cargo/**"
+      - "Cargo.toml"
+      - "Cargo.lock"
+      - "tailwind.css"
+      - "Dockerfile"
+      - "oci-build/**"
+      - ".forgejo/workflows/build-oci-image.yml"
 
 jobs:
   build-and-push:
