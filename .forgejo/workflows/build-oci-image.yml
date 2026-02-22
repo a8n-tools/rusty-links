@@ -73,7 +73,7 @@ jobs:
           let tag_args = ($tags | each {|tag| [-t $"($registry)/($image):($tag)"]} | flatten)
           let cache_from = $"type=registry,ref=($registry)/($image):latest"
           print $"Building and pushing ($image) with tags: ($tags_str)"
-          ^docker buildx build --push --cache-from $cache_from --cache-to type=inline --label "org.opencontainers.image.source=https://dev.a8n.run/a8n-tools/rusty-links" ...$tag_args .
+          ^docker buildx build --push --cache-from $cache_from --cache-to type=inline ...$tag_args .
 
       - name: Print image URLs
         shell: nu {0}
