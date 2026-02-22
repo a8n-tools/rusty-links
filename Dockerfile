@@ -1,11 +1,13 @@
 # syntax=docker/dockerfile:1
 
+# Global ARGs must be declared before the first FROM to be available in all stages
+ARG RUST_VERSION=1.91
+ARG DEBIAN_VERSION=bookworm
+
 # ===== Stage 1: Nushell binary =====
 FROM ghcr.io/nushell/nushell:latest-bookworm AS nushell
 
 # ===== Stage 2: Builder =====
-ARG RUST_VERSION=1.91
-ARG DEBIAN_VERSION=bookworm
 FROM docker.io/rust:${RUST_VERSION}-slim AS builder
 
 ARG CARGO_FEATURES=server
