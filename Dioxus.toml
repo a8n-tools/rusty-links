@@ -38,8 +38,11 @@ watch_path = ["src", "assets"]
 # Public directory to serve static files from
 public_dir = "assets"
 
-# CSS style file - Tailwind CSS served from assets directory
-style = ["tailwind.css"]
+# CSS is loaded via the Stylesheet component in app.rs and served by a custom
+# Axum route in main.rs. Do not add style entries here — the Dioxus asset
+# pipeline mangles filenames (e.g. tailwind.css → /tailwindcss) which breaks
+# production builds that use `cargo build` instead of `dx build`.
+style = []
 
 # Javascript code file
 script = []

@@ -22,6 +22,10 @@ pub fn App() -> Element {
             // Urls are relative to your Cargo.toml file
             href: "/tailwind.css"
         }
+        head::Link {
+            rel: "icon",
+            href: "/assets/favicon.ico",
+        }
         Router::<Route> {
             config: || RouterConfig::default().on_update(|_| None)
         }
