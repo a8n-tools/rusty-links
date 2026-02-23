@@ -29,23 +29,26 @@ RUN cargo build --release --features server
 # Runtime stage
 FROM alpine:3.21
 
-WORKDIR /app
-
 # Install runtime dependencies
 RUN apk add --no-cache ca-certificates tzdata
 
 # Create non-root user
 RUN adduser -D -u 1001 appuser
 
-# Copy binary and migrations from builder
+# Create standard directory structure:
+#   /app    — application binary and static assets (read-only)
+#   /data   — persistent application data (Docker volume)
+#   /config — application configuration (Docker volume)
+RUN mkdir -p /app/assets /app/public /data /config
+
+WORKDIR /app
+
+# Copy binary from builder
+# Note: migrations/ are embedded at compile time by sqlx::migrate!() and not needed at runtime
 COPY --from=builder /build/target/release/rusty-links /app/rusty-links
-COPY --from=builder /build/migrations /app/migrations
 
-# Create assets directory (populated at runtime by Dioxus)
-RUN mkdir -p assets
-
-# Set ownership
-RUN chown -R appuser:appuser /app
+# Set ownership of all standard directories
+RUN chown -R appuser:appuser /app /data /config
 
 USER appuser
 

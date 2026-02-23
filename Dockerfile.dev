@@ -10,7 +10,9 @@ RUN apt-get update && apt-get install -y \
 # Install cargo-watch for hot reloading
 RUN cargo install cargo-watch
 
-# Set working directory
+# Create standard directory structure
+RUN mkdir -p /app /data /config
+
 WORKDIR /app
 
 # Copy dependency files first

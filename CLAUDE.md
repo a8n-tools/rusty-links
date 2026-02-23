@@ -59,6 +59,15 @@ Server-only modules (`#[cfg(feature = "server")]`): api, auth, config, error, gi
 - **Config**: `src/config.rs` - Environment-based configuration
 - **Errors**: `src/error.rs` - Centralized error handling with `AppError` type
 
+## Docker Directory Structure
+
+The production container follows a standard three-directory layout:
+- `/app` — Application binary and empty directories required by dioxus-server (`assets/`, `public/`). Read-only at runtime.
+- `/data` — Persistent application data, mounted as a Docker volume. Currently unused but available for future needs.
+- `/config` — Application configuration, mountable as a Docker volume. Currently unused; env vars are passed via `environment:` in `compose.yml`.
+
+Migrations are embedded at compile time by `sqlx::migrate!()` and are not copied to the runtime image.
+
 ## Database
 
 - PostgreSQL with SQLx (compile-time checked queries)

@@ -22,6 +22,8 @@ services:
       BATCH_SIZE: ${BATCH_SIZE:-50}
       JITTER_PERCENT: ${JITTER_PERCENT:-20}
       RUST_LOG: ${RUST_LOG:-info}
+    volumes:
+      - rusty-links-app-data:/data
     ports:
       - "${HOST_PORT:-8080}:8080"
     networks:
@@ -57,7 +59,9 @@ services:
     networks:
       - rusty-links-private
 
-#volumes:
+volumes:
+  rusty-links-app-data:
+    name: rusty-links-app-data
 #  rusty-links-db-data:
 #    name: rusty-links-db-data
 #    driver_opts:
