@@ -94,8 +94,13 @@ async fn main() {
     // Create API router
     let api_router = api::create_router(pool.clone(), config.clone(), scheduler_shutdown);
 
-    // Get the fullstack address from CLI or use localhost
-    let address = dioxus::cli_config::fullstack_address_or_localhost();
+    // Build bind address from Dioxus CLI config (set by `dx serve`) with fallbacks:
+    //   IP   → CLI value, else 0.0.0.0  (not 127.0.0.1, which is unreachable inside Docker)
+    //   Port → CLI value, else APP_PORT from config
+    let ip = dioxus::cli_config::server_ip()
+        .unwrap_or(std::net::IpAddr::V4(std::net::Ipv4Addr::UNSPECIFIED));
+    let port = dioxus::cli_config::server_port().unwrap_or(config.app_port);
+    let address = std::net::SocketAddr::new(ip, port);
 
     tracing::info!(
         "Starting Dioxus fullstack server with API routes at {}",

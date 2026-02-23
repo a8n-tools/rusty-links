@@ -85,4 +85,4 @@ Copy the appropriate file to `.env` before running:
 cp .env.standalone .env   # or .env.saas
 ```
 
-IMPORTANT: When adding, removing, or renaming environment variables (in `src/config.rs`, `compose.yml`, or any `std::env::var` call), update both `.env.standalone` and `.env.saas` to keep them in sync.
+IMPORTANT: When updating code, ALWAYS check if `.env.standalone` and `.env.saas` need to be updated. This applies when adding, removing, or renaming environment variables in `src/config.rs`, `compose.yml`, or any `std::env::var` call. Both files must stay in sync.
