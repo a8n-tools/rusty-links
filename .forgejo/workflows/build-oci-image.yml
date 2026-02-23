@@ -22,11 +22,18 @@ on:
 
 jobs:
   build-and-push:
-    name: Build and push image
+    name: Build and push ${{ matrix.image }}
     runs-on: opensuse-base-16.0-v1
     permissions:
       contents: read
       packages: write
+    strategy:
+      matrix:
+        include:
+          - image: rusty-links
+            build_mode: standalone
+          - image: rusty-links-saas
+            build_mode: saas
     env:
       IMAGE_REGISTRY: ""
       REGISTRY_PROVIDER: dev.a8n.run
@@ -68,19 +75,19 @@ jobs:
         run: |
           let tags_str = "${{ steps.get-tags.outputs.tags }}"
           let tags = ($tags_str | split row ",")
-          let image = "rusty-links"
+          let image = "${{ matrix.image }}"
           let registry = $env.IMAGE_REGISTRY
           let tag_args = ($tags | each {|tag| [-t $"($registry)/($image):($tag)"]} | flatten)
           let cache_from = $"type=registry,ref=($registry)/($image):latest"
           print $"Building and pushing ($image) with tags: ($tags_str)"
-          ^docker buildx build --push --cache-from $cache_from --cache-to type=inline ...$tag_args .
+          ^docker buildx build --push --build-arg $"BUILD_MODE=${{ matrix.build_mode }}" --cache-from $cache_from --cache-to type=inline ...$tag_args .
 
       - name: Print image URLs
         shell: nu {0}
         run: |
           let tags_str = "${{ steps.get-tags.outputs.tags }}"
           let tags = ($tags_str | split row ",")
-          let image = "rusty-links"
+          let image = "${{ matrix.image }}"
           let registry = $env.IMAGE_REGISTRY
           for tag in $tags {
             print $"Image pushed to ($registry)/($image):($tag)"
