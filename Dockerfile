@@ -11,40 +11,39 @@ WORKDIR /build
 # Install build dependencies
 RUN apk add --no-cache musl-dev pkgconfig openssl-dev openssl-libs-static
 
-# Resolve cargo features from BUILD_MODE
-#   standalone → --features standalone,server
-#   saas       → --no-default-features --features saas,server
+# Install dioxus-cli (for fullstack build: server binary + WASM client)
+RUN cargo install dioxus-cli --locked
+
+# Install WASM target for client build
+RUN rustup target add wasm32-unknown-unknown
+
+# Resolve build flags from BUILD_MODE
 RUN if [ "$BUILD_MODE" = "saas" ]; then \
       echo "--no-default-features --features saas,server" > /tmp/cargo-features; \
+      echo "--no-default-features --features saas --bin rusty-links-saas" > /tmp/dx-flags; \
     else \
       echo "--features standalone,server" > /tmp/cargo-features; \
+      echo "--features standalone" > /tmp/dx-flags; \
     fi
 
-# Copy cargo files for dependency caching
+# --- Dependency caching (server-side only) ---
 COPY Cargo.toml Cargo.lock ./
-
-# Create dummy src for dependency compilation
 RUN mkdir src && echo "fn main() {}" > src/main.rs
+RUN cargo build --release $(cat /tmp/cargo-features) \
+    && rm -rf src target/release/deps/rusty_links*
 
-# Build dependencies only
-RUN cargo build --release $(cat /tmp/cargo-features) && rm -rf src target/release/deps/rusty_links*
+# --- Full build with dioxus ---
+# Copy source code (respects .dockerignore)
+COPY . .
 
-# Copy actual source code (exclude .cargo/ which sets a glibc target)
-COPY src/ src/
-COPY migrations/ migrations/
-COPY tailwind.css tailwind.css
+# Build fullstack app (server binary + WASM client bundle)
+RUN dx build --release $(cat /tmp/dx-flags)
 
-# Prepare assets directory for the Dioxus asset!() macro
-RUN mkdir -p assets && cp tailwind.css assets/tailwind.css
-
-# Build the application
-RUN cargo build --release $(cat /tmp/cargo-features)
-
-# Resolve binary name: "rusty-links" for standalone, "rusty-links-saas" for saas
+# Create consistent output path regardless of build mode
 RUN if [ "$BUILD_MODE" = "saas" ]; then \
-      ln -s /build/target/release/rusty-links-saas /build/app-binary; \
+      ln -s /build/target/dx/rusty-links-saas/release/web /build/dx-output; \
     else \
-      ln -s /build/target/release/rusty-links /build/app-binary; \
+      ln -s /build/target/dx/rusty-links/release/web /build/dx-output; \
     fi
 
 # Runtime stage
@@ -59,16 +58,25 @@ RUN apk add --no-cache ca-certificates tzdata
 RUN adduser -D -u 1001 appuser
 
 # Create standard directory structure:
-#   /app    — application binary and static assets (read-only)
+#   /app    — application binary, static assets, and WASM client (read-only)
 #   /data   — persistent application data (Docker volume)
 #   /config — application configuration (Docker volume)
-RUN mkdir -p /app/assets /app/public /data /config
+RUN mkdir -p /app/assets /data /config
 
 WORKDIR /app
 
-# Copy binary from builder (symlink resolves to the correct binary for the build mode)
+# Copy dx build output (server binary + public/ with index.html and WASM/JS)
 # Note: migrations/ are embedded at compile time by sqlx::migrate!() and not needed at runtime
-COPY --from=builder /build/app-binary /app/rusty-links
+COPY --from=builder /build/dx-output/ /app/
+
+# Copy WASM/JS assets to /app/assets/ for the ServeDir("/assets") route in main.rs
+RUN cp /app/public/assets/* /app/assets/ 2>/dev/null || true
+
+# Copy favicon (not processed by dx asset pipeline since it's not referenced via asset!())
+COPY --from=builder /build/assets/favicon.ico /app/assets/
+
+# Normalize binary name for consistent ENTRYPOINT
+RUN if [ "$BUILD_MODE" = "saas" ]; then mv /app/rusty-links-saas /app/rusty-links; fi
 
 # Set ownership of all standard directories
 RUN chown -R appuser:appuser /app /data /config
