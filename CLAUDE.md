@@ -67,9 +67,13 @@ Server-only modules (`#[cfg(feature = "server")]`): api, auth, config, error, gi
 
 ## Configuration
 
-Requires `.env` file with:
-- `DATABASE_URL` - PostgreSQL connection string
-- `APP_PORT` - Server port (default: 8080)
-- `UPDATE_INTERVAL_DAYS` - Days between metadata updates (default: 30)
-- `RUST_LOG` - Tracing log level (default: info)
-- `GITHUB_TOKEN` - Optional, for higher GitHub API rate limits
+Environment variables are defined in feature-specific files:
+- `.env.standalone` - Standalone mode (includes JWT auth variables)
+- `.env.saas` - SaaS mode (auth handled by parent app cookies)
+
+Copy the appropriate file to `.env` before running:
+```bash
+cp .env.standalone .env   # or .env.saas
+```
+
+IMPORTANT: When adding, removing, or renaming environment variables (in `src/config.rs`, `compose.yml`, or any `std::env::var` call), update both `.env.standalone` and `.env.saas` to keep them in sync.
