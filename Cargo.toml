@@ -3,6 +3,16 @@ name = "rusty-links"
 version = "0.1.0"
 edition = "2021"
 
+[[bin]]
+name = "rusty-links"
+path = "src/main.rs"
+required-features = ["standalone"]
+
+[[bin]]
+name = "rusty-links-saas"
+path = "src/main.rs"
+required-features = ["saas"]
+
 [dependencies]
 # Web framework
 dioxus = { version = "0.7.1", features = ["fullstack", "router"] }
@@ -43,9 +53,9 @@ url = "2.5.7"
 urlencoding = "2.1"
 chrono = { version = "0.4.42", features = ["serde"] }
 regex = "1.12.2"
-native-tls = "=0.2.16"
+native-tls = { version = "=0.2.16", optional = true }
 
-# Password hashing (standalone mode)
+# Password hashing (standalone + server only)
 bcrypt = { version = "0.15", optional = true }
 
 # JWT authentication
@@ -91,7 +101,7 @@ web-sys = { version = "0.3", features = [
 
 [features]
 default = ["standalone"]
-standalone = ["dep:bcrypt"]
+standalone = []
 saas = []
 server = [
     "dioxus/server",
@@ -103,6 +113,8 @@ server = [
     "dep:sqlx",
     "dep:http",
     "dep:jsonwebtoken",
+    "dep:native-tls",
+    "dep:bcrypt",
 ]
 web = [
     "dioxus/web",

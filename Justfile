@@ -5,13 +5,27 @@ default:
 # Run all checks (server, web, clippy, fmt)
 check: check-server check-web check-clippy check-fmt
 
-# Check server compilation
-check-server:
-    cargo check --features server
+# Check server compilation (standalone + saas)
+check-server: check-server-standalone check-server-saas
 
-# Check web/WASM compilation
-check-web:
-    cargo check --features web --target wasm32-unknown-unknown
+# Check standalone server compilation
+check-server-standalone:
+    cargo check --features standalone,server
+
+# Check saas server compilation
+check-server-saas:
+    cargo check --no-default-features --features saas,server
+
+# Check web/WASM compilation (standalone + saas)
+check-web: check-web-standalone check-web-saas
+
+# Check standalone web/WASM compilation
+check-web-standalone:
+    cargo check --features standalone,web --target wasm32-unknown-unknown
+
+# Check saas web/WASM compilation
+check-web-saas:
+    cargo check --no-default-features --features saas,web --target wasm32-unknown-unknown
 
 # Run clippy lints
 check-clippy:
@@ -21,17 +35,17 @@ check-clippy:
 check-fmt:
     cargo fmt --check
 
-# Build Docker image for validation
-check-docker:
-    docker buildx build --tag rusty-links:check .
+# Build Docker image for validation (mode: standalone or saas)
+check-docker mode="standalone":
+    docker buildx build --build-arg BUILD_MODE={{ mode }} --tag rusty-links:check .
 
 # Build release binary
 build:
     cargo build --release
 
-# Build Docker image
-build-docker:
-    docker buildx build --tag rusty-links:local .
+# Build Docker image (mode: standalone or saas)
+build-docker mode="standalone":
+    docker buildx build --build-arg BUILD_MODE={{ mode }} --tag rusty-links:local .
 
 # Start development server
 dev:

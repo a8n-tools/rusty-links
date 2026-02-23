@@ -1,10 +1,24 @@
+# Build mode: "standalone" (default) or "saas"
+ARG BUILD_MODE=standalone
+
 # Build stage
 FROM rust:1.93-alpine AS builder
+
+ARG BUILD_MODE
 
 WORKDIR /build
 
 # Install build dependencies
 RUN apk add --no-cache musl-dev pkgconfig openssl-dev openssl-libs-static
+
+# Resolve cargo features from BUILD_MODE
+#   standalone → --features standalone,server
+#   saas       → --no-default-features --features saas,server
+RUN if [ "$BUILD_MODE" = "saas" ]; then \
+      echo "--no-default-features --features saas,server" > /tmp/cargo-features; \
+    else \
+      echo "--features standalone,server" > /tmp/cargo-features; \
+    fi
 
 # Copy cargo files for dependency caching
 COPY Cargo.toml Cargo.lock ./
@@ -13,7 +27,7 @@ COPY Cargo.toml Cargo.lock ./
 RUN mkdir src && echo "fn main() {}" > src/main.rs
 
 # Build dependencies only
-RUN cargo build --release --features server && rm -rf src target/release/deps/rusty_links*
+RUN cargo build --release $(cat /tmp/cargo-features) && rm -rf src target/release/deps/rusty_links*
 
 # Copy actual source code (exclude .cargo/ which sets a glibc target)
 COPY src/ src/
@@ -24,10 +38,19 @@ COPY tailwind.css tailwind.css
 RUN mkdir -p assets && cp tailwind.css assets/tailwind.css
 
 # Build the application
-RUN cargo build --release --features server
+RUN cargo build --release $(cat /tmp/cargo-features)
+
+# Resolve binary name: "rusty-links" for standalone, "rusty-links-saas" for saas
+RUN if [ "$BUILD_MODE" = "saas" ]; then \
+      ln -s /build/target/release/rusty-links-saas /build/app-binary; \
+    else \
+      ln -s /build/target/release/rusty-links /build/app-binary; \
+    fi
 
 # Runtime stage
 FROM alpine:3.21
+
+ARG BUILD_MODE
 
 # Install runtime dependencies
 RUN apk add --no-cache ca-certificates tzdata
@@ -43,9 +66,9 @@ RUN mkdir -p /app/assets /app/public /data /config
 
 WORKDIR /app
 
-# Copy binary from builder
+# Copy binary from builder (symlink resolves to the correct binary for the build mode)
 # Note: migrations/ are embedded at compile time by sqlx::migrate!() and not needed at runtime
-COPY --from=builder /build/target/release/rusty-links /app/rusty-links
+COPY --from=builder /build/app-binary /app/rusty-links
 
 # Set ownership of all standard directories
 RUN chown -R appuser:appuser /app /data /config
@@ -53,6 +76,7 @@ RUN chown -R appuser:appuser /app /data /config
 USER appuser
 
 LABEL org.opencontainers.image.source=https://dev.a8n.run/a8n-tools/rusty-links
+LABEL org.opencontainers.image.description="rusty-links (${BUILD_MODE})"
 
 EXPOSE 8080
 

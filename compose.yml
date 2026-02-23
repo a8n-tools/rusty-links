@@ -9,6 +9,8 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
+      args:
+        BUILD_MODE: standalone
     container_name: rusty-links-app
     depends_on:
       db:
