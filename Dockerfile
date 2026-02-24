@@ -1,8 +1,8 @@
 # Build mode: "standalone" (default) or "saas"
 ARG BUILD_MODE=standalone
 
-# Build stage (Debian-based for pre-built dioxus-cli binary)
-FROM rust:1.93-bookworm AS builder
+# Build stage (trixie for glibc 2.41, required by pre-built dioxus-cli binary)
+FROM rust:1.93-slim-trixie AS builder
 
 ARG BUILD_MODE
 
@@ -10,10 +10,12 @@ WORKDIR /build
 
 # Install build dependencies
 RUN apt-get update && apt-get install --yes --no-install-recommends \
-    pkg-config libssl-dev \
+    curl pkg-config libssl-dev \
     && rm -rf /var/lib/apt/lists/*
 
-# Install dioxus-cli from pre-built binary (seconds instead of minutes)
+# Install cargo-binstall, then use it to fetch pre-built dioxus-cli (seconds instead of minutes)
+RUN curl --location --silent --show-error https://github.com/cargo-bins/cargo-binstall/releases/latest/download/cargo-binstall-x86_64-unknown-linux-gnu.tgz \
+    | tar --extract --gzip --directory /usr/local/cargo/bin
 RUN cargo binstall dioxus-cli --no-confirm
 
 # Install WASM target for client build
@@ -48,8 +50,8 @@ RUN if [ "$BUILD_MODE" = "saas" ]; then \
       ln -s /build/target/dx/rusty-links/release/web /build/dx-output; \
     fi
 
-# Runtime stage (slim Debian since the binary links against glibc)
-FROM debian:bookworm-slim
+# Runtime stage (must match builder glibc version)
+FROM debian:trixie-slim
 
 ARG BUILD_MODE
 
