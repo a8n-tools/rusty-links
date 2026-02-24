@@ -2,6 +2,7 @@ use dioxus::prelude::*;
 use dioxus_router::RouterConfig;
 use uuid::Uuid;
 
+#[cfg(feature = "standalone")]
 use crate::server_functions::auth::check_setup;
 use crate::ui::http;
 use crate::ui::pages::add_link::AddLinkPage;
@@ -11,6 +12,7 @@ use crate::ui::pages::languages::LanguagesPage;
 use crate::ui::pages::licenses::LicensesPage;
 use crate::ui::pages::links_list::LinksListPage;
 use crate::ui::pages::login::Login;
+#[cfg(feature = "standalone")]
 use crate::ui::pages::setup::Setup;
 use crate::ui::pages::tags::TagsPage;
 
@@ -36,6 +38,7 @@ pub fn App() -> Element {
 pub enum Route {
     #[route("/")]
     Home {},
+    #[cfg(feature = "standalone")]
     #[route("/setup")]
     SetupPage {},
     #[route("/login")]
@@ -60,6 +63,7 @@ pub enum Route {
 
 #[derive(Clone, Debug, PartialEq)]
 enum HomeState {
+    #[cfg(feature = "standalone")]
     NeedsSetup,
     NeedsLogin,
     LoggedIn,
@@ -67,11 +71,14 @@ enum HomeState {
 }
 
 async fn check_home_state() -> HomeState {
-    // First check if setup is needed
-    match check_setup().await {
-        Ok(true) => return HomeState::NeedsSetup,
-        Ok(false) => {}
-        Err(e) => return HomeState::Error(e.to_string()),
+    // First check if setup is needed (standalone only — saas auth is handled externally)
+    #[cfg(feature = "standalone")]
+    {
+        match check_setup().await {
+            Ok(true) => return HomeState::NeedsSetup,
+            Ok(false) => {}
+            Err(e) => return HomeState::Error(e.to_string()),
+        }
     }
 
     // In standalone mode, skip the network call if no token is stored
@@ -97,6 +104,7 @@ fn Home() -> Element {
     let result = home_state.read().clone();
 
     match result {
+        #[cfg(feature = "standalone")]
         Some(HomeState::NeedsSetup) => {
             nav.push(Route::SetupPage {});
             rsx! {
@@ -153,6 +161,7 @@ fn Home() -> Element {
     }
 }
 
+#[cfg(feature = "standalone")]
 #[component]
 fn SetupPage() -> Element {
     rsx! { Setup {} }
