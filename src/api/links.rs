@@ -17,7 +17,7 @@ use axum::{
     extract::{Path, Query, State},
     http::StatusCode,
     response::IntoResponse,
-    routing::{post, put},
+    routing::post,
     Json, Router,
 };
 use chrono::{DateTime, Utc};
@@ -69,6 +69,8 @@ async fn create_link_handler(
     Json(request): Json<CreateLinkWithCategories>,
 ) -> Result<impl IntoResponse, AppError> {
     let user_id = auth.user_id;
+
+    crate::security::validate_url_for_ssrf(&request.url)?;
 
     tracing::info!(
         user_id = %user_id,
@@ -285,13 +287,19 @@ async fn list_links_handler(
         "Links fetched"
     );
 
-    // Enrich links with categories, tags, languages, and licenses
+    // Enrich links with categories, tags, languages, and licenses using batch queries
+    let link_ids: Vec<Uuid> = paginated.links.iter().map(|l| l.id).collect();
+    let mut categories_map = Link::get_categories_batch(&pool, &link_ids).await?;
+    let mut tags_map = Link::get_tags_batch(&pool, &link_ids).await?;
+    let mut languages_map = Link::get_languages_batch(&pool, &link_ids).await?;
+    let mut licenses_map = Link::get_licenses_batch(&pool, &link_ids).await?;
+
     let mut links_with_metadata = Vec::with_capacity(paginated.links.len());
     for link in paginated.links {
-        let categories = Link::get_categories(&pool, link.id, user_id).await?;
-        let tags = Link::get_tags(&pool, link.id, user_id).await?;
-        let languages = Link::get_languages(&pool, link.id, user_id).await?;
-        let licenses = Link::get_licenses(&pool, link.id, user_id).await?;
+        let categories = categories_map.remove(&link.id).unwrap_or_default();
+        let tags = tags_map.remove(&link.id).unwrap_or_default();
+        let languages = languages_map.remove(&link.id).unwrap_or_default();
+        let licenses = licenses_map.remove(&link.id).unwrap_or_default();
 
         links_with_metadata.push(LinkWithCategories {
             link,
@@ -1223,7 +1231,7 @@ async fn check_duplicate_handler(
 /// - 401 Unauthorized: No valid session
 /// - 400 Bad Request: Invalid URL format
 async fn preview_link_handler(
-    State(pool): State<PgPool>,
+    State(_pool): State<PgPool>,
     auth: AuthenticatedUser,
     Json(request): Json<PreviewRequest>,
 ) -> Result<Json<PreviewResponse>, AppError> {
@@ -1234,6 +1242,8 @@ async fn preview_link_handler(
     // Parse and validate URL
     let parsed_url = url::Url::parse(&request.url)
         .map_err(|_| AppError::validation("url", "Invalid URL format"))?;
+
+    crate::security::validate_url_for_ssrf(&request.url)?;
 
     // Extract domain
     let domain = parsed_url

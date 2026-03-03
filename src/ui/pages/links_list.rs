@@ -225,10 +225,8 @@ pub fn LinksListPage() -> Element {
         // Add event listener to document
         if let Some(window) = web_sys::window() {
             if let Some(document) = window.document() {
-                let _ = document.add_event_listener_with_callback(
-                    "paste",
-                    closure.as_ref().unchecked_ref(),
-                );
+                let _ = document
+                    .add_event_listener_with_callback("paste", closure.as_ref().unchecked_ref());
             }
         }
 

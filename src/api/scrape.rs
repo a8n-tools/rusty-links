@@ -25,6 +25,8 @@ async fn scrape_handler(
 ) -> Result<impl IntoResponse, AppError> {
     tracing::info!(url = %request.url, "Scraping URL for metadata");
 
+    crate::security::validate_url_for_ssrf(&request.url)?;
+
     let metadata = scraper::scrape_url(&request.url).await?;
 
     tracing::info!(

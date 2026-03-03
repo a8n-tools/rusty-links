@@ -41,14 +41,16 @@ impl Tag {
         Ok(tag)
     }
 
-    /// Get a tag by ID
+    /// Get a tag by ID (global or user-owned)
     pub async fn get_by_id(pool: &PgPool, id: Uuid, user_id: Uuid) -> Result<Tag, AppError> {
-        sqlx::query_as::<_, Tag>("SELECT * FROM tags WHERE id = $1 AND user_id = $2")
-            .bind(id)
-            .bind(user_id)
-            .fetch_optional(pool)
-            .await?
-            .ok_or_else(|| AppError::not_found("tag", &id.to_string()))
+        sqlx::query_as::<_, Tag>(
+            "SELECT * FROM tags WHERE id = $1 AND (user_id IS NULL OR user_id = $2)",
+        )
+        .bind(id)
+        .bind(user_id)
+        .fetch_optional(pool)
+        .await?
+        .ok_or_else(|| AppError::not_found("tag", &id.to_string()))
     }
 
     /// Get all tags for a user

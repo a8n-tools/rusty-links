@@ -4,4 +4,3 @@
 //! They run on the server and have access to the database pool and configuration.
 
 pub mod auth;
-pub mod links;

@@ -45,6 +45,8 @@ pub async fn scrape_url(url: &str) -> Result<ScrapedMetadata, AppError> {
     let base_url =
         Url::parse(url).map_err(|e| AppError::validation("url", &format!("Invalid URL: {}", e)))?;
 
+    crate::security::validate_url_for_ssrf(url)?;
+
     // Build HTTP client with timeout and redirects
     let client = reqwest::Client::builder()
         .timeout(Duration::from_secs(10))
@@ -113,19 +115,53 @@ pub async fn scrape_url(url: &str) -> Result<ScrapedMetadata, AppError> {
 /// * `Ok(false)` - URL is not accessible (connection failed or non-success status)
 /// * `Err(AppError)` - Only returns error if client creation fails
 pub async fn check_url_health(url: &str) -> Result<bool, AppError> {
+    let _ = url::Url::parse(url)
+        .map_err(|e| AppError::validation("url", &format!("Invalid URL: {}", e)))?;
+    crate::security::validate_url_for_ssrf(url)?;
+
     let client = reqwest::Client::builder()
         .timeout(Duration::from_secs(10))
         .redirect(reqwest::redirect::Policy::limited(5))
         .build()
         .map_err(|e| AppError::Internal(e.to_string()))?;
 
+    // Try HEAD first
     match client.head(url).send().await {
         Ok(response) => {
             let status = response.status();
-            Ok(status.is_success() || status.is_redirection())
+            if status.is_success() || status.is_redirection() {
+                return Ok(true);
+            }
+            // Fall back to GET for methods that reject HEAD
+            if status == reqwest::StatusCode::METHOD_NOT_ALLOWED
+                || status == reqwest::StatusCode::FORBIDDEN
+                || status == reqwest::StatusCode::NOT_IMPLEMENTED
+            {
+                tracing::debug!(url = %url, status = %status, "HEAD rejected, falling back to GET with Range header");
+            } else {
+                return Ok(false);
+            }
         }
         Err(e) => {
-            tracing::debug!(url = %url, error = %e, "Health check failed");
+            tracing::debug!(url = %url, error = %e, "HEAD request failed, falling back to GET with Range header");
+        }
+    }
+
+    // Fallback: GET with Range header to minimize data transfer
+    match client
+        .get(url)
+        .header(reqwest::header::RANGE, "bytes=0-0")
+        .send()
+        .await
+    {
+        Ok(response) => {
+            let status = response.status();
+            Ok(status.is_success()
+                || status.is_redirection()
+                || status == reqwest::StatusCode::PARTIAL_CONTENT)
+        }
+        Err(e) => {
+            tracing::debug!(url = %url, error = %e, "GET fallback also failed");
             Ok(false)
         }
     }
@@ -410,6 +446,9 @@ mod tests {
         let document = Html::parse_document(html);
         let candidates = extract_favicon(&document, &base);
         // Should have the default /favicon.ico fallback
-        assert_eq!(candidates, vec!["https://example.com/favicon.ico".to_string()]);
+        assert_eq!(
+            candidates,
+            vec!["https://example.com/favicon.ico".to_string()]
+        );
     }
 }

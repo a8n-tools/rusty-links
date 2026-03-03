@@ -17,6 +17,18 @@ pub struct License {
 }
 
 impl License {
+    /// Get a license by ID (global or user-owned)
+    pub async fn get_by_id(pool: &PgPool, id: Uuid, user_id: Uuid) -> Result<License, AppError> {
+        sqlx::query_as::<_, License>(
+            "SELECT * FROM licenses WHERE id = $1 AND (user_id IS NULL OR user_id = $2)",
+        )
+        .bind(id)
+        .bind(user_id)
+        .fetch_optional(pool)
+        .await?
+        .ok_or_else(|| AppError::not_found("license", &id.to_string()))
+    }
+
     /// Get all available licenses (global + user's custom)
     pub async fn get_all_available(pool: &PgPool, user_id: Uuid) -> Result<Vec<License>, AppError> {
         let licenses = sqlx::query_as::<_, License>(

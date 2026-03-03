@@ -56,8 +56,6 @@ services:
       - ./data/db/:/var/lib/postgresql/data
       # Use this with the volume below change the location of the database.
       #- rusty-links-db-data:/var/lib/postgresql/data
-    ports:
-      - "5432:5432"
     networks:
       - rusty-links-private
 

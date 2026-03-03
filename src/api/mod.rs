@@ -78,9 +78,7 @@ pub fn create_router(pool: PgPool, config: Config, scheduler_shutdown: Arc<Atomi
     };
 
     #[cfg(not(any(feature = "standalone", feature = "saas")))]
-    let auth_router = {
-        Router::new().route("/check-setup", get(auth::check_setup_handler))
-    };
+    let auth_router = { Router::new().route("/check-setup", get(auth::check_setup_handler)) };
 
     // Create admin router (standalone only)
     #[cfg(feature = "standalone")]

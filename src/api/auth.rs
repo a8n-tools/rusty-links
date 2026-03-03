@@ -41,9 +41,7 @@ use crate::models::{create_user, find_user_by_email, verify_password, CreateUser
 #[cfg(feature = "standalone")]
 use crate::security;
 #[cfg(feature = "standalone")]
-use crate::server_functions::auth::{
-    AuthResponse, LoginRequest, RefreshRequest, SetupRequest,
-};
+use crate::server_functions::auth::{AuthResponse, LoginRequest, RefreshRequest, SetupRequest};
 
 /// POST /api/auth/setup (standalone)
 ///
@@ -64,11 +62,9 @@ pub async fn setup_handler(
     }
 
     // Validate password complexity
-    security::validate_password(&request.password).map_err(|msg| {
-        AppError::Validation {
-            field: "password".to_string(),
-            message: msg,
-        }
+    security::validate_password(&request.password).map_err(|msg| AppError::Validation {
+        field: "password".to_string(),
+        message: msg,
     })?;
 
     // Create the first user (will automatically be admin)
@@ -88,8 +84,7 @@ pub async fn setup_handler(
     let refresh_token = generate_refresh_token();
 
     // Store refresh token in database
-    let expires_at =
-        chrono::Utc::now() + chrono::Duration::days(config.refresh_token_expiry_days);
+    let expires_at = chrono::Utc::now() + chrono::Duration::days(config.refresh_token_expiry_days);
     sqlx::query("INSERT INTO refresh_tokens (user_id, token, expires_at) VALUES ($1, $2, $3)")
         .bind(user.id)
         .bind(&refresh_token)
@@ -120,17 +115,13 @@ pub async fn register_handler(
 
     // Check if registration is allowed
     if !config.allow_registration {
-        return Err(AppError::Forbidden(
-            "Registration is disabled".to_string(),
-        ));
+        return Err(AppError::Forbidden("Registration is disabled".to_string()));
     }
 
     // Validate password complexity
-    security::validate_password(&request.password).map_err(|msg| {
-        AppError::Validation {
-            field: "password".to_string(),
-            message: msg,
-        }
+    security::validate_password(&request.password).map_err(|msg| AppError::Validation {
+        field: "password".to_string(),
+        message: msg,
     })?;
 
     // Create user
@@ -155,8 +146,7 @@ pub async fn register_handler(
 
     let refresh_token = generate_refresh_token();
 
-    let expires_at =
-        chrono::Utc::now() + chrono::Duration::days(config.refresh_token_expiry_days);
+    let expires_at = chrono::Utc::now() + chrono::Duration::days(config.refresh_token_expiry_days);
     sqlx::query("INSERT INTO refresh_tokens (user_id, token, expires_at) VALUES ($1, $2, $3)")
         .bind(user.id)
         .bind(&refresh_token)
@@ -233,8 +223,7 @@ pub async fn login_handler(
 
     let refresh_token = generate_refresh_token();
 
-    let expires_at =
-        chrono::Utc::now() + chrono::Duration::days(config.refresh_token_expiry_days);
+    let expires_at = chrono::Utc::now() + chrono::Duration::days(config.refresh_token_expiry_days);
     sqlx::query("INSERT INTO refresh_tokens (user_id, token, expires_at) VALUES ($1, $2, $3)")
         .bind(user.id)
         .bind(&refresh_token)

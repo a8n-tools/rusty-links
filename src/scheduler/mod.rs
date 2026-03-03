@@ -8,6 +8,7 @@ use crate::error::AppError;
 use crate::github;
 use crate::models::Link;
 use crate::scraper;
+use crate::security;
 use rand::Rng;
 use sqlx::PgPool;
 use std::sync::atomic::{AtomicBool, Ordering};
@@ -137,12 +138,36 @@ impl Scheduler {
     /// This function is called periodically by the scheduler loop.
     /// Currently implements:
     /// - Refresh stale link metadata (web scraping + GitHub)
-    ///
-    /// Future tasks:
-    /// - Check for broken links and update their status
-    /// - Clean up expired sessions
+    /// - Clean up old login attempts and expired refresh tokens
     async fn run_tasks(&self) -> Result<(), AppError> {
-        self.refresh_stale_links().await
+        self.refresh_stale_links().await?;
+        self.cleanup_expired_data().await;
+        Ok(())
+    }
+
+    /// Clean up old login attempts and expired refresh tokens
+    async fn cleanup_expired_data(&self) {
+        match security::cleanup_old_login_attempts(&self.pool, 30).await {
+            Ok(count) => {
+                if count > 0 {
+                    tracing::info!(count, "Cleaned up old login attempts");
+                }
+            }
+            Err(e) => {
+                tracing::warn!(error = %e, "Failed to clean up old login attempts");
+            }
+        }
+
+        match security::cleanup_expired_refresh_tokens(&self.pool).await {
+            Ok(count) => {
+                if count > 0 {
+                    tracing::info!(count, "Cleaned up expired refresh tokens");
+                }
+            }
+            Err(e) => {
+                tracing::warn!(error = %e, "Failed to clean up expired refresh tokens");
+            }
+        }
     }
 
     /// Refresh metadata for stale links

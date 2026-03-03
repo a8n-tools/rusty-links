@@ -9,10 +9,6 @@ use rusty_links::{api, config, error::AppError, scheduler};
 #[cfg(feature = "server")]
 use sqlx::{postgres::PgPoolOptions, PgPool};
 #[cfg(feature = "server")]
-use std::sync::atomic::AtomicBool;
-#[cfg(feature = "server")]
-use std::sync::Arc;
-#[cfg(feature = "server")]
 use std::time::Duration;
 #[cfg(feature = "server")]
 use tower_http::services::ServeDir;
@@ -85,8 +81,8 @@ async fn main() {
     rusty_links::server_functions::auth::set_db_pool(pool.clone());
 
     // Start background scheduler
-    let scheduler_shutdown = Arc::new(AtomicBool::new(false));
     let scheduler_instance = scheduler::Scheduler::new(pool.clone(), config.clone());
+    let scheduler_shutdown = scheduler_instance.shutdown_handle();
     let _scheduler_handle = scheduler_instance.start();
 
     tracing::info!("Background scheduler started");

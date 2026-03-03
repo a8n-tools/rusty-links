@@ -16,6 +16,18 @@ pub struct Language {
 }
 
 impl Language {
+    /// Get a language by ID (global or user-owned)
+    pub async fn get_by_id(pool: &PgPool, id: Uuid, user_id: Uuid) -> Result<Language, AppError> {
+        sqlx::query_as::<_, Language>(
+            "SELECT * FROM languages WHERE id = $1 AND (user_id IS NULL OR user_id = $2)",
+        )
+        .bind(id)
+        .bind(user_id)
+        .fetch_optional(pool)
+        .await?
+        .ok_or_else(|| AppError::not_found("language", &id.to_string()))
+    }
+
     /// Get all available languages (global + user's custom)
     pub async fn get_all_available(
         pool: &PgPool,

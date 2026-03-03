@@ -171,41 +171,50 @@ pub async fn move_category(
 }
 
 /// Build a tree structure from flat list of categories
-fn build_category_tree(mut categories: Vec<CategoryNode>) -> Vec<CategoryNode> {
+fn build_category_tree(categories: Vec<CategoryNode>) -> Vec<CategoryNode> {
     use std::collections::HashMap;
 
-    // Create a map for quick lookup
+    if categories.is_empty() {
+        return Vec::new();
+    }
+
+    // Pass 1: Index all categories and record parent-child relationships
     let mut map: HashMap<String, CategoryNode> = HashMap::new();
-    for cat in categories.drain(..) {
+    let mut child_ids: HashMap<String, Vec<String>> = HashMap::new();
+
+    for cat in categories {
+        if let Some(ref parent_id) = cat.parent_id {
+            child_ids
+                .entry(parent_id.clone())
+                .or_default()
+                .push(cat.id.clone());
+        }
         map.insert(cat.id.clone(), cat);
     }
 
-    // Build tree
-    let mut roots = Vec::new();
-    let keys: Vec<String> = map.keys().cloned().collect();
+    // Pass 2: Process bottom-up (sort by depth descending) to attach children before parents
+    let mut sorted_ids: Vec<String> = map.keys().cloned().collect();
+    sorted_ids.sort_by(|a, b| {
+        let depth_a = map.get(a).map_or(0, |c| c.depth);
+        let depth_b = map.get(b).map_or(0, |c| c.depth);
+        depth_b.cmp(&depth_a) // descending
+    });
 
-    for id in keys {
-        if let Some(cat) = map.remove(&id) {
-            if let Some(parent_id) = &cat.parent_id {
-                // Add to parent's children
-                if let Some(parent) = map.get_mut(parent_id) {
-                    parent.children.push(cat);
-                } else {
-                    // Parent doesn't exist, treat as root
-                    roots.push(cat);
-                }
-            } else {
-                // No parent, it's a root
-                roots.push(cat);
+    for id in &sorted_ids {
+        if let Some(children_ids) = child_ids.get(id) {
+            let children: Vec<CategoryNode> = children_ids
+                .iter()
+                .filter_map(|cid| map.remove(cid))
+                .collect();
+            if let Some(parent) = map.get_mut(id) {
+                parent.children = children;
             }
         }
     }
 
-    // Collect remaining nodes from map (these are parents)
-    for (_, cat) in map {
-        roots.push(cat);
-    }
-
+    // Remaining entries are roots
+    let mut roots: Vec<CategoryNode> = map.into_values().collect();
+    roots.sort_by(|a, b| a.name.cmp(&b.name));
     roots
 }
 

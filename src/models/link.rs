@@ -12,6 +12,7 @@ use crate::models::{Category, Language, License, Tag};
 use chrono::{DateTime, NaiveDate, Utc};
 use serde::{Deserialize, Serialize};
 use sqlx::PgPool;
+use std::collections::HashMap;
 use url::Url;
 use uuid::Uuid;
 
@@ -526,16 +527,16 @@ impl Link {
 
         // Update junction tables if IDs are provided
         if let Some(category_ids) = &update.category_ids {
-            Self::update_categories(pool, id, category_ids).await?;
+            Self::update_categories(pool, id, category_ids, user_id).await?;
         }
         if let Some(tag_ids) = &update.tag_ids {
-            Self::update_tags(pool, id, tag_ids).await?;
+            Self::update_tags(pool, id, tag_ids, user_id).await?;
         }
         if let Some(language_ids) = &update.language_ids {
-            Self::update_languages(pool, id, language_ids).await?;
+            Self::update_languages(pool, id, language_ids, user_id).await?;
         }
         if let Some(license_ids) = &update.license_ids {
-            Self::update_licenses(pool, id, license_ids).await?;
+            Self::update_licenses(pool, id, license_ids, user_id).await?;
         }
 
         tracing::info!(link_id = %id, "Link updated");
@@ -548,6 +549,7 @@ impl Link {
         pool: &PgPool,
         link_id: Uuid,
         category_ids: &[Uuid],
+        user_id: Uuid,
     ) -> Result<(), AppError> {
         // Delete existing categories
         sqlx::query("DELETE FROM link_categories WHERE link_id = $1")
@@ -555,8 +557,9 @@ impl Link {
             .execute(pool)
             .await?;
 
-        // Insert new categories
+        // Insert new categories (validate ownership first)
         for category_id in category_ids {
+            Category::get_by_id(pool, *category_id, user_id).await?;
             sqlx::query("INSERT INTO link_categories (link_id, category_id) VALUES ($1, $2)")
                 .bind(link_id)
                 .bind(category_id)
@@ -568,15 +571,21 @@ impl Link {
     }
 
     /// Update link tags (replaces all existing)
-    async fn update_tags(pool: &PgPool, link_id: Uuid, tag_ids: &[Uuid]) -> Result<(), AppError> {
+    async fn update_tags(
+        pool: &PgPool,
+        link_id: Uuid,
+        tag_ids: &[Uuid],
+        user_id: Uuid,
+    ) -> Result<(), AppError> {
         // Delete existing tags
         sqlx::query("DELETE FROM link_tags WHERE link_id = $1")
             .bind(link_id)
             .execute(pool)
             .await?;
 
-        // Insert new tags with order
+        // Insert new tags with order (validate ownership first)
         for (order, tag_id) in tag_ids.iter().enumerate() {
+            Tag::get_by_id(pool, *tag_id, user_id).await?;
             sqlx::query("INSERT INTO link_tags (link_id, tag_id, order_num) VALUES ($1, $2, $3)")
                 .bind(link_id)
                 .bind(tag_id)
@@ -593,6 +602,7 @@ impl Link {
         pool: &PgPool,
         link_id: Uuid,
         language_ids: &[Uuid],
+        user_id: Uuid,
     ) -> Result<(), AppError> {
         // Delete existing languages
         sqlx::query("DELETE FROM link_languages WHERE link_id = $1")
@@ -600,8 +610,9 @@ impl Link {
             .execute(pool)
             .await?;
 
-        // Insert new languages with order
+        // Insert new languages with order (validate ownership first)
         for (order, language_id) in language_ids.iter().enumerate() {
+            Language::get_by_id(pool, *language_id, user_id).await?;
             sqlx::query(
                 "INSERT INTO link_languages (link_id, language_id, order_num) VALUES ($1, $2, $3)",
             )
@@ -620,6 +631,7 @@ impl Link {
         pool: &PgPool,
         link_id: Uuid,
         license_ids: &[Uuid],
+        user_id: Uuid,
     ) -> Result<(), AppError> {
         // Delete existing licenses
         sqlx::query("DELETE FROM link_licenses WHERE link_id = $1")
@@ -627,8 +639,9 @@ impl Link {
             .execute(pool)
             .await?;
 
-        // Insert new licenses with order
+        // Insert new licenses with order (validate ownership first)
         for (order, license_id) in license_ids.iter().enumerate() {
+            License::get_by_id(pool, *license_id, user_id).await?;
             sqlx::query(
                 "INSERT INTO link_licenses (link_id, license_id, order_num) VALUES ($1, $2, $3)",
             )
@@ -815,6 +828,7 @@ impl Link {
         user_id: Uuid,
     ) -> Result<(), AppError> {
         let _ = Self::get_by_id(pool, link_id, user_id).await?;
+        let _ = Language::get_by_id(pool, language_id, user_id).await?;
 
         sqlx::query(
             r#"
@@ -880,6 +894,7 @@ impl Link {
         user_id: Uuid,
     ) -> Result<(), AppError> {
         let _ = Self::get_by_id(pool, link_id, user_id).await?;
+        let _ = License::get_by_id(pool, license_id, user_id).await?;
 
         sqlx::query(
             r#"
@@ -935,6 +950,146 @@ impl Link {
         .await?;
 
         Ok(licenses)
+    }
+
+    /// Get categories for multiple links in a single query
+    pub async fn get_categories_batch(
+        pool: &PgPool,
+        link_ids: &[Uuid],
+    ) -> Result<HashMap<Uuid, Vec<Category>>, AppError> {
+        let rows = sqlx::query(
+            r#"
+            SELECT lc.link_id, c.id, c.user_id, c.name, c.parent_id, c.depth, c.sort_order, c.created_at
+            FROM categories c
+            JOIN link_categories lc ON lc.category_id = c.id
+            WHERE lc.link_id = ANY($1)
+            ORDER BY c.name
+            "#,
+        )
+        .bind(link_ids)
+        .fetch_all(pool)
+        .await?;
+
+        let mut map: HashMap<Uuid, Vec<Category>> = HashMap::new();
+        for row in rows {
+            use sqlx::Row;
+            let link_id: Uuid = row.get("link_id");
+            let category = Category {
+                id: row.get("id"),
+                user_id: row.get("user_id"),
+                name: row.get("name"),
+                parent_id: row.get("parent_id"),
+                depth: row.get("depth"),
+                sort_order: row.get("sort_order"),
+                created_at: row.get("created_at"),
+            };
+            map.entry(link_id).or_default().push(category);
+        }
+
+        Ok(map)
+    }
+
+    /// Get tags for multiple links in a single query
+    pub async fn get_tags_batch(
+        pool: &PgPool,
+        link_ids: &[Uuid],
+    ) -> Result<HashMap<Uuid, Vec<Tag>>, AppError> {
+        let rows = sqlx::query(
+            r#"
+            SELECT lt.link_id, t.id, t.user_id, t.name, t.created_at
+            FROM tags t
+            JOIN link_tags lt ON lt.tag_id = t.id
+            WHERE lt.link_id = ANY($1)
+            ORDER BY t.name
+            "#,
+        )
+        .bind(link_ids)
+        .fetch_all(pool)
+        .await?;
+
+        let mut map: HashMap<Uuid, Vec<Tag>> = HashMap::new();
+        for row in rows {
+            use sqlx::Row;
+            let link_id: Uuid = row.get("link_id");
+            let tag = Tag {
+                id: row.get("id"),
+                user_id: row.get("user_id"),
+                name: row.get("name"),
+                created_at: row.get("created_at"),
+            };
+            map.entry(link_id).or_default().push(tag);
+        }
+
+        Ok(map)
+    }
+
+    /// Get languages for multiple links in a single query
+    pub async fn get_languages_batch(
+        pool: &PgPool,
+        link_ids: &[Uuid],
+    ) -> Result<HashMap<Uuid, Vec<Language>>, AppError> {
+        let rows = sqlx::query(
+            r#"
+            SELECT ll.link_id, l.id, l.name, l.user_id, l.created_at
+            FROM languages l
+            JOIN link_languages ll ON ll.language_id = l.id
+            WHERE ll.link_id = ANY($1)
+            ORDER BY l.name
+            "#,
+        )
+        .bind(link_ids)
+        .fetch_all(pool)
+        .await?;
+
+        let mut map: HashMap<Uuid, Vec<Language>> = HashMap::new();
+        for row in rows {
+            use sqlx::Row;
+            let link_id: Uuid = row.get("link_id");
+            let language = Language {
+                id: row.get("id"),
+                name: row.get("name"),
+                user_id: row.get("user_id"),
+                created_at: row.get("created_at"),
+            };
+            map.entry(link_id).or_default().push(language);
+        }
+
+        Ok(map)
+    }
+
+    /// Get licenses for multiple links in a single query
+    pub async fn get_licenses_batch(
+        pool: &PgPool,
+        link_ids: &[Uuid],
+    ) -> Result<HashMap<Uuid, Vec<License>>, AppError> {
+        let rows = sqlx::query(
+            r#"
+            SELECT ll.link_id, l.id, l.user_id, l.name, l.full_name, l.created_at
+            FROM licenses l
+            JOIN link_licenses ll ON ll.license_id = l.id
+            WHERE ll.link_id = ANY($1)
+            ORDER BY l.name
+            "#,
+        )
+        .bind(link_ids)
+        .fetch_all(pool)
+        .await?;
+
+        let mut map: HashMap<Uuid, Vec<License>> = HashMap::new();
+        for row in rows {
+            use sqlx::Row;
+            let link_id: Uuid = row.get("link_id");
+            let license = License {
+                id: row.get("id"),
+                user_id: row.get("user_id"),
+                name: row.get("name"),
+                full_name: row.get("full_name"),
+                created_at: row.get("created_at"),
+            };
+            map.entry(link_id).or_default().push(license);
+        }
+
+        Ok(map)
     }
 
     /// Update scraped metadata for a link
@@ -1143,55 +1298,18 @@ impl Link {
     ) -> Result<Vec<LinkWithCategories>, AppError> {
         let links = Self::get_all_by_user(pool, user_id).await?;
 
+        let link_ids: Vec<Uuid> = links.iter().map(|l| l.id).collect();
+        let mut categories_map = Self::get_categories_batch(pool, &link_ids).await?;
+        let mut tags_map = Self::get_tags_batch(pool, &link_ids).await?;
+        let mut languages_map = Self::get_languages_batch(pool, &link_ids).await?;
+        let mut licenses_map = Self::get_licenses_batch(pool, &link_ids).await?;
+
         let mut result = Vec::with_capacity(links.len());
         for link in links {
-            let categories = sqlx::query_as::<_, Category>(
-                r#"
-                SELECT c.* FROM categories c
-                JOIN link_categories lc ON lc.category_id = c.id
-                WHERE lc.link_id = $1
-                ORDER BY c.name
-                "#,
-            )
-            .bind(link.id)
-            .fetch_all(pool)
-            .await?;
-
-            let tags = sqlx::query_as::<_, Tag>(
-                r#"
-                SELECT t.* FROM tags t
-                JOIN link_tags lt ON lt.tag_id = t.id
-                WHERE lt.link_id = $1
-                ORDER BY t.name
-                "#,
-            )
-            .bind(link.id)
-            .fetch_all(pool)
-            .await?;
-
-            let languages = sqlx::query_as::<_, Language>(
-                r#"
-                SELECT l.* FROM languages l
-                JOIN link_languages ll ON ll.language_id = l.id
-                WHERE ll.link_id = $1
-                ORDER BY l.name
-                "#,
-            )
-            .bind(link.id)
-            .fetch_all(pool)
-            .await?;
-
-            let licenses = sqlx::query_as::<_, License>(
-                r#"
-                SELECT l.* FROM licenses l
-                JOIN link_licenses ll ON ll.license_id = l.id
-                WHERE ll.link_id = $1
-                ORDER BY l.name
-                "#,
-            )
-            .bind(link.id)
-            .fetch_all(pool)
-            .await?;
+            let categories = categories_map.remove(&link.id).unwrap_or_default();
+            let tags = tags_map.remove(&link.id).unwrap_or_default();
+            let languages = languages_map.remove(&link.id).unwrap_or_default();
+            let licenses = licenses_map.remove(&link.id).unwrap_or_default();
 
             result.push(LinkWithCategories {
                 link,

@@ -35,7 +35,11 @@ pub fn get_user_from_cookie(jar: &CookieJar) -> Option<SaasUserClaims> {
     let user_id = payload
         .get("user_id")
         .and_then(|v| v.as_str().map(String::from))
-        .or_else(|| payload.get("sub").and_then(|v| v.as_str().map(String::from)))
+        .or_else(|| {
+            payload
+                .get("sub")
+                .and_then(|v| v.as_str().map(String::from))
+        })
         .or_else(|| payload.get("id").and_then(|v| v.as_str().map(String::from)))?;
 
     let email = payload
