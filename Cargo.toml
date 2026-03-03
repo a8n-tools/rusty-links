@@ -53,7 +53,7 @@ url = "2.5.7"
 urlencoding = "2.1"
 chrono = { version = "0.4.42", features = ["serde"] }
 regex = "1.12.2"
-native-tls = { version = "=0.2.16", optional = true }
+native-tls = { version = "0.2.18", optional = true }
 
 # Password hashing (standalone + server only)
 bcrypt = { version = "0.15", optional = true }
