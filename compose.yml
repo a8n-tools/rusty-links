@@ -18,7 +18,7 @@ services:
     restart: unless-stopped
     environment:
       DATABASE_URL: postgres://${DB_USERNAME:-rustylinks}:${DB_PASSWORD:-changeme}@db:5432/${DB_NAME:-rustylinks}
-      APP_PORT: 8080
+      APP_PORT: 3001
       UPDATE_INTERVAL_DAYS: ${UPDATE_INTERVAL_DAYS:-30}
       UPDATE_INTERVAL_HOURS: ${UPDATE_INTERVAL_HOURS:-24}
       BATCH_SIZE: ${BATCH_SIZE:-50}
@@ -27,7 +27,7 @@ services:
     volumes:
       - rusty-links-app-data:/data
     ports:
-      - "${HOST_PORT:-8080}:8080"
+      - "${HOST_PORT:-3001}:3001"
     networks:
       - rusty-links-private
 
@@ -53,9 +53,7 @@ services:
       POSTGRES_PASSWORD: ${DB_PASSWORD:-changeme}
       POSTGRES_DB: ${DB_NAME:-rustylinks}
     volumes:
-      - ./data/db/:/var/lib/postgresql/data
-      # Use this with the volume below change the location of the database.
-      #- rusty-links-db-data:/var/lib/postgresql/data
+      - rusty-links-db-data:/var/lib/postgresql/data
     # Uncomment to expose PostgreSQL for local development:
     #ports:
     #  - "5432:5432"
@@ -65,12 +63,8 @@ services:
 volumes:
   rusty-links-app-data:
     name: rusty-links-app-data
-#  rusty-links-db-data:
-#    name: rusty-links-db-data
-#    driver_opts:
-#      type: none
-#      o: bind
-#      device: /full/path/to/rusty-link/db/data
+  rusty-links-db-data:
+    name: rusty-links-db-data
 
 networks:
   rusty-links-private:

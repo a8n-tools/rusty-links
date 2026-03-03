@@ -66,7 +66,7 @@ pub fn Setup() -> Element {
                         // Setup successful, redirect to links page
                         nav.push(Route::LinksPage {});
                     } else {
-                        error.set(Some(format!("Setup failed: {}", resp.body)));
+                        error.set(Some(resp.error_message()));
                     }
                 }
                 Err(e) => {

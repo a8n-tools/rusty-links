@@ -154,7 +154,7 @@ pub fn validate_password(password: &str) -> Result<(), String> {
     }
 
     if !password.chars().any(|c| !c.is_alphanumeric()) {
-        return Err("Password must contain at least one special character".to_string());
+        return Err("Password must contain at least one special character (e.g., !@#$%^&*)".to_string());
     }
 
     Ok(())

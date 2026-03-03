@@ -476,4 +476,16 @@ impl HttpResponse {
     pub fn json<T: DeserializeOwned>(&self) -> Result<T, String> {
         serde_json::from_str(&self.body).map_err(|e| format!("Parse error: {}", e))
     }
+
+    /// Extract a human-readable error message from the response body.
+    /// Tries to parse as JSON `{"error": "..."}` and returns the error field;
+    /// falls back to the raw body text.
+    pub fn error_message(&self) -> String {
+        if let Ok(json) = serde_json::from_str::<serde_json::Value>(&self.body) {
+            if let Some(error) = json.get("error").and_then(|v| v.as_str()) {
+                return error.to_string();
+            }
+        }
+        self.body.clone()
+    }
 }
