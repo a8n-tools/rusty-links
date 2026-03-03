@@ -315,6 +315,29 @@ pub async fn refresh_handler(
     }))
 }
 
+/// POST /api/auth/logout (standalone)
+///
+/// Invalidates all refresh tokens for the current user.
+#[cfg(feature = "standalone")]
+pub async fn logout_handler(
+    State(pool): State<PgPool>,
+    claims: Claims,
+) -> Result<impl IntoResponse, AppError> {
+    let user_id: uuid::Uuid = claims
+        .user_id
+        .parse()
+        .map_err(|_| AppError::SessionExpired)?;
+
+    sqlx::query("DELETE FROM refresh_tokens WHERE user_id = $1")
+        .bind(user_id)
+        .execute(&pool)
+        .await?;
+
+    tracing::info!(user_id = %user_id, "User logged out, refresh tokens deleted");
+
+    Ok(axum::http::StatusCode::NO_CONTENT)
+}
+
 /// GET /api/auth/me (standalone)
 ///
 /// Returns information about the currently authenticated user.

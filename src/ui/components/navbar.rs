@@ -11,12 +11,14 @@ pub fn Navbar() -> Element {
         spawn(async move {
             loading.set(true);
 
-            // Use REST API for logout (properly clears cookies)
+            // Use REST API for logout (invalidates refresh tokens server-side)
             let result = http::post_empty("/api/auth/logout").await;
+
+            // Always clear client-side tokens, even if server call fails
+            crate::ui::auth_state::clear_auth();
 
             loading.set(false);
 
-            // Always redirect to login, even if logout fails
             if let Err(e) = result {
                 tracing::warn!("Logout failed: {:?}", e);
             }

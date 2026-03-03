@@ -66,6 +66,7 @@ pub fn create_router(pool: PgPool, config: Config, scheduler_shutdown: Arc<Atomi
             .route("/register", post(auth::register_handler))
             .route("/login", post(auth::login_handler))
             .route("/refresh", post(auth::refresh_handler))
+            .route("/logout", post(auth::logout_handler))
             .route("/me", get(auth::me_handler))
             .route("/check-setup", get(auth::check_setup_handler))
     };
