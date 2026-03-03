@@ -6,6 +6,20 @@
 
 use serde::{de::DeserializeOwned, Serialize};
 
+/// Redirect to /login when an API call returns 401 Unauthorized.
+/// Skips auth endpoints so login/setup pages can handle their own 401s.
+#[cfg(target_arch = "wasm32")]
+fn redirect_if_unauthorized(status: u16, url: &str) {
+    if status == 401 && !url.starts_with("/api/auth/") {
+        #[cfg(feature = "standalone")]
+        crate::ui::auth_state::clear_auth();
+
+        if let Some(window) = web_sys::window() {
+            let _ = window.location().set_href("/login");
+        }
+    }
+}
+
 /// Make a GET request and deserialize the JSON response
 pub async fn get<T: DeserializeOwned>(url: &str) -> Result<T, String> {
     #[cfg(target_arch = "wasm32")]
@@ -31,6 +45,8 @@ pub async fn get<T: DeserializeOwned>(url: &str) -> Result<T, String> {
             .send()
             .await
             .map_err(|e| format!("Network error: {}", e))?;
+
+        redirect_if_unauthorized(response.status(), url);
 
         if !response.ok() {
             return Err(format!("HTTP error: {}", response.status()));
@@ -94,6 +110,8 @@ pub async fn get_response(url: &str) -> Result<HttpResponse, String> {
             .await
             .map_err(|e| format!("Read error: {}", e))?;
 
+        redirect_if_unauthorized(status, url);
+
         Ok(HttpResponse { status, body: text })
     }
 
@@ -143,6 +161,8 @@ pub async fn post<T: DeserializeOwned, B: Serialize>(url: &str, body: &B) -> Res
             .send()
             .await
             .map_err(|e| format!("Network error: {}", e))?;
+
+        redirect_if_unauthorized(response.status(), url);
 
         if !response.ok() {
             let error_text = response.text().await.unwrap_or_default();
@@ -211,6 +231,8 @@ pub async fn post_response<B: Serialize>(url: &str, body: &B) -> Result<HttpResp
             .await
             .map_err(|e| format!("Read error: {}", e))?;
 
+        redirect_if_unauthorized(status, url);
+
         Ok(HttpResponse { status, body: text })
     }
 
@@ -266,6 +288,8 @@ pub async fn post_empty(url: &str) -> Result<HttpResponse, String> {
             .await
             .map_err(|e| format!("Read error: {}", e))?;
 
+        redirect_if_unauthorized(status, url);
+
         Ok(HttpResponse { status, body: text })
     }
 
@@ -315,6 +339,8 @@ pub async fn put<T: DeserializeOwned, B: Serialize>(url: &str, body: &B) -> Resu
             .send()
             .await
             .map_err(|e| format!("Network error: {}", e))?;
+
+        redirect_if_unauthorized(response.status(), url);
 
         if !response.ok() {
             let error_text = response.text().await.unwrap_or_default();
@@ -377,6 +403,8 @@ pub async fn patch<T: DeserializeOwned, B: Serialize>(url: &str, body: &B) -> Re
             .await
             .map_err(|e| format!("Network error: {}", e))?;
 
+        redirect_if_unauthorized(response.status(), url);
+
         if !response.ok() {
             let error_text = response.text().await.unwrap_or_default();
             return Err(format!("HTTP error {}: {}", response.status(), error_text));
@@ -435,6 +463,8 @@ pub async fn delete(url: &str) -> Result<(), String> {
             .send()
             .await
             .map_err(|e| format!("Network error: {}", e))?;
+
+        redirect_if_unauthorized(response.status(), url);
 
         if !response.ok() {
             let error_text = response.text().await.unwrap_or_default();
