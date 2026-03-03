@@ -18,7 +18,7 @@ services:
     restart: unless-stopped
     environment:
       DATABASE_URL: postgres://${DB_USERNAME:-rustylinks}:${DB_PASSWORD:-changeme}@db:5432/${DB_NAME:-rustylinks}
-      APP_PORT: 3001
+      APP_PORT: 8080
       UPDATE_INTERVAL_DAYS: ${UPDATE_INTERVAL_DAYS:-30}
       UPDATE_INTERVAL_HOURS: ${UPDATE_INTERVAL_HOURS:-24}
       BATCH_SIZE: ${BATCH_SIZE:-50}
@@ -27,7 +27,7 @@ services:
     volumes:
       - rusty-links-app-data:/data
     ports:
-      - "${HOST_PORT:-3001}:3001"
+      - "${HOST_PORT:-8080}:8080"
     networks:
       - rusty-links-private
 
