@@ -72,3 +72,32 @@ fn extract_pool() -> Result<&'static PgPool, ServerFnError> {
         .get()
         .ok_or_else(|| ServerFnError::new("Database pool not initialized"))
 }
+
+/// Log an unauthenticated access attempt to a protected page route.
+/// Called from ProtectedLayout when the client-side auth check fails.
+#[server]
+pub async fn log_unauthenticated_access(path: String) -> Result<(), ServerFnError> {
+    let headers: axum::http::HeaderMap = dioxus_fullstack::extract().await?;
+    let connect_info =
+        dioxus_fullstack::extract::<axum::extract::ConnectInfo<std::net::SocketAddr>, _>()
+            .await
+            .ok();
+
+    let ip = headers
+        .get("X-Forwarded-For")
+        .and_then(|v| v.to_str().ok())
+        .and_then(|v| v.split(',').next())
+        .map(|s| s.trim().to_string())
+        .or_else(|| {
+            headers
+                .get("X-Real-Ip")
+                .and_then(|v| v.to_str().ok())
+                .map(|s| s.trim().to_string())
+        })
+        .or_else(|| connect_info.map(|ci| ci.0.ip().to_string()))
+        .unwrap_or_else(|| "unknown".to_string());
+
+    tracing::info!(ip = %ip, path = %path, "Unauthenticated access attempt on protected route");
+
+    Ok(())
+}

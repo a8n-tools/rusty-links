@@ -4,6 +4,43 @@ use uuid::Uuid;
 
 use crate::error::AppError;
 
+/// Extract the client IP address from request parts.
+/// Checks X-Forwarded-For and X-Real-Ip headers first (for reverse proxy setups),
+/// then falls back to the connection info.
+fn client_ip(parts: &Parts) -> String {
+    if let Some(forwarded) = parts
+        .headers
+        .get("X-Forwarded-For")
+        .and_then(|v| v.to_str().ok())
+    {
+        if let Some(ip) = forwarded.split(',').next().map(|s| s.trim()) {
+            if !ip.is_empty() {
+                return ip.to_string();
+            }
+        }
+    }
+
+    if let Some(real_ip) = parts
+        .headers
+        .get("X-Real-Ip")
+        .and_then(|v| v.to_str().ok())
+    {
+        let trimmed = real_ip.trim();
+        if !trimmed.is_empty() {
+            return trimmed.to_string();
+        }
+    }
+
+    if let Some(connect_info) = parts
+        .extensions
+        .get::<axum::extract::ConnectInfo<std::net::SocketAddr>>()
+    {
+        return connect_info.0.ip().to_string();
+    }
+
+    "unknown".to_string()
+}
+
 /// JWT claims extracted from Authorization header.
 ///
 /// Use as an Axum extractor to require authentication on a route.
@@ -43,22 +80,30 @@ where
         use axum::extract::FromRef;
 
         let config = crate::config::Config::from_ref(state);
+        let ip = client_ip(parts);
+        let path = parts.uri.path().to_string();
 
         // Extract Authorization header
         let auth_header = parts
             .headers
             .get("Authorization")
             .and_then(|v| v.to_str().ok())
-            .ok_or(AppError::SessionExpired)?;
+            .ok_or_else(|| {
+                tracing::info!(ip = %ip, path = %path, "Unauthenticated access attempt (no token)");
+                AppError::SessionExpired
+            })?;
 
         // Parse "Bearer <token>"
-        let token = auth_header
-            .strip_prefix("Bearer ")
-            .ok_or(AppError::SessionExpired)?;
+        let token = auth_header.strip_prefix("Bearer ").ok_or_else(|| {
+            tracing::info!(ip = %ip, path = %path, "Unauthenticated access attempt (malformed header)");
+            AppError::SessionExpired
+        })?;
 
         // Decode JWT
-        let claims = crate::auth::jwt::decode_jwt(token, &config.jwt_secret)
-            .map_err(|_| AppError::SessionExpired)?;
+        let claims = crate::auth::jwt::decode_jwt(token, &config.jwt_secret).map_err(|_| {
+            tracing::info!(ip = %ip, path = %path, "Unauthenticated access attempt (invalid or expired token)");
+            AppError::SessionExpired
+        })?;
 
         Ok(claims)
     }
@@ -111,13 +156,18 @@ where
     async fn from_request_parts(parts: &mut Parts, _state: &S) -> Result<Self, Self::Rejection> {
         use axum_extra::extract::CookieJar;
 
+        let ip = client_ip(parts);
+        let path = parts.uri.path().to_string();
+
         let jar = CookieJar::from_headers(&parts.headers);
-        let claims =
-            crate::auth::saas_auth::get_user_from_cookie(&jar).ok_or(AppError::SessionExpired)?;
-        let user_id: Uuid = claims
-            .user_id
-            .parse()
-            .map_err(|_| AppError::SessionExpired)?;
+        let claims = crate::auth::saas_auth::get_user_from_cookie(&jar).ok_or_else(|| {
+            tracing::info!(ip = %ip, path = %path, "Unauthenticated access attempt (no valid cookie)");
+            AppError::SessionExpired
+        })?;
+        let user_id: Uuid = claims.user_id.parse().map_err(|_| {
+            tracing::info!(ip = %ip, path = %path, "Unauthenticated access attempt (invalid user ID in cookie)");
+            AppError::SessionExpired
+        })?;
         Ok(AuthenticatedUser { user_id })
     }
 }

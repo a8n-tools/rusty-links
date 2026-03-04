@@ -67,6 +67,15 @@ pub enum Route {
 fn ProtectedLayout() -> Element {
     #[cfg(feature = "standalone")]
     if !crate::ui::auth_state::is_authenticated() {
+        #[cfg(target_arch = "wasm32")]
+        spawn(async move {
+            let path = web_sys::window()
+                .and_then(|w| w.location().pathname().ok())
+                .unwrap_or_default();
+            let _ = crate::server_functions::auth::log_unauthenticated_access(path).await;
+            navigator().push(Route::LoginPage {});
+        });
+        #[cfg(not(target_arch = "wasm32"))]
         navigator().push(Route::LoginPage {});
         return rsx! {};
     }

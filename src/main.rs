@@ -136,7 +136,12 @@ async fn main() {
 
     tracing::info!("Server listening on {}", address);
 
-    axum::serve(listener, router).await.expect("Server error");
+    axum::serve(
+        listener,
+        router.into_make_service_with_connect_info::<std::net::SocketAddr>(),
+    )
+    .await
+    .expect("Server error");
 }
 
 #[cfg(not(feature = "server"))]

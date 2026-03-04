@@ -475,7 +475,7 @@ impl axum::response::IntoResponse for AppError {
                 tracing::warn!("Authentication failed: Invalid credentials");
             }
             AppError::SessionExpired => {
-                tracing::info!("Session expired");
+                tracing::debug!("Session expired (details logged by auth middleware)");
             }
             AppError::Unauthorized => {
                 tracing::warn!("Unauthorized access attempt");
