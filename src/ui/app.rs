@@ -43,22 +43,34 @@ pub enum Route {
     SetupPage {},
     #[route("/login")]
     LoginPage {},
-    #[route("/links")]
-    LinksPage {},
-    #[route("/links/add?:initial_url")]
-    AddLink { initial_url: Option<String> },
-    #[route("/links/:link_id/edit")]
-    EditLink { link_id: Uuid },
-    #[route("/categories")]
-    Categories {},
-    #[route("/tags")]
-    Tags {},
-    #[route("/languages")]
-    Languages {},
-    #[route("/licenses")]
-    Licenses {},
+    #[layout(ProtectedLayout)]
+        #[route("/links")]
+        LinksPage {},
+        #[route("/links/add?:initial_url")]
+        AddLink { initial_url: Option<String> },
+        #[route("/links/:link_id/edit")]
+        EditLink { link_id: Uuid },
+        #[route("/categories")]
+        Categories {},
+        #[route("/tags")]
+        Tags {},
+        #[route("/languages")]
+        Languages {},
+        #[route("/licenses")]
+        Licenses {},
+    #[end_layout]
     #[route("/:..route")]
     NotFound { route: Vec<String> },
+}
+
+#[component]
+fn ProtectedLayout() -> Element {
+    #[cfg(feature = "standalone")]
+    if !crate::ui::auth_state::is_authenticated() {
+        navigator().push(Route::LoginPage {});
+        return rsx! {};
+    }
+    rsx! { Outlet::<Route> {} }
 }
 
 #[derive(Clone, Debug, PartialEq)]
