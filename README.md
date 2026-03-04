@@ -332,6 +332,11 @@ Part 8: Deployment & Documentation (Steps 46-55)
 >
 > Make sure and separate each prompt section. Use markdown. Each prompt should be tagged as text using code tags. The goal is to output prompts, but context, etc. is important as well. Each prompt will use quadruple (4) backtick code tags while the inner code tags will use triple (3) backticks. Save the prompts in the `docs/` directory.
 
+## TODO
+
+- [ ] Delete `oci-build/setup.nu` — it is orphaned now that the Dockerfile uses the dummy-src pattern instead of Nushell + setup.nu for building.
+- [ ] Remove or update `.cargo/config.toml` — it sets `target = "x86_64-unknown-linux-gnu"` (glibc), which conflicts with the Alpine/musl Docker build. The Dockerfile works around this by using selective `COPY` instead of `COPY . .`, but the config should be reviewed.
+
 ## Notes
 
 - ✅ Server feature compiles successfully (cargo check --features server)
