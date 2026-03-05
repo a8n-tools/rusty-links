@@ -25,7 +25,7 @@ A self-hosted bookmark manager built with Rust, featuring powerful organization 
 
 ## Highlights
 
-- **Single-User Authentication** - JWT-based auth with bcrypt password hashing
+- **Single-User Authentication** - JWT-based auth with Argon2id password hashing
 - **GitHub Integration** - Automatic metadata fetching for repositories (stars, language, license)
 - **Powerful Organization** - Hierarchical categories (3 levels), custom tags, languages, and licenses
 - **Smart Search** - Full-text search with advanced filtering and sorting
@@ -40,7 +40,7 @@ A self-hosted bookmark manager built with Rust, featuring powerful organization 
 ### Features
 
 #### Core Functionality
-- JWT-based authentication with bcrypt password hashing
+- JWT-based authentication with Argon2id password hashing
 - Full CRUD operations for bookmarks with automatic metadata extraction
 - GitHub repository integration (stars, language, license, last commit)
 - Duplicate URL detection per user
@@ -95,7 +95,7 @@ A self-hosted bookmark manager built with Rust, featuring powerful organization 
 - **LAUNCH_CHECKLIST.md** - Comprehensive pre-launch checklist
 
 #### Security
-- bcrypt password hashing
+- Argon2id password hashing
 - JWT-based authentication with access and refresh tokens
 - Parameterized SQL queries (injection prevention)
 - Input validation and sanitization
@@ -242,7 +242,7 @@ None at this time. Please report issues at: https://github.com/NiceGuyIT/rusty-l
 
 ## Security Notes
 
-- All passwords hashed with bcrypt
+- All passwords hashed with Argon2id
 - JWT-based authentication with configurable token expiry
 - Account lockout after configurable failed login attempts
 - Parameterized SQL queries prevent injection attacks

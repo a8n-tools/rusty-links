@@ -156,14 +156,14 @@ CREATE TABLE users (
 |-----------------|-------------|-------------------------|----------------------------|
 | `id`            | UUID        | PRIMARY KEY             | User identifier            |
 | `email`         | TEXT        | NOT NULL, UNIQUE        | User email address         |
-| `password_hash` | TEXT        | NOT NULL                | bcrypt password hash       |
+| `password_hash` | TEXT        | NOT NULL                | Argon2id password hash       |
 | `created_at`    | TIMESTAMPTZ | NOT NULL, DEFAULT NOW() | Account creation timestamp |
 
 **Indexes:**
 - `idx_users_email` - Fast email lookups for authentication
 
 **Notes:**
-- Passwords are hashed using bcrypt
+- Passwords are hashed using Argon2id
 - Email must be unique (case-sensitive)
 - Deleting a user cascades to all their data
 

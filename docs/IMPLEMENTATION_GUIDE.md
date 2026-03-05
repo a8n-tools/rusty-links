@@ -247,7 +247,7 @@ rusty-links/
 - **Framework:** Dioxus Fullstack
 - **Database:** PostgreSQL with SQLx
 - **HTTP Server:** Axum
-- **Password Hashing:** bcrypt
+- **Password Hashing:** Argon2id
 - **Web Scraping:** reqwest + scraper
 - **Logging:** tracing
 
@@ -265,7 +265,7 @@ rusty-links/
 
 ## Key Features Implemented
 
-✅ JWT authentication with bcrypt
+✅ JWT authentication with Argon2id
 ✅ Link management with CRUD operations
 ✅ Automatic metadata extraction (title, description, logo)
 ✅ GitHub repository integration (stars, languages, licenses)

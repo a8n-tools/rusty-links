@@ -8,7 +8,7 @@ A self-hosted bookmark manager built with Rust and Dioxus. Organize, search, and
 
 ## Features
 
-- **JWT authentication** with bcrypt password hashing and refresh tokens
+- **JWT authentication** with Argon2id password hashing and refresh tokens
 - **Link management** with full CRUD operations
 - **Automatic metadata extraction** - titles, descriptions, logos
 - **GitHub integration** - stars, languages, licenses auto-detected
@@ -166,7 +166,7 @@ See `.env.standalone` and `.env.saas` for full documentation of all options.
 - **Backend:** Rust with Axum web framework
 - **Frontend:** Dioxus 0.7 (fullstack mode with SSR)
 - **Database:** PostgreSQL with SQLx (compile-time checked queries)
-- **Authentication:** JWT tokens with bcrypt password hashing
+- **Authentication:** JWT tokens with Argon2id password hashing
 - **Scraping:** reqwest + scraper crate
 - **Styling:** Tailwind CSS v4
 - **Deployment:** Docker + Docker Compose

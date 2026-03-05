@@ -56,6 +56,7 @@ regex = "1.12.2"
 native-tls = { version = "0.2.18", optional = true }
 
 # Password hashing (standalone + server only)
+argon2 = { version = "0.5", optional = true }
 bcrypt = { version = "0.15", optional = true }
 
 # JWT authentication
@@ -114,6 +115,7 @@ server = [
     "dep:http",
     "dep:jsonwebtoken",
     "dep:native-tls",
+    "dep:argon2",
     "dep:bcrypt",
 ]
 web = [

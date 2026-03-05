@@ -32,7 +32,7 @@ Phase 1 focuses on a single-user, self-hosted deployment with core bookmark mana
 - **Framework:** Dioxus Fullstack (single binary for server + frontend)
 - **Database:** PostgreSQL
 - **ORM:** SQLx with compile-time checked queries and migrations
-- **Password Hashing:** bcrypt
+- **Password Hashing:** Argon2id
 - **HTTP Client:** reqwest
 - **HTML Parsing:** scraper
 - **Logging:** Structured JSON logging (use standard Rust logging library with configurable levels)
@@ -92,7 +92,7 @@ Phase 1 focuses on a single-user, self-hosted deployment with core bookmark mana
 - Email field (basic validation: contains @, has domain)
 - Password field (no requirements in Phase 1)
 - No password strength requirements or complexity rules
-- Password stored with bcrypt hash using recommended parameters
+- Password stored with Argon2id hash using recommended parameters
 
 ### Session Management
 - Secure, httpOnly cookies for session tokens
@@ -121,7 +121,7 @@ Phase 1 focuses on a single-user, self-hosted deployment with core bookmark mana
 ### Users Table
 - `id` (primary key)
 - `email` (unique, validated format)
-- `password_hash` (bcrypt)
+- `password_hash` (Argon2id)
 - `created_at` (timestamp)
 
 ### Links Table
@@ -1162,7 +1162,7 @@ Follow RESTful conventions:
 ### Security
 
 **Phase 1 Basics:**
-- bcrypt password hashing (recommended parameters)
+- Argon2id password hashing (recommended parameters)
 - Secure session tokens
 - HttpOnly, secure cookies
 - SameSite attributes

@@ -8,7 +8,7 @@
 //!
 //! # Security
 //!
-//! Passwords are hashed using bcrypt with a cost factor of 12.
+//! Passwords are hashed using Argon2id with default parameters.
 
 use crate::error::AppError;
 use chrono::{DateTime, Utc};
@@ -190,16 +190,35 @@ pub async fn find_user_by_email(pool: &PgPool, email: &str) -> Result<Option<Use
     Ok(user)
 }
 
-/// Verify a password against a bcrypt hash
+/// Check if a hash is a legacy bcrypt hash
+pub fn is_legacy_hash(hash: &str) -> bool {
+    hash.starts_with("$2b$") || hash.starts_with("$2a$") || hash.starts_with("$2y$")
+}
+
+/// Verify a password against an Argon2id or legacy bcrypt hash
 pub fn verify_password(password: &str, hash: &str) -> Result<bool, AppError> {
     tracing::debug!("Verifying password");
 
     #[cfg(feature = "standalone")]
     {
-        let result = bcrypt::verify(password, hash).map_err(|e| {
-            tracing::error!(error = %e, "Failed to verify password");
-            AppError::Internal(format!("Failed to verify password: {}", e))
-        })?;
+        let result = if is_legacy_hash(hash) {
+            tracing::debug!("Verifying against legacy bcrypt hash");
+            bcrypt::verify(password, hash).map_err(|e| {
+                tracing::error!(error = %e, "Failed to verify bcrypt password");
+                AppError::Internal(format!("Failed to verify password: {}", e))
+            })?
+        } else {
+            use argon2::{Argon2, PasswordHash, PasswordVerifier};
+
+            let parsed_hash = PasswordHash::new(hash).map_err(|e| {
+                tracing::error!(error = %e, "Failed to parse password hash");
+                AppError::Internal(format!("Failed to parse password hash: {}", e))
+            })?;
+
+            Argon2::default()
+                .verify_password(password.as_bytes(), &parsed_hash)
+                .is_ok()
+        };
 
         if result {
             tracing::debug!("Password verification successful");
@@ -217,6 +236,24 @@ pub fn verify_password(password: &str, hash: &str) -> Result<bool, AppError> {
             "Password verification not available in saas mode".to_string(),
         ))
     }
+}
+
+/// Upgrade a user's password hash from bcrypt to Argon2id
+pub async fn upgrade_password_hash(
+    pool: &PgPool,
+    user_id: Uuid,
+    password: &str,
+) -> Result<(), AppError> {
+    let new_hash = hash_password(password)?;
+
+    sqlx::query("UPDATE users SET password_hash = $1 WHERE id = $2")
+        .bind(&new_hash)
+        .bind(user_id)
+        .execute(pool)
+        .await?;
+
+    tracing::info!(user_id = %user_id, "Migrated password hash from bcrypt to Argon2id");
+    Ok(())
 }
 
 /// Check if any user exists in the database
@@ -276,16 +313,25 @@ fn validate_email(email: &str) -> Result<(), AppError> {
     Ok(())
 }
 
-/// Hash a password using bcrypt
+/// Hash a password using Argon2id
 fn hash_password(password: &str) -> Result<String, AppError> {
     tracing::debug!("Hashing password");
 
     #[cfg(feature = "standalone")]
     {
-        let hash = bcrypt::hash(password, 12).map_err(|e| {
-            tracing::error!(error = %e, "Failed to hash password");
-            AppError::Internal(format!("Failed to hash password: {}", e))
-        })?;
+        use argon2::{
+            password_hash::{rand_core::OsRng, SaltString},
+            Argon2, PasswordHasher,
+        };
+
+        let salt = SaltString::generate(&mut OsRng);
+        let hash = Argon2::default()
+            .hash_password(password.as_bytes(), &salt)
+            .map_err(|e| {
+                tracing::error!(error = %e, "Failed to hash password");
+                AppError::Internal(format!("Failed to hash password: {}", e))
+            })?
+            .to_string();
 
         tracing::debug!("Password hashed successfully");
         Ok(hash)

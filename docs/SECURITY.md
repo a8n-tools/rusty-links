@@ -33,7 +33,7 @@ Rusty Links implements security best practices for a self-hosted bookmark manage
 
 ### Authentication & Authorization
 
-✅ **bcrypt Password Hashing**
+✅ **Argon2id Password Hashing**
 - Industry-standard password hashing algorithm
 - Automatic salt generation
 - Configurable work factor
@@ -108,7 +108,7 @@ sqlx::query("SELECT * FROM users WHERE email = $1")
 
 ✅ **Password Requirements**
 - Minimum 8 characters (configurable)
-- Hashed with bcrypt before storage
+- Hashed with Argon2id before storage
 - Never logged or exposed in responses
 - Password hash excluded from User serialization
 
@@ -547,7 +547,7 @@ systemctl status rustylinks
 
 **For Application:**
 - Minimum 8 characters enforced
-- Consider bcrypt work factor adjustment
+- Consider Argon2id work factor adjustment
 - No password reset via email (single-user)
 - Session timeout after 30 days inactivity (future feature)
 

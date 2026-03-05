@@ -150,7 +150,7 @@ Complete checklist for launching Rusty Links v1.0.0 to production.
 - [ ] Session expires correctly (if timeout implemented)
 
 #### Password Security
-- [ ] Passwords hashed with bcrypt
+- [ ] Passwords hashed with Argon2id
 - [ ] Password minimum length enforced (8 characters)
 - [ ] Passwords never logged
 - [ ] Passwords not in API responses

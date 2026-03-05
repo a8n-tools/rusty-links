@@ -50,7 +50,7 @@ Server-only modules (`#[cfg(feature = "server")]`): api, auth, config, error, gi
 - **Entry point**: `src/main.rs` - Initializes database pool, starts scheduler, creates Axum router with Dioxus frontend and API routes
 - **API layer**: `src/api/` - REST endpoints nested under `/api`, with auth routes at `/api/auth/*`
 - **Server functions**: `src/server_functions/` - Dioxus server functions bridging client/server communication (available on both sides)
-- **Auth**: `src/auth/` - Session-based authentication using cookies, bcrypt password hashing
+- **Auth**: `src/auth/` - Session-based authentication using cookies, Argon2id password hashing
 - **UI**: `src/ui/` - Dioxus components with pages (`pages/`) and reusable components (`components/`)
 - **Models**: `src/models/` - Database models (User, Link, Category, Tag, etc.)
 - **Scheduler**: `src/scheduler/` - Background task runner for periodic metadata updates

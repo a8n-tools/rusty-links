@@ -38,7 +38,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 #### Core Features
 - **Authentication System**
   - Two build modes: standalone (JWT auth) and SaaS (parent app cookie auth)
-  - bcrypt password hashing (standalone mode)
+  - Argon2id password hashing (standalone mode)
   - JWT-based authentication with access and refresh tokens
   - Account lockout after configurable failed login attempts
   - Initial setup endpoint (`/api/auth/setup`) for first user creation
@@ -165,7 +165,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Asynchronous runtime with Tokio
   - Structured logging with tracing crate
   - JWT authentication with jsonwebtoken crate
-  - Password hashing with bcrypt crate
+  - Password hashing with Argon2id crate
 
 - **Database**
   - PostgreSQL with SQLx for compile-time query verification
@@ -327,7 +327,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 #### Security
 
 - **Authentication Security**
-  - bcrypt password hashing
+  - Argon2id password hashing
   - JWT-based authentication with access and refresh tokens
   - Configurable token expiry (access and refresh)
   - Account lockout after configurable failed attempts
@@ -404,7 +404,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Security
 
-- bcrypt password hashing implementation
+- Argon2id password hashing implementation
 - SQL injection prevention via parameterized queries
 - XSS prevention via CSP and output encoding
 - JWT token security with configurable expiry

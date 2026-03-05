@@ -37,7 +37,10 @@ use crate::auth::middleware::Claims;
 #[cfg(feature = "standalone")]
 use crate::config::Config;
 #[cfg(feature = "standalone")]
-use crate::models::{create_user, find_user_by_email, verify_password, CreateUser};
+use crate::models::{
+    create_user, find_user_by_email, is_legacy_hash, upgrade_password_hash, verify_password,
+    CreateUser,
+};
 #[cfg(feature = "standalone")]
 use crate::security;
 #[cfg(feature = "standalone")]
@@ -206,6 +209,13 @@ pub async fn login_handler(
             "Login failed: Invalid password"
         );
         return Err(AppError::InvalidCredentials);
+    }
+
+    // Migrate legacy bcrypt hash to Argon2id
+    if is_legacy_hash(&user.password_hash) {
+        if let Err(e) = upgrade_password_hash(&pool, user.id, &request.password).await {
+            tracing::warn!(user_id = %user.id, error = %e, "Failed to migrate password hash");
+        }
     }
 
     // Record successful attempt
