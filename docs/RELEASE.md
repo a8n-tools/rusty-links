@@ -115,23 +115,23 @@ Create a GitHub Release for better visibility:
 ### Pull Latest Version
 
 ```bash
-docker pull ghcr.io/YOUR-USERNAME/rusty-links:latest
+docker pull dev.a8n.run/a8n-tools/rusty-links:latest
 ```
 
 ### Pull Specific Version
 
 ```bash
-docker pull ghcr.io/YOUR-USERNAME/rusty-links:v1.0.0
+docker pull dev.a8n.run/a8n-tools/rusty-links:v1.0.0
 ```
 
 ### Pull by Major/Minor Version
 
 ```bash
 # Latest v1.x.x release
-docker pull ghcr.io/YOUR-USERNAME/rusty-links:v1
+docker pull dev.a8n.run/a8n-tools/rusty-links:v1
 
 # Latest v1.0.x release
-docker pull ghcr.io/YOUR-USERNAME/rusty-links:v1.0
+docker pull dev.a8n.run/a8n-tools/rusty-links:v1.0
 ```
 
 ## Update compose.yml to Use Published Image
@@ -141,7 +141,7 @@ Instead of building locally, use the published image:
 ```yaml
 services:
   app:
-    image: ghcr.io/YOUR-USERNAME/rusty-links:latest
+    image: dev.a8n.run/a8n-tools/rusty-links:latest
     # Remove the 'build' section
     container_name: rusty-links-app
     environment:
@@ -276,8 +276,8 @@ The workflow generates build attestations for supply chain security:
 ```bash
 # Verify attestation
 gh attestation verify \
-  oci://ghcr.io/YOUR-USERNAME/rusty-links:v1.0.0 \
-  --owner YOUR-USERNAME
+  oci://dev.a8n.run/a8n-tools/rusty-links:v1.0.0 \
+  --owner a8n-tools
 ```
 
 ### Signing Images (Future)

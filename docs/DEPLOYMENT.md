@@ -132,7 +132,7 @@ docker-compose --version
 cd ~/rustylinks
 
 # Clone from GitHub
-git clone https://github.com/YOUR-USERNAME/rusty-links.git .
+git clone https://dev.a8n.run/a8n-tools/rusty-links.git .
 
 # Or pull pre-built image (recommended for production)
 # Configuration shown in next steps
@@ -142,7 +142,7 @@ git clone https://github.com/YOUR-USERNAME/rusty-links.git .
 
 ```bash
 # Copy environment template
-cp .env.example .env
+cp .env.standalone .env
 
 # Generate strong password
 openssl rand -base64 32
@@ -207,7 +207,7 @@ services:
     # Security: No exposed ports (only accessible via network)
 
   app:
-    image: ghcr.io/YOUR-USERNAME/rusty-links:latest
+    image: dev.a8n.run/a8n-tools/rusty-links:latest
     container_name: rustylinks-app
     restart: unless-stopped
     depends_on:

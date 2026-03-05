@@ -7,7 +7,7 @@ This guide covers deploying Rusty Links using Docker and Docker Compose for both
 ### 1. Copy Environment Template
 
 ```bash
-cp .env.example .env
+cp .env.standalone .env
 ```
 
 ### 2. Configure Environment Variables
@@ -270,12 +270,12 @@ docker images rusty-links
 
 ### Non-Root User
 
-The application runs as a non-root user (`rustylinks`, UID 1000):
+The application runs as a non-root user (`appuser`, UID 1001):
 
 ```bash
 # Verify user
 docker compose exec app id
-# Output: uid=1000(rustylinks) gid=1000(rustylinks)
+# Output: uid=1001(appuser) gid=1001(appuser)
 ```
 
 ### Secure Passwords
@@ -296,7 +296,7 @@ Services communicate via a dedicated bridge network (`rusty-links-network`), iso
 
 ### Minimal Runtime
 
-The production image uses `debian:bookworm-slim` with only essential runtime dependencies.
+The production image uses `debian:trixie-slim` with only essential runtime dependencies.
 
 ## Performance Tuning
 

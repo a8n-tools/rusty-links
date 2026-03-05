@@ -30,15 +30,14 @@ This project adheres to a code of conduct that all contributors are expected to 
 
 Before you begin, ensure you have:
 
-- Rust 1.75 or later installed
-- PostgreSQL 14+ running locally
-- Node.js 18+ (for Dioxus CLI)
+- Rust (latest stable recommended)
+- PostgreSQL 17+ running locally
+- Dioxus CLI (`cargo install dioxus-cli` or `cargo binstall dioxus-cli`)
 - Git for version control
-- A GitHub account
 
 ### Finding Issues to Work On
 
-1. Check the [Issues](https://github.com/YOUR-USERNAME/rusty-links/issues) page
+1. Check the [Issues](https://dev.a8n.run/a8n-tools/rusty-links/issues) page
 2. Look for issues labeled `good first issue` for beginner-friendly tasks
 3. Check for issues labeled `help wanted` if you're more experienced
 4. Comment on the issue to let others know you're working on it
@@ -48,13 +47,13 @@ Before you begin, ensure you have:
 1. **Fork the repository**
    ```bash
    # Click "Fork" on GitHub, then clone your fork
-   git clone https://github.com/YOUR-USERNAME/rusty-links.git
+   git clone https://dev.a8n.run/a8n-tools/rusty-links.git
    cd rusty-links
    ```
 
 2. **Add upstream remote**
    ```bash
-   git remote add upstream https://github.com/ORIGINAL-OWNER/rusty-links.git
+   git remote add upstream https://dev.a8n.run/a8n-tools/rusty-links.git
    ```
 
 3. **Install dependencies**
@@ -72,7 +71,7 @@ Before you begin, ensure you have:
    createdb rustylinks
 
    # Copy environment template
-   cp .env.example .env
+   cp .env.standalone .env
    # Edit .env with your database credentials
 
    # Run migrations

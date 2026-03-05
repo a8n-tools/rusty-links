@@ -1,44 +1,40 @@
-# Rusty Links 🔗
+# Rusty Links
 
 A self-hosted bookmark manager built with Rust and Dioxus. Organize, search, and manage your links with automatic metadata extraction and GitHub integration.
 
-![Rust](https://img.shields.io/badge/rust-1.75%2B-orange)
-![License](https://img.shields.io/badge/license-MIT-blue)
-![Docker](https://img.shields.io/badge/docker-ready-blue)
-
-[Features](#-features) • [Quick Start](#-quick-start) • [Documentation](#-documentation) • [Contributing](#-contributing)
+[Features](#features) | [Quick Start](#quick-start) | [Documentation](#documentation) | [Contributing](#contributing)
 
 ---
 
-## ✨ Features
+## Features
 
-- 🔐 **Single-user authentication** with secure Argon2 password hashing
-- 📋 **Link management** with full CRUD operations
-- 🤖 **Automatic metadata extraction** - titles, descriptions, logos
-- 🐙 **GitHub integration** - stars, languages, licenses auto-detected
-- 📂 **Hierarchical categories** (up to 3 levels)
-- 🏷️ **Tags, languages, and licenses** for organization
-- 🔍 **Full-text search** with advanced filtering
-- ⏰ **Scheduled updates** to keep metadata fresh
-- 📱 **Responsive UI** - works on mobile, tablet, desktop
-- 🐳 **Docker ready** - one command deployment
-- 🔒 **Privacy-first** - self-hosted, your data stays yours
+- **JWT authentication** with bcrypt password hashing and refresh tokens
+- **Link management** with full CRUD operations
+- **Automatic metadata extraction** - titles, descriptions, logos
+- **GitHub integration** - stars, languages, licenses auto-detected
+- **Hierarchical categories** (up to 3 levels)
+- **Tags, languages, and licenses** for organization
+- **Full-text search** with advanced filtering
+- **Scheduled updates** to keep metadata fresh
+- **Responsive UI** - works on mobile, tablet, and desktop
+- **Docker ready** - one command deployment
+- **Two build modes** - standalone (self-hosted) and SaaS (parent app auth)
 
 ---
 
-## 🚀 Quick Start
+## Quick Start
 
 ### Using Docker Compose (Recommended)
 
 1. **Clone the repository**
    ```bash
-   git clone https://github.com/YOUR-USERNAME/rusty-links.git
+   git clone https://git.a8n.run/a8n-tools/rusty-links.git
    cd rusty-links
    ```
 
 2. **Configure environment**
    ```bash
-   cp .env.example .env
+   cp .env.standalone .env
    # Edit .env and set a secure database password
    ```
 
@@ -48,76 +44,96 @@ A self-hosted bookmark manager built with Rust and Dioxus. Organize, search, and
    ```
 
 4. **Access the application**
-   - Open http://localhost:8080
-   - Create your account (first user only)
+   - Open http://localhost:3003
+   - Create your account via the setup page
    - Start adding links!
-
-### Using Docker Image
-
-```bash
-# Pull latest image
-docker pull ghcr.io/NiceGuyIT/rusty-links:latest
-
-# Run with external PostgreSQL
-docker run -d \
-  -e DATABASE_URL=postgres://user:pass@host/db \
-  -e APP_PORT=8080 \
-  -p 8080:8080 \
-  ghcr.io/YOUR-USERNAME/rusty-links:latest
-```
 
 ### From Source
 
-See [Building from Source](#-building-from-source) below.
+See [Building from Source](#building-from-source) below.
 
 ---
 
-## 📸 Screenshots
+## Configuration
 
-*Screenshots will be added as the UI is developed*
+### Build Modes
 
----
+Rusty Links supports two build modes via the `BUILD_MODE` build argument:
 
-## ⚙️ Configuration
+- **standalone** (default) - Self-hosted with built-in JWT authentication
+- **saas** - Authentication handled by a parent application's cookies
 
-Configure via environment variables:
+Environment variable templates are provided for each mode:
+```bash
+cp .env.standalone .env   # Standalone mode
+cp .env.saas .env         # SaaS mode
+```
+
+### Environment Variables
+
+#### Core Settings
+
+| Variable                | Description                                         | Default      |
+|-------------------------|-----------------------------------------------------|--------------|
+| `DATABASE_URL`          | PostgreSQL connection string                        | *Required*   |
+| `APP_PORT`              | Application port                                    | `8080`       |
+| `HOST_PORT`             | Docker host port mapping                            | `3003`       |
+| `DB_USERNAME`           | PostgreSQL username (Docker Compose)                | `rustylinks` |
+| `DB_PASSWORD`           | PostgreSQL password (Docker Compose)                | `changeme`   |
+| `DB_NAME`               | PostgreSQL database name (Docker Compose)           | `rustylinks` |
+| `RUST_LOG`              | Log level (trace, debug, info, warn, error)         | `info`       |
+
+#### Scheduler Settings
 
 | Variable                | Description                                         | Default    |
 |-------------------------|-----------------------------------------------------|------------|
-| `DATABASE_URL`          | PostgreSQL connection string                        | *Required* |
-| `APP_PORT`              | Application port                                    | `8080`     |
 | `UPDATE_INTERVAL_DAYS`  | Days between metadata updates                       | `30`       |
-| `UPDATE_INTERVAL_HOURS` | Metadata update frequency (hours)                   | `24`       |
+| `UPDATE_INTERVAL_HOURS` | Scheduler run frequency (hours)                     | `24`       |
 | `BATCH_SIZE`            | Links processed per batch                           | `50`       |
 | `JITTER_PERCENT`        | Update scheduling jitter (0-100)                    | `20`       |
-| `RUST_LOG`              | Log level (trace, debug, info, warn, error)         | `info`     |
 | `GITHUB_TOKEN`          | GitHub API token (optional, for higher rate limits) | None       |
 
-See `.env.example` for all available options.
+#### Standalone Mode Settings
+
+| Variable                     | Description                                    | Default |
+|------------------------------|------------------------------------------------|---------|
+| `JWT_SECRET`                 | Secret key for signing JWT tokens              | Random  |
+| `JWT_EXPIRY`                 | Access token expiry in hours                   | `1`     |
+| `REFRESH_TOKEN_EXPIRY`       | Refresh token expiry in days                   | `7`     |
+| `ACCOUNT_LOCKOUT_ATTEMPTS`   | Failed login attempts before lockout           | `5`     |
+| `ACCOUNT_LOCKOUT_DURATION`   | Lockout duration in minutes                    | `30`    |
+| `ALLOW_REGISTRATION`         | Allow new user registration (`true`/`1`)       | `true`  |
+
+See `.env.standalone` and `.env.saas` for full documentation of all options.
 
 ---
 
-## 📚 Documentation
+## Documentation
 
 - [Docker Deployment Guide](docs/DOCKER.md) - Complete Docker setup and deployment
-- [Release Process](docs/RELEASE.md) - How to create and publish releases
-- [Project Architecture](CLAUDE.md) - System design and architecture overview
+- [API Reference](docs/API.md) - Complete endpoint reference with examples
+- [Database Schema](docs/DATABASE.md) - Schema reference and migration history
+- [Security](docs/SECURITY.md) - Security features and hardening guide
+- [Testing](docs/TESTING.md) - Testing strategy and instructions
+- [Deployment](docs/DEPLOYMENT.md) - Production deployment guide
+- [Release Process](docs/RELEASE.md) - Versioning and release workflow
 
 ---
 
-## 🔨 Building from Source
+## Building from Source
 
 ### Prerequisites
 
-- Rust 1.75 or later
-- PostgreSQL 14+
-- Node.js 18+ (for Dioxus CLI)
+- Rust (latest stable recommended)
+- PostgreSQL 17+
+- Dioxus CLI (`cargo install dioxus-cli` or `cargo binstall dioxus-cli`)
 
 ### Steps
 
 1. **Install dependencies**
    ```bash
    cargo install dioxus-cli
+   rustup target add wasm32-unknown-unknown
    ```
 
 2. **Set up database**
@@ -127,36 +143,32 @@ See `.env.example` for all available options.
 
 3. **Configure environment**
    ```bash
-   cp .env.example .env
+   cp .env.standalone .env
    # Edit .env with your database URL
    ```
 
-4. **Run migrations**
-   ```bash
-   cargo install sqlx-cli --no-default-features --features postgres
-   sqlx migrate run
-   ```
-
-5. **Run development server**
+4. **Run development server**
    ```bash
    dx serve
    ```
 
-6. **Build for production**
+   Migrations run automatically on startup.
+
+5. **Build for production**
    ```bash
-   cargo build --release
-   ./target/release/rusty-links
+   dx build --release
    ```
 
 ---
 
-## 🏗️ Architecture
+## Architecture
 
 - **Backend:** Rust with Axum web framework
-- **Frontend:** Dioxus (React-like for Rust)
-- **Database:** PostgreSQL with SQLx
-- **Authentication:** Session-based with Argon2
+- **Frontend:** Dioxus 0.7 (fullstack mode with SSR)
+- **Database:** PostgreSQL with SQLx (compile-time checked queries)
+- **Authentication:** JWT tokens with bcrypt password hashing
 - **Scraping:** reqwest + scraper crate
+- **Styling:** Tailwind CSS v4
 - **Deployment:** Docker + Docker Compose
 
 ### Project Structure
@@ -164,22 +176,34 @@ See `.env.example` for all available options.
 ```
 rusty-links/
 ├── src/
-│   ├── main.rs           # Application entry point
-│   ├── api/              # REST API endpoints
-│   ├── auth/             # Authentication logic
-│   ├── ui/               # Dioxus frontend components
-│   ├── models/           # Database models
-│   ├── config.rs         # Configuration management
-│   └── error.rs          # Error handling
-├── migrations/           # Database migrations
-├── assets/               # Static assets
-├── docs/                 # Documentation
-└── Dockerfile            # Production container
+│   ├── main.rs              # Application entry point
+│   ├── lib.rs               # Library root, feature-gated modules
+│   ├── config.rs            # Environment-based configuration
+│   ├── error.rs             # Centralized error handling
+│   ├── security.rs          # Security utilities
+│   ├── api/                 # REST API endpoints
+│   ├── auth/                # JWT authentication and middleware
+│   ├── github/              # GitHub API integration
+│   ├── models/              # Database models (User, Link, Category, Tag, etc.)
+│   ├── scheduler/           # Background task runner
+│   ├── scraper/             # HTML metadata extraction
+│   ├── server_functions/    # Dioxus server functions (client/server bridge)
+│   └── ui/                  # Dioxus frontend
+│       ├── app.rs           # Root component and routing
+│       ├── components/      # Reusable UI components
+│       └── pages/           # Page components
+├── migrations/              # Database migrations (8 files)
+├── assets/                  # Static assets (generated CSS, favicon)
+├── examples/                # Reverse proxy configs (nginx, Caddy)
+├── docs/                    # Documentation
+├── Dockerfile               # Multi-stage production build
+├── compose.yml              # Docker Compose (app + PostgreSQL)
+└── compose.dev.yml          # Development override (hot reloading)
 ```
 
 ---
 
-## 🛠️ Development
+## Development
 
 ### Running Tests
 
@@ -195,17 +219,11 @@ For development with hot reloading:
 docker compose -f compose.yml -f compose.dev.yml up
 ```
 
-This will:
-- Mount source code as volumes
-- Use `cargo watch` for automatic reloads
-- Enable debug logging
-
 ### Database Migrations
 
 Migrations run automatically on application startup. For manual control:
 
 ```bash
-# Install SQLx CLI
 cargo install sqlx-cli --no-default-features --features postgres
 
 # Create new migration
@@ -213,37 +231,27 @@ sqlx migrate add <migration_name>
 
 # Run migrations
 sqlx migrate run
-
-# Revert last migration
-sqlx migrate revert
 ```
 
 ### Code Quality
 
 ```bash
-# Format code
 cargo fmt
-
-# Run linter
 cargo clippy
-
-# Check without building
 cargo check
+cargo check --features server
+cargo check --features web --target wasm32-unknown-unknown
 ```
 
 ---
 
-## 🚀 Production Deployment
+## Production Deployment
 
-See [docs/DOCKER.md](docs/DOCKER.md) for complete deployment instructions.
+See [docs/DOCKER.md](docs/DOCKER.md) and [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md) for complete instructions.
 
 Quick production deployment:
 
 ```bash
-# Pull published image
-docker pull ghcr.io/YOUR-USERNAME/rusty-links:latest
-
-# Start with Docker Compose
 docker compose up -d
 
 # View logs
@@ -255,90 +263,32 @@ docker compose ps
 
 ### Security Considerations
 
-- Always use strong database passwords
-- Run as non-root user (default in Docker)
-- Keep dependencies updated
-- Use HTTPS in production (reverse proxy recommended)
+- Always set a strong `DB_PASSWORD` and `JWT_SECRET`
+- Run as non-root user (default in Docker: appuser, UID 1001)
+- Use HTTPS in production (reverse proxy recommended, see `examples/`)
 - Regularly backup your database
 
 ---
 
-## 🤝 Contributing
+## Contributing
 
 Contributions are welcome! Please see [CONTRIBUTING.md](CONTRIBUTING.md) for guidelines.
 
-### Development Workflow
+---
 
-1. Fork the repository
-2. Create a feature branch (`git checkout -b feature/amazing-feature`)
-3. Make your changes
-4. Run tests: `cargo test`
-5. Run linter: `cargo clippy`
-6. Format code: `cargo fmt`
-7. Commit your changes (`git commit -m 'Add amazing feature'`)
-8. Push to the branch (`git push origin feature/amazing-feature`)
-9. Open a Pull Request
+## License
 
-### Reporting Issues
-
-- Use GitHub Issues for bug reports and feature requests
-- Check existing issues before creating new ones
-- Provide clear reproduction steps for bugs
-- Include system information (OS, Rust version, etc.)
+This project is licensed under the MIT License - see [LICENSE](LICENSE.md) for details.
 
 ---
 
-## 📄 License
+## Credits
 
-This project is licensed under the MIT License - see [LICENSE](LICENSE) for details.
-
----
-
-## 🙏 Credits
-
-Built with:
-- [Rust](https://www.rust-lang.org/) - Systems programming language
-- [Dioxus](https://dioxuslabs.com/) - React-like UI framework for Rust
-- [Axum](https://github.com/tokio-rs/axum) - Web framework
-- [SQLx](https://github.com/launchbadge/sqlx) - Async SQL toolkit
-- [PostgreSQL](https://www.postgresql.org/) - Database
-- [Docker](https://www.docker.com/) - Containerization
+Built with [Rust](https://www.rust-lang.org/), [Dioxus](https://dioxuslabs.com/), [Axum](https://github.com/tokio-rs/axum), [SQLx](https://github.com/launchbadge/sqlx), [PostgreSQL](https://www.postgresql.org/), and [Docker](https://www.docker.com/).
 
 ---
-
-## ⭐ Star History
-
-If you find this project useful, please consider giving it a star!
-
----
-
-## Prompts
-
-This is the prompt to create vibe coding prompts.
-
-Part 8: Deployment & Documentation (Steps 46-55)
-
-> Read the `IMPLEMENTATION_GUIDE` for Part 8: Deployment & Documentation (Steps 46-55). Draft a detailed, step-by-step blueprint for building Part 8: Deployment & Documentation (Steps 46-55). Then, once you have a solid plan, break it down into small, iterative chunks that build on each other. Look at these chunks and then go another round to break it into small steps. Review the results and make sure that the steps are small enough to be implemented safely, but big enough to move the project forward. Iterate until you feel that the steps are right sized for this project.
->
-> From here you should have the foundation to provide a series of prompts for a code-generation LLM that will implement each step. Prioritize best practices, and incremental progress, ensuring no big jumps in complexity at any stage. Make sure that each prompt builds on the previous prompts, and ends with wiring things together. There should be no hanging or orphaned code that isn't integrated into a previous step.
->
-> Make sure and separate each prompt section. Use markdown. Each prompt should be tagged as text using code tags using quadruple (4) backticks. The goal is to output prompts, but context, etc is important as well. The inner code tags should use triple (3) backticks. Save the prompts in the `docs/` directory.
-
----
-
-> Read the `IMPLEMENTATION_GUIDE` and draft a detailed, step-by-step blueprint for building the Link Flow in step 36. Then, once you have a solid plan, break it down into small, iterative chunks that build on each other. Look at these chunks and then go another round to break it into small steps. Review the results and make sure that the steps are small enough to be implemented safely, but big enough to move the project forward. Iterate until you feel that the steps are right sized for this project.
->
-> From here you should have the foundation to provide a series of prompts for a code-generation LLM that will implement each step. Prioritize best practices, and incremental progress, ensuring no big jumps in complexity at any stage. Make sure that each prompt builds on the previous prompts, and ends with wiring things together. There should be no hanging or orphaned code that isn't integrated into a previous step.
->
-> Make sure and separate each prompt section. Use markdown. Each prompt should be tagged as text using code tags. The goal is to output prompts, but context, etc. is important as well. Each prompt will use quadruple (4) backtick code tags while the inner code tags will use triple (3) backticks. Save the prompts in the `docs/` directory.
 
 ## TODO
 
-- [ ] Delete `oci-build/setup.nu` — it is orphaned now that the Dockerfile uses the dummy-src pattern instead of Nushell + setup.nu for building.
-- [ ] Remove or update `.cargo/config.toml` — it sets `target = "x86_64-unknown-linux-gnu"` (glibc), which conflicts with the Alpine/musl Docker build. The Dockerfile works around this by using selective `COPY` instead of `COPY . .`, but the config should be reviewed.
-
-## Notes
-
-- ✅ Server feature compiles successfully (cargo check --features server)
-- ✅ Web feature compiles successfully for WASM (cargo check --features web --target wasm32-unknown-unknown)
-
+- [ ] Delete `oci-build/setup.nu` — orphaned now that the Dockerfile uses the dummy-src pattern
+- [ ] Remove or update `.cargo/config.toml` — sets `target = "x86_64-unknown-linux-gnu"` (glibc), which conflicts with Alpine/musl Docker builds

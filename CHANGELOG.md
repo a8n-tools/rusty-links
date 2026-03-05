@@ -37,11 +37,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 #### Core Features
 - **Authentication System**
-  - Single-user authentication for Phase 1
-  - Argon2 password hashing (memory-hard, ASIC-resistant)
-  - Session-based authentication with HTTP-only cookies
-  - Secure session management with database-backed storage
-  - Session token generation using cryptographically secure RNG
+  - Two build modes: standalone (JWT auth) and SaaS (parent app cookie auth)
+  - bcrypt password hashing (standalone mode)
+  - JWT-based authentication with access and refresh tokens
+  - Account lockout after configurable failed login attempts
   - Initial setup endpoint (`/api/auth/setup`) for first user creation
   - Setup endpoint automatically disabled after first user
   - Login/logout functionality with proper cookie management
@@ -161,12 +160,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 #### Technical Implementation
 
 - **Backend Stack**
-  - Rust 1.75+ with Axum web framework
-  - PostgreSQL 16+ database with SQLx
+  - Rust with Axum web framework
+  - PostgreSQL 17+ database with SQLx
   - Asynchronous runtime with Tokio
   - Structured logging with tracing crate
-  - Session management with secure cookies (axum-extra)
-  - Password hashing with argon2 crate
+  - JWT authentication with jsonwebtoken crate
+  - Password hashing with bcrypt crate
 
 - **Database**
   - PostgreSQL with SQLx for compile-time query verification
@@ -179,7 +178,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Self-referencing foreign keys (category hierarchy)
   - Junction tables for many-to-many relationships
   - Automatic migrations on startup
-  - 5 migration files documenting schema evolution
+  - 8 migration files documenting schema evolution
 
 - **Frontend**
   - Dioxus framework for reactive UI (fullstack mode)
@@ -199,8 +198,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Docker Support**
   - Multi-stage Dockerfile for optimized builds
   - Production image < 150MB
-  - debian:bookworm-slim base image
-  - Non-root user (rustylinks, UID 1000)
+  - debian:trixie-slim base image
+  - Non-root user (appuser, UID 1001)
   - Security hardening:
     - No new privileges
     - Minimal runtime dependencies
@@ -210,7 +209,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - **Docker Compose**
   - One-command deployment (`docker compose up -d`)
-  - PostgreSQL 16-alpine service container
+  - PostgreSQL 17-alpine service container
   - Automatic health checks
   - Named volumes for data persistence
   - Isolated bridge network
@@ -236,7 +235,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - **Configuration**
   - Environment-based configuration
-  - `.env.example` template provided
+  - `.env.standalone` and `.env.saas` templates provided
   - Configurable settings:
     - Database connection
     - Application port
@@ -322,20 +321,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Configuration Examples**
   - Nginx reverse proxy config (`examples/nginx.conf`)
   - Caddy reverse proxy config (`examples/Caddyfile`)
-  - Environment template (`.env.example`)
+  - Environment templates (`.env.standalone`, `.env.saas`)
   - Docker Compose production config
 
 #### Security
 
 - **Authentication Security**
-  - Argon2id password hashing
-  - Configurable Argon2 parameters
-  - Constant-time password comparison
-  - Session-based authentication (stateful)
-  - Secure random session tokens (32 bytes)
-  - HttpOnly cookies (XSS prevention)
-  - Secure cookie flag (HTTPS only)
-  - SameSite=Lax (CSRF protection)
+  - bcrypt password hashing
+  - JWT-based authentication with access and refresh tokens
+  - Configurable token expiry (access and refresh)
+  - Account lockout after configurable failed attempts
 
 - **Data Protection**
   - Parameterized SQL queries (injection prevention)
@@ -409,11 +404,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Security
 
-- Argon2 password hashing implementation
+- bcrypt password hashing implementation
 - SQL injection prevention via parameterized queries
 - XSS prevention via CSP and output encoding
-- CSRF protection via SameSite cookies
-- Session management security
+- JWT token security with configurable expiry
 - Input validation and sanitization
 - Secure cookie settings
 - Non-root Docker container
@@ -434,12 +428,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## Links
 
-- [Repository](https://github.com/YOUR-USERNAME/rusty-links)
-- [Documentation](https://github.com/YOUR-USERNAME/rusty-links/tree/main/docs)
-- [Issues](https://github.com/YOUR-USERNAME/rusty-links/issues)
-- [Releases](https://github.com/YOUR-USERNAME/rusty-links/releases)
+- [Repository](https://dev.a8n.run/a8n-tools/rusty-links)
+- [Documentation](https://dev.a8n.run/a8n-tools/rusty-links/tree/main/docs)
+- [Issues](https://dev.a8n.run/a8n-tools/rusty-links/issues)
+- [Releases](https://dev.a8n.run/a8n-tools/rusty-links/releases)
 
 ---
 
-[Unreleased]: https://github.com/YOUR-USERNAME/rusty-links/compare/v1.0.0...HEAD
-[1.0.0]: https://github.com/YOUR-USERNAME/rusty-links/releases/tag/v1.0.0
+[Unreleased]: https://dev.a8n.run/a8n-tools/rusty-links/compare/v1.0.0...HEAD
+[1.0.0]: https://dev.a8n.run/a8n-tools/rusty-links/releases/tag/v1.0.0

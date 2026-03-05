@@ -33,21 +33,12 @@ Rusty Links implements security best practices for a self-hosted bookmark manage
 
 ### Authentication & Authorization
 
-✅ **Argon2 Password Hashing**
-- Industry-standard, memory-hard hashing algorithm
-- Configurable memory cost, time cost, and parallelism
-- Resistant to GPU and ASIC attacks
-- Salt included automatically
+✅ **bcrypt Password Hashing**
+- Industry-standard password hashing algorithm
+- Automatic salt generation
+- Configurable work factor
 
-```rust
-// Implementation in src/models/user.rs
-use argon2::{
-    password_hash::{PasswordHash, PasswordHasher, PasswordVerifier, SaltString},
-    Argon2,
-};
-```
-
-✅ **Session-based Authentication**
+✅ **JWT-based Authentication**
 - Secure random session tokens (32 bytes / 64 hex characters)
 - Database-backed sessions (not JWT)
 - HttpOnly cookies prevent XSS attacks
@@ -117,15 +108,14 @@ sqlx::query("SELECT * FROM users WHERE email = $1")
 
 ✅ **Password Requirements**
 - Minimum 8 characters (configurable)
-- Hashed with Argon2 before storage
+- Hashed with bcrypt before storage
 - Never logged or exposed in responses
 - Password hash excluded from User serialization
 
-✅ **Secure Session Storage**
-- Sessions stored in PostgreSQL database
-- Session tokens never in logs
-- Automatic cleanup on logout
-- No session fixation vulnerabilities
+✅ **JWT Token Security**
+- Access tokens with configurable expiry
+- Refresh tokens for session renewal
+- Account lockout after failed login attempts
 
 ✅ **No Sensitive Data Logging**
 - Passwords never logged
@@ -175,12 +165,12 @@ pub fn masked_database_url(&self) -> String {
 ### Container Security
 
 ✅ **Non-root User**
-- Container runs as user `rustylinks` (UID 1000)
+- Container runs as user `appuser` (UID 1001)
 - No privilege escalation
 - Minimal capabilities
 
 ✅ **Minimal Runtime Image**
-- debian:bookworm-slim base
+- debian:trixie-slim base
 - Only essential runtime dependencies
 - No build tools in final image
 - Multi-stage builds for size reduction
@@ -557,7 +547,7 @@ systemctl status rustylinks
 
 **For Application:**
 - Minimum 8 characters enforced
-- Consider bcrypt or Argon2 settings adjustment
+- Consider bcrypt work factor adjustment
 - No password reset via email (single-user)
 - Session timeout after 30 days inactivity (future feature)
 

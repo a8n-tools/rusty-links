@@ -49,9 +49,9 @@ curl http://localhost:8080/api/health
 nano compose.prod.yml
 
 # Change:
-# image: ghcr.io/YOUR-USERNAME/rusty-links:latest
+# image: dev.a8n.run/a8n-tools/rusty-links:latest
 # To:
-# image: ghcr.io/YOUR-USERNAME/rusty-links:1.1.0
+# image: dev.a8n.run/a8n-tools/rusty-links:1.1.0
 
 # Then follow the general upgrade process above
 ```
@@ -180,7 +180,7 @@ docker-compose -f compose.prod.yml down app
 nano compose.prod.yml
 
 # Change image tag to previous version:
-# image: ghcr.io/YOUR-USERNAME/rusty-links:1.0.0
+# image: dev.a8n.run/a8n-tools/rusty-links:1.0.0
 
 # 3. Restore database backup (if needed)
 docker-compose -f compose.prod.yml exec -T postgres \
@@ -310,8 +310,8 @@ docker-compose -f compose.prod.yml logs app | grep -i migration
 # Verify environment variables
 docker-compose -f compose.prod.yml exec app env | grep -E "DATABASE_URL|APP_PORT|RUST_LOG"
 
-# Compare with .env.example for new variables
-diff .env .env.example
+# Compare with .env.standalone for new variables
+diff .env .env.standalone
 ```
 
 #### Performance Degradation After Upgrade
@@ -334,7 +334,7 @@ If you encounter issues during upgrade:
 
 1. Check the logs: `docker-compose logs -f app`
 2. Review [TROUBLESHOOTING.md](TROUBLESHOOTING.md) (if available)
-3. Check [GitHub Issues](https://github.com/YOUR-USERNAME/rusty-links/issues)
+3. Check [GitHub Issues](https://dev.a8n.run/a8n-tools/rusty-links/issues)
 4. Create a new issue with:
    - Version upgrading from/to
    - Error logs
@@ -390,4 +390,4 @@ After upgrading, verify:
 **Last Updated:** 2025-01-XX
 **Current Version:** 1.0.0
 
-For the latest upgrade information, always refer to the [GitHub Releases](https://github.com/YOUR-USERNAME/rusty-links/releases) page.
+For the latest upgrade information, always refer to the [GitHub Releases](https://dev.a8n.run/a8n-tools/rusty-links/releases) page.

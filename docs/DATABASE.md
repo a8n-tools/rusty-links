@@ -19,7 +19,7 @@ Complete database schema reference for Rusty Links PostgreSQL database.
 
 ## Overview
 
-Rusty Links uses PostgreSQL 14+ as its database backend. The schema is designed with:
+Rusty Links uses PostgreSQL 17+ as its database backend. The schema is designed with:
 
 - **UUID primary keys** for all entities
 - **Cascade deletes** to maintain referential integrity
@@ -156,14 +156,14 @@ CREATE TABLE users (
 |-----------------|-------------|-------------------------|----------------------------|
 | `id`            | UUID        | PRIMARY KEY             | User identifier            |
 | `email`         | TEXT        | NOT NULL, UNIQUE        | User email address         |
-| `password_hash` | TEXT        | NOT NULL                | Argon2 password hash       |
+| `password_hash` | TEXT        | NOT NULL                | bcrypt password hash       |
 | `created_at`    | TIMESTAMPTZ | NOT NULL, DEFAULT NOW() | Account creation timestamp |
 
 **Indexes:**
 - `idx_users_email` - Fast email lookups for authentication
 
 **Notes:**
-- Passwords are hashed using Argon2
+- Passwords are hashed using bcrypt
 - Email must be unique (case-sensitive)
 - Deleting a user cascades to all their data
 

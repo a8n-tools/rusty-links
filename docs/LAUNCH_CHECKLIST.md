@@ -150,7 +150,7 @@ Complete checklist for launching Rusty Links v1.0.0 to production.
 - [ ] Session expires correctly (if timeout implemented)
 
 #### Password Security
-- [ ] Passwords hashed with Argon2
+- [ ] Passwords hashed with bcrypt
 - [ ] Password minimum length enforced (8 characters)
 - [ ] Passwords never logged
 - [ ] Passwords not in API responses
@@ -303,7 +303,7 @@ Complete checklist for launching Rusty Links v1.0.0 to production.
 - [ ] Environment variables used for config
 
 ### Configuration
-- [ ] `.env.example` up to date
+- [ ] `.env.standalone` and `.env.saas` up to date
 - [ ] All environment variables documented
 - [ ] Default values sensible
 - [ ] Required vs optional vars clear

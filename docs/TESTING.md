@@ -102,7 +102,7 @@ Tests require environment variables:
 export DATABASE_URL="postgresql://rustylinks:password@localhost/rustylinks_test"
 
 # Or use .env.test file
-cp .env.example .env.test
+cp .env.standalone .env.test
 # Edit .env.test with test database URL
 
 # Run tests with custom env file

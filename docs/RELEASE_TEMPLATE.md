@@ -25,7 +25,7 @@ A self-hosted bookmark manager built with Rust, featuring powerful organization 
 
 ## Highlights
 
-- **Single-User Authentication** - Secure session-based auth with Argon2 password hashing
+- **Single-User Authentication** - JWT-based auth with bcrypt password hashing
 - **GitHub Integration** - Automatic metadata fetching for repositories (stars, language, license)
 - **Powerful Organization** - Hierarchical categories (3 levels), custom tags, languages, and licenses
 - **Smart Search** - Full-text search with advanced filtering and sorting
@@ -40,7 +40,7 @@ A self-hosted bookmark manager built with Rust, featuring powerful organization 
 ### Features
 
 #### Core Functionality
-- Session-based authentication with Argon2id password hashing
+- JWT-based authentication with bcrypt password hashing
 - Full CRUD operations for bookmarks with automatic metadata extraction
 - GitHub repository integration (stars, language, license, last commit)
 - Duplicate URL detection per user
@@ -95,8 +95,8 @@ A self-hosted bookmark manager built with Rust, featuring powerful organization 
 - **LAUNCH_CHECKLIST.md** - Comprehensive pre-launch checklist
 
 #### Security
-- Argon2id password hashing with configurable parameters
-- HttpOnly, Secure, SameSite=Lax cookies
+- bcrypt password hashing
+- JWT-based authentication with access and refresh tokens
 - Parameterized SQL queries (injection prevention)
 - Input validation and sanitization
 - No sensitive data logging
@@ -171,7 +171,7 @@ git clone https://github.com/NiceGuyIT/rusty-links.git
 cd rusty-links
 
 # Copy environment template
-cp .env.example .env
+cp .env.standalone .env
 
 # Edit .env with your configuration
 nano .env
@@ -179,9 +179,8 @@ nano .env
 # Build and run with Docker Compose
 docker compose up -d
 
-# Or build with Cargo (requires Rust 1.75+)
-cargo build --release
-./target/release/rusty-links
+# Or build with Dioxus CLI
+dx build --release
 ```
 
 ---
@@ -243,9 +242,9 @@ None at this time. Please report issues at: https://github.com/NiceGuyIT/rusty-l
 
 ## Security Notes
 
-- All passwords hashed with Argon2id (memory-hard, ASIC-resistant)
-- Session tokens generated with cryptographically secure RNG (32 bytes)
-- HttpOnly, Secure, SameSite cookies prevent XSS/CSRF attacks
+- All passwords hashed with bcrypt
+- JWT-based authentication with configurable token expiry
+- Account lockout after configurable failed login attempts
 - Parameterized SQL queries prevent injection attacks
 - Input validation on all user inputs
 - Non-root Docker container for defense in depth

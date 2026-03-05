@@ -234,7 +234,7 @@ rusty-links/
 │   └── api/
 ├── Dockerfile
 ├── compose.yml
-├── .env.example
+├── .env.standalone
 └── README.md
 ```
 
@@ -247,7 +247,7 @@ rusty-links/
 - **Framework:** Dioxus Fullstack
 - **Database:** PostgreSQL with SQLx
 - **HTTP Server:** Axum
-- **Password Hashing:** Argon2
+- **Password Hashing:** bcrypt
 - **Web Scraping:** reqwest + scraper
 - **Logging:** tracing
 
@@ -265,7 +265,7 @@ rusty-links/
 
 ## Key Features Implemented
 
-✅ Single-user authentication with Argon2
+✅ JWT authentication with bcrypt
 ✅ Link management with CRUD operations
 ✅ Automatic metadata extraction (title, description, logo)
 ✅ GitHub repository integration (stars, languages, licenses)
