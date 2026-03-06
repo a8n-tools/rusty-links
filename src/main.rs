@@ -130,7 +130,7 @@ async fn main() {
                     // Only protect app pages — skip API, assets, and framework routes
                     let is_protected = matches!(
                         path,
-                        "/links" | "/categories" | "/tags" | "/languages" | "/licenses" | "/login"
+                        "/" | "/links" | "/categories" | "/tags" | "/languages" | "/licenses" | "/login"
                     ) || path.starts_with("/links/");
 
                     if !is_protected {
