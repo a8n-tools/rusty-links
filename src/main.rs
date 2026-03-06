@@ -5,6 +5,8 @@ use dioxus::prelude::*;
 #[cfg(feature = "server")]
 use dioxus::server::{DioxusRouterExt, ServeConfig};
 #[cfg(feature = "server")]
+use axum::response::IntoResponse;
+#[cfg(feature = "server")]
 use rusty_links::{api, config, error::AppError, scheduler};
 #[cfg(feature = "server")]
 use sqlx::{postgres::PgPoolOptions, PgPool};
@@ -107,6 +109,55 @@ async fn main() {
     // 1. First create Dioxus app router (handles server functions, static assets, and rendering)
     // 2. Then nest our custom API routes (they take precedence due to being more specific)
     let dioxus_router = axum::Router::new().serve_dioxus_application(ServeConfig::new(), App);
+
+    // In SaaS mode, wrap the Dioxus router with auth-check middleware that redirects
+    // unauthenticated users to the parent platform's login page.
+    #[cfg(feature = "saas")]
+    let dioxus_router = {
+        let saas_login_url = config.saas_login_url.clone();
+        let host_url = config.host_url.clone();
+        dioxus_router.layer(axum::middleware::from_fn(
+            move |jar: axum_extra::extract::CookieJar,
+                  req: axum::http::Request<axum::body::Body>,
+                  next: axum::middleware::Next| {
+                let saas_login_url = saas_login_url.clone();
+                let host_url = host_url.clone();
+                async move {
+                    let path = req.uri().path();
+
+                    // Only protect app pages — skip API, assets, and framework routes
+                    let is_protected = matches!(
+                        path,
+                        "/links" | "/categories" | "/tags" | "/languages" | "/licenses" | "/login"
+                    ) || path.starts_with("/links/");
+
+                    if !is_protected {
+                        return next.run(req).await;
+                    }
+
+                    // Check access_token cookie
+                    if rusty_links::auth::saas_auth::get_user_from_cookie(&jar).is_some() {
+                        // Authenticated user hitting /login — send them to links instead
+                        if path == "/login" {
+                            return axum::response::Redirect::to("/links").into_response();
+                        }
+                        return next.run(req).await;
+                    }
+
+                    // Not authenticated — redirect to SaaS login
+                    // Use /links as the default return page (not /login)
+                    let return_path = if path == "/login" { "/links" } else { path };
+                    let return_to = format!("{}{}", host_url.trim_end_matches('/'), return_path);
+                    let redirect_url = format!(
+                        "{}?redirect={}",
+                        saas_login_url.trim_end_matches('/'),
+                        urlencoding::encode(&return_to)
+                    );
+                    axum::response::Redirect::to(&redirect_url).into_response()
+                }
+            },
+        ))
+    };
 
     // Merge the API router with the Dioxus router
     // API routes under /api will be handled by our custom router

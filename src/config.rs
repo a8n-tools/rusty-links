@@ -11,6 +11,11 @@ pub struct Config {
     pub update_interval_hours: u32,
     pub batch_size: usize,
     pub jitter_percent: u8,
+    // SaaS mode configuration
+    #[cfg(feature = "saas")]
+    pub saas_login_url: String,
+    #[cfg(feature = "saas")]
+    pub host_url: String,
     // JWT configuration (standalone mode)
     #[cfg(feature = "standalone")]
     pub jwt_secret: String,
@@ -125,6 +130,14 @@ impl Config {
             ));
         }
 
+        // SaaS mode configuration
+        #[cfg(feature = "saas")]
+        let saas_login_url = std::env::var("SAAS_LOGIN_URL")
+            .unwrap_or_else(|_| "http://localhost:5173/login".to_string());
+        #[cfg(feature = "saas")]
+        let host_url = std::env::var("HOST_URL")
+            .unwrap_or_else(|_| format!("http://localhost:{app_port}"));
+
         // JWT configuration (standalone mode only)
         #[cfg(feature = "standalone")]
         let jwt_secret = std::env::var("JWT_SECRET").unwrap_or_else(|_| {
@@ -200,6 +213,10 @@ impl Config {
             update_interval_hours,
             batch_size,
             jitter_percent,
+            #[cfg(feature = "saas")]
+            saas_login_url,
+            #[cfg(feature = "saas")]
+            host_url,
             #[cfg(feature = "standalone")]
             jwt_secret,
             #[cfg(feature = "standalone")]
@@ -244,6 +261,10 @@ mod tests {
             update_interval_hours: 24,
             batch_size: 50,
             jitter_percent: 20,
+            #[cfg(feature = "saas")]
+            saas_login_url: "http://localhost:5173/login".to_string(),
+            #[cfg(feature = "saas")]
+            host_url: "http://localhost:8080".to_string(),
             #[cfg(feature = "standalone")]
             jwt_secret: "test_secret".to_string(),
             #[cfg(feature = "standalone")]
