@@ -8,6 +8,17 @@ pub fn Navbar() -> Element {
     let nav = navigator();
 
     let on_logout = move |_| {
+        // In SaaS mode, navigate directly to /logout — the server middleware
+        // redirects to the SaaS platform's logout endpoint to clear cookies.
+        #[cfg(feature = "saas")]
+        {
+            #[cfg(target_arch = "wasm32")]
+            if let Some(window) = web_sys::window() {
+                let _ = window.location().set_href("/logout");
+                return;
+            }
+        }
+
         spawn(async move {
             loading.set(true);
 
@@ -23,16 +34,6 @@ pub fn Navbar() -> Element {
                 tracing::warn!("Logout failed: {:?}", e);
             }
 
-            // In SaaS mode, navigate to /logout which the server middleware
-            // redirects to the SaaS platform's logout endpoint.
-            #[cfg(feature = "saas")]
-            {
-                #[cfg(target_arch = "wasm32")]
-                if let Some(window) = web_sys::window() {
-                    let _ = window.location().set_href("/logout");
-                    return;
-                }
-            }
             nav.push("/login");
         });
     };
