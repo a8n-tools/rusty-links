@@ -117,6 +117,7 @@ async fn main() {
         let saas_login_url = config.saas_login_url.clone();
         let host_url = config.host_url.clone();
         let saas_jwt_secret = config.saas_jwt_secret.clone();
+        let saas_logout_url = config.saas_logout_url.clone();
         dioxus_router.layer(axum::middleware::from_fn(
             move |jar: axum_extra::extract::CookieJar,
                   req: axum::http::Request<axum::body::Body>,
@@ -124,8 +125,20 @@ async fn main() {
                 let saas_login_url = saas_login_url.clone();
                 let host_url = host_url.clone();
                 let saas_jwt_secret = saas_jwt_secret.clone();
+                let saas_logout_url = saas_logout_url.clone();
                 async move {
                     let path = req.uri().path();
+
+                    // Handle /logout — redirect to SaaS platform logout
+                    if path == "/logout" {
+                        let return_to = format!("{}/links", host_url.trim_end_matches('/'));
+                        let redirect_url = format!(
+                            "{}?url={}",
+                            saas_logout_url.trim_end_matches('/'),
+                            urlencoding::encode(&return_to)
+                        );
+                        return axum::response::Redirect::to(&redirect_url).into_response();
+                    }
 
                     // Only protect app pages — skip API, assets, and framework routes
                     let is_protected = matches!(

@@ -23,13 +23,13 @@ pub fn Navbar() -> Element {
                 tracing::warn!("Logout failed: {:?}", e);
             }
 
-            // In SaaS mode, use full page navigation so the server middleware
-            // can redirect to the parent platform's login page.
+            // In SaaS mode, navigate to /logout which the server middleware
+            // redirects to the SaaS platform's logout endpoint.
             #[cfg(feature = "saas")]
             {
                 #[cfg(target_arch = "wasm32")]
                 if let Some(window) = web_sys::window() {
-                    let _ = window.location().set_href("/login");
+                    let _ = window.location().set_href("/logout");
                     return;
                 }
             }
