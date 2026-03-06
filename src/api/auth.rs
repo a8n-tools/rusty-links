@@ -387,9 +387,11 @@ use axum_extra::extract::CookieJar;
 /// Returns user info from the parent app's cookie.
 #[cfg(feature = "saas")]
 pub async fn me_handler(
+    State(config): State<crate::config::Config>,
     jar: CookieJar,
 ) -> Result<Json<crate::server_functions::auth::UserInfo>, AppError> {
-    let claims = saas_auth::get_user_from_cookie(&jar).ok_or(AppError::SessionExpired)?;
+    let claims = saas_auth::get_user_from_cookie(&jar, &config.saas_jwt_secret)
+        .ok_or(AppError::SessionExpired)?;
 
     Ok(Json(crate::server_functions::auth::UserInfo {
         id: claims.user_id,

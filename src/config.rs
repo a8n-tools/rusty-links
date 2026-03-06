@@ -16,6 +16,8 @@ pub struct Config {
     pub saas_login_url: String,
     #[cfg(feature = "saas")]
     pub host_url: String,
+    #[cfg(feature = "saas")]
+    pub saas_jwt_secret: String,
     // JWT configuration (standalone mode)
     #[cfg(feature = "standalone")]
     pub jwt_secret: String,
@@ -137,6 +139,12 @@ impl Config {
         #[cfg(feature = "saas")]
         let host_url = std::env::var("HOST_URL")
             .unwrap_or_else(|_| format!("http://localhost:{app_port}"));
+        #[cfg(feature = "saas")]
+        let saas_jwt_secret = std::env::var("SAAS_JWT_SECRET")
+            .unwrap_or_else(|_| {
+                tracing::warn!("SAAS_JWT_SECRET not set — JWT signatures will not be validated");
+                String::new()
+            });
 
         // JWT configuration (standalone mode only)
         #[cfg(feature = "standalone")]
@@ -217,6 +225,8 @@ impl Config {
             saas_login_url,
             #[cfg(feature = "saas")]
             host_url,
+            #[cfg(feature = "saas")]
+            saas_jwt_secret,
             #[cfg(feature = "standalone")]
             jwt_secret,
             #[cfg(feature = "standalone")]
@@ -265,6 +275,8 @@ mod tests {
             saas_login_url: "http://localhost:5173/login".to_string(),
             #[cfg(feature = "saas")]
             host_url: "http://localhost:8080".to_string(),
+            #[cfg(feature = "saas")]
+            saas_jwt_secret: "test-secret".to_string(),
             #[cfg(feature = "standalone")]
             jwt_secret: "test_secret".to_string(),
             #[cfg(feature = "standalone")]

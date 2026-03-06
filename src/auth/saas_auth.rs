@@ -1,5 +1,5 @@
 use axum_extra::extract::CookieJar;
-use base64::Engine;
+use jsonwebtoken::{decode, DecodingKey, Validation};
 
 /// SaaS user claims extracted from access_token cookie
 #[derive(Debug, Clone)]
@@ -10,28 +10,34 @@ pub struct SaasUserClaims {
     pub membership_status: Option<String>,
 }
 
-/// Extract user claims from access_token cookie (SaaS mode).
+/// Extract and verify user claims from access_token cookie (SaaS mode).
 ///
-/// Decodes the JWT payload via base64 (no signature validation — the parent
-/// app is responsible for issuing valid tokens).
-pub fn get_user_from_cookie(jar: &CookieJar) -> Option<SaasUserClaims> {
+/// Validates the JWT signature using the shared secret, then extracts user claims.
+pub fn get_user_from_cookie(jar: &CookieJar, secret: &str) -> Option<SaasUserClaims> {
     let cookie = jar.get("access_token")?;
-    let parts: Vec<&str> = cookie.value().split('.').collect();
+    let token = cookie.value();
 
-    if parts.len() != 3 {
-        return None;
-    }
+    let mut validation = Validation::default();
+    validation.algorithms = vec![
+        jsonwebtoken::Algorithm::HS256,
+        jsonwebtoken::Algorithm::HS384,
+        jsonwebtoken::Algorithm::HS512,
+    ];
+    // Only require exp claim
+    validation.required_spec_claims.clear();
+    validation.required_spec_claims.insert("exp".to_string());
 
-    // Try URL-safe Base64 first, then standard
-    let bytes = base64::engine::general_purpose::URL_SAFE_NO_PAD
-        .decode(parts[1])
-        .or_else(|_| base64::engine::general_purpose::STANDARD.decode(parts[1]))
-        .ok()?;
+    let token_data = decode::<serde_json::Value>(
+        token,
+        &DecodingKey::from_secret(secret.as_bytes()),
+        &validation,
+    )
+    .ok()?;
 
-    let payload: serde_json::Value = serde_json::from_slice(&bytes).ok()?;
+    let payload = token_data.claims;
 
     // Extract user_id from JWT payload
-    // The parent app's JWT may have user_id as "sub", "user_id", or "id"
+    // The parent app's JWT may have user_id as "sub" (UUID or integer), "user_id", or "id"
     let user_id = payload
         .get("user_id")
         .and_then(|v| v.as_str().map(String::from))

@@ -116,12 +116,14 @@ async fn main() {
     let dioxus_router = {
         let saas_login_url = config.saas_login_url.clone();
         let host_url = config.host_url.clone();
+        let saas_jwt_secret = config.saas_jwt_secret.clone();
         dioxus_router.layer(axum::middleware::from_fn(
             move |jar: axum_extra::extract::CookieJar,
                   req: axum::http::Request<axum::body::Body>,
                   next: axum::middleware::Next| {
                 let saas_login_url = saas_login_url.clone();
                 let host_url = host_url.clone();
+                let saas_jwt_secret = saas_jwt_secret.clone();
                 async move {
                     let path = req.uri().path();
 
@@ -136,7 +138,7 @@ async fn main() {
                     }
 
                     // Check access_token cookie
-                    if rusty_links::auth::saas_auth::get_user_from_cookie(&jar).is_some() {
+                    if rusty_links::auth::saas_auth::get_user_from_cookie(&jar, &saas_jwt_secret).is_some() {
                         // Authenticated user hitting /login — send them to links instead
                         if path == "/login" {
                             return axum::response::Redirect::to("/links").into_response();

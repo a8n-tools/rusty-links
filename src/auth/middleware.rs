@@ -150,20 +150,25 @@ where
 impl<S> FromRequestParts<S> for AuthenticatedUser
 where
     S: Send + Sync,
+    crate::config::Config: axum::extract::FromRef<S>,
 {
     type Rejection = AppError;
 
-    async fn from_request_parts(parts: &mut Parts, _state: &S) -> Result<Self, Self::Rejection> {
+    async fn from_request_parts(parts: &mut Parts, state: &S) -> Result<Self, Self::Rejection> {
+        use axum::extract::FromRef;
         use axum_extra::extract::CookieJar;
 
+        let config = crate::config::Config::from_ref(state);
         let ip = client_ip(parts);
         let path = parts.uri.path().to_string();
 
         let jar = CookieJar::from_headers(&parts.headers);
-        let claims = crate::auth::saas_auth::get_user_from_cookie(&jar).ok_or_else(|| {
-            tracing::info!(ip = %ip, path = %path, "Unauthenticated access attempt (no valid cookie)");
-            AppError::SessionExpired
-        })?;
+        let claims =
+            crate::auth::saas_auth::get_user_from_cookie(&jar, &config.saas_jwt_secret)
+                .ok_or_else(|| {
+                    tracing::info!(ip = %ip, path = %path, "Unauthenticated access attempt (no valid cookie)");
+                    AppError::SessionExpired
+                })?;
         let user_id: Uuid = claims.user_id.parse().map_err(|_| {
             tracing::info!(ip = %ip, path = %path, "Unauthenticated access attempt (invalid user ID in cookie)");
             AppError::SessionExpired
