@@ -129,11 +129,11 @@ async fn main() {
                 async move {
                     let path = req.uri().path();
 
-                    // Handle /logout — redirect to SaaS frontend logout page
+                    // Handle /logout — redirect to SaaS API logout endpoint
                     if path == "/logout" {
                         let return_to = format!("{}/links", host_url.trim_end_matches('/'));
                         let redirect_url = format!(
-                            "{}?redirect={}",
+                            "{}?url={}",
                             saas_logout_url.trim_end_matches('/'),
                             urlencoding::encode(&return_to)
                         );
