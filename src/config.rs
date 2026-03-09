@@ -150,7 +150,7 @@ impl Config {
 
         #[cfg(feature = "saas")]
         let saas_logout_url = std::env::var("SAAS_LOGOUT_URL")
-            .unwrap_or_else(|_| "http://localhost:18080/v1/auth/logout".to_string());
+            .unwrap_or_else(|_| "http://localhost:5173/logout".to_string());
 
         // JWT configuration (standalone mode only)
         #[cfg(feature = "standalone")]
@@ -286,7 +286,7 @@ mod tests {
             #[cfg(feature = "saas")]
             saas_jwt_secret: "test-secret".to_string(),
             #[cfg(feature = "saas")]
-            saas_logout_url: "http://localhost:18080/v1/auth/logout".to_string(),
+            saas_logout_url: "http://localhost:5173/logout".to_string(),
             #[cfg(feature = "standalone")]
             jwt_secret: "test_secret".to_string(),
             #[cfg(feature = "standalone")]
