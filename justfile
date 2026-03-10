@@ -37,7 +37,7 @@ check-fmt:
 
 # Build Docker image for validation (mode: standalone or saas)
 check-docker mode="standalone":
-    docker buildx build --build-arg BUILD_MODE={{ mode }} --tag rusty-links:check .
+    docker buildx build --build-arg BUILD_MODE={{ mode }} --tag rusty-links:check -f oci-build/Dockerfile .
 
 # Build release binary
 build:
@@ -45,7 +45,7 @@ build:
 
 # Build Docker image (mode: standalone or saas)
 build-docker mode="standalone":
-    docker buildx build --build-arg BUILD_MODE={{ mode }} --tag rusty-links:local .
+    docker buildx build --build-arg BUILD_MODE={{ mode }} --tag rusty-links:local -f oci-build/Dockerfile .
 
 # Start development server
 dev:
