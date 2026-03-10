@@ -151,6 +151,7 @@ impl<S> FromRequestParts<S> for AuthenticatedUser
 where
     S: Send + Sync,
     crate::config::Config: axum::extract::FromRef<S>,
+    sqlx::PgPool: axum::extract::FromRef<S>,
 {
     type Rejection = AppError;
 
@@ -159,6 +160,7 @@ where
         use axum_extra::extract::CookieJar;
 
         let config = crate::config::Config::from_ref(state);
+        let pool = sqlx::PgPool::from_ref(state);
         let ip = client_ip(parts);
         let path = parts.uri.path().to_string();
 
@@ -173,6 +175,26 @@ where
             tracing::info!(ip = %ip, path = %path, "Unauthenticated access attempt (invalid user ID in cookie)");
             AppError::SessionExpired
         })?;
+
+        // Ensure the SaaS user exists in the local database.
+        // The parent app manages authentication; we just need a local user row
+        // so that foreign key constraints on links, tags, etc. are satisfied.
+        let email = claims
+            .email
+            .filter(|e| !e.is_empty())
+            .unwrap_or_else(|| format!("{}@saas.local", user_id));
+        sqlx::query(
+            "INSERT INTO users (id, email, password_hash, name) VALUES ($1, $2, '', '') ON CONFLICT (id) DO NOTHING",
+        )
+        .bind(user_id)
+        .bind(&email)
+        .execute(&pool)
+        .await
+        .map_err(|e| {
+            tracing::error!(error = %e, user_id = %user_id, "Failed to provision SaaS user");
+            AppError::Database(e)
+        })?;
+
         Ok(AuthenticatedUser { user_id })
     }
 }

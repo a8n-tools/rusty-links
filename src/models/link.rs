@@ -764,15 +764,23 @@ impl Link {
         let _ = Self::get_by_id(pool, link_id, user_id).await?;
         let _ = Tag::get_by_id(pool, tag_id, user_id).await?;
 
+        let next_order: i32 = sqlx::query_scalar(
+            "SELECT COALESCE(MAX(order_num), -1) + 1 FROM link_tags WHERE link_id = $1",
+        )
+        .bind(link_id)
+        .fetch_one(pool)
+        .await?;
+
         sqlx::query(
             r#"
-            INSERT INTO link_tags (link_id, tag_id)
-            VALUES ($1, $2)
+            INSERT INTO link_tags (link_id, tag_id, order_num)
+            VALUES ($1, $2, $3)
             ON CONFLICT DO NOTHING
             "#,
         )
         .bind(link_id)
         .bind(tag_id)
+        .bind(next_order)
         .execute(pool)
         .await?;
 
@@ -830,15 +838,23 @@ impl Link {
         let _ = Self::get_by_id(pool, link_id, user_id).await?;
         let _ = Language::get_by_id(pool, language_id, user_id).await?;
 
+        let next_order: i32 = sqlx::query_scalar(
+            "SELECT COALESCE(MAX(order_num), -1) + 1 FROM link_languages WHERE link_id = $1",
+        )
+        .bind(link_id)
+        .fetch_one(pool)
+        .await?;
+
         sqlx::query(
             r#"
-            INSERT INTO link_languages (link_id, language_id)
-            VALUES ($1, $2)
+            INSERT INTO link_languages (link_id, language_id, order_num)
+            VALUES ($1, $2, $3)
             ON CONFLICT DO NOTHING
             "#,
         )
         .bind(link_id)
         .bind(language_id)
+        .bind(next_order)
         .execute(pool)
         .await?;
 
@@ -896,15 +912,23 @@ impl Link {
         let _ = Self::get_by_id(pool, link_id, user_id).await?;
         let _ = License::get_by_id(pool, license_id, user_id).await?;
 
+        let next_order: i32 = sqlx::query_scalar(
+            "SELECT COALESCE(MAX(order_num), -1) + 1 FROM link_licenses WHERE link_id = $1",
+        )
+        .bind(link_id)
+        .fetch_one(pool)
+        .await?;
+
         sqlx::query(
             r#"
-            INSERT INTO link_licenses (link_id, license_id)
-            VALUES ($1, $2)
+            INSERT INTO link_licenses (link_id, license_id, order_num)
+            VALUES ($1, $2, $3)
             ON CONFLICT DO NOTHING
             "#,
         )
         .bind(link_id)
         .bind(license_id)
+        .bind(next_order)
         .execute(pool)
         .await?;
 
