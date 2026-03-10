@@ -18,11 +18,9 @@ LICENSE
 docs/
 
 # Docker files
-Dockerfile.dev
 .dockerignore
 docker-compose.yml
 compose.yml
-compose.dev.yml
 
 # OCI build files (only setup.nu should enter the build context)
 oci-build/build.nu
