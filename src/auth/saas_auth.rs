@@ -8,6 +8,7 @@ pub struct SaasUserClaims {
     pub user_id: String,
     pub email: Option<String>,
     pub membership_status: Option<String>,
+    pub is_admin: bool,
 }
 
 /// Extract and verify user claims from access_token cookie (SaaS mode).
@@ -62,9 +63,29 @@ pub fn get_user_from_cookie(jar: &CookieJar, secret: &str) -> Option<SaasUserCla
         return None;
     }
 
+    // Extract admin status from JWT payload
+    // Supports "is_admin" (bool) or "role"/"roles" containing "admin"
+    let is_admin = payload
+        .get("is_admin")
+        .and_then(|v| v.as_bool())
+        .unwrap_or_else(|| {
+            // Check "role" == "admin"
+            if let Some(role) = payload.get("role").and_then(|v| v.as_str()) {
+                return role.eq_ignore_ascii_case("admin");
+            }
+            // Check "roles" array contains "admin"
+            if let Some(roles) = payload.get("roles").and_then(|v| v.as_array()) {
+                return roles
+                    .iter()
+                    .any(|r| r.as_str().is_some_and(|s| s.eq_ignore_ascii_case("admin")));
+            }
+            false
+        });
+
     Some(SaasUserClaims {
         user_id,
         email,
         membership_status,
+        is_admin,
     })
 }

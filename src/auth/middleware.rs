@@ -179,15 +179,17 @@ where
         // Ensure the SaaS user exists in the local database.
         // The parent app manages authentication; we just need a local user row
         // so that foreign key constraints on links, tags, etc. are satisfied.
+        // Admin status is synced from the parent app's JWT on every request.
         let email = claims
             .email
             .filter(|e| !e.is_empty())
             .unwrap_or_else(|| format!("{}@saas.local", user_id));
         sqlx::query(
-            "INSERT INTO users (id, email, password_hash, name) VALUES ($1, $2, '', '') ON CONFLICT (id) DO NOTHING",
+            "INSERT INTO users (id, email, password_hash, name, is_admin) VALUES ($1, $2, '', '', $3) ON CONFLICT (id) DO UPDATE SET is_admin = $3",
         )
         .bind(user_id)
         .bind(&email)
+        .bind(claims.is_admin)
         .execute(&pool)
         .await
         .map_err(|e| {

@@ -397,6 +397,6 @@ pub async fn me_handler(
         id: claims.user_id,
         email: claims.email.unwrap_or_default(),
         name: String::new(),
-        is_admin: false,
+        is_admin: claims.is_admin,
     }))
 }
