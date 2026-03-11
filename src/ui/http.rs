@@ -552,13 +552,8 @@ impl HttpResponse {
 
     /// Extract a human-readable error message from the response body.
     /// Tries to parse as JSON `{"error": "..."}` and returns the error field;
-    /// falls back to the raw body text.
+    /// falls back to a friendly message based on status code.
     pub fn error_message(&self) -> String {
-        if let Ok(json) = serde_json::from_str::<serde_json::Value>(&self.body) {
-            if let Some(error) = json.get("error").and_then(|v| v.as_str()) {
-                return error.to_string();
-            }
-        }
-        self.body.clone()
+        clean_error(self.status, &self.body)
     }
 }
