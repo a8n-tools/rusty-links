@@ -6,6 +6,37 @@
 
 use serde::{de::DeserializeOwned, Serialize};
 
+/// Extract a clean error message from an HTTP error response body.
+/// Parses JSON `{"error": "..."}` and returns the error field;
+/// falls back to a generic message based on status code.
+fn clean_error(status: u16, body: &str) -> String {
+    // Try to extract "error" field from JSON response
+    if let Ok(json) = serde_json::from_str::<serde_json::Value>(body) {
+        if let Some(error) = json.get("error").and_then(|v| v.as_str()) {
+            return error.to_string();
+        }
+    }
+
+    // If body is non-empty and not JSON, return it as-is (but trim)
+    let trimmed = body.trim();
+    if !trimmed.is_empty() && !trimmed.starts_with('{') {
+        return trimmed.to_string();
+    }
+
+    // Fall back to a generic message based on status code
+    match status {
+        400 => "Invalid request. Please check your input and try again.".to_string(),
+        401 => "You need to log in to perform this action.".to_string(),
+        403 => "You don't have permission to perform this action.".to_string(),
+        404 => "The requested resource was not found.".to_string(),
+        409 => "This item already exists.".to_string(),
+        422 => "The submitted data is invalid. Please check your input.".to_string(),
+        429 => "Too many requests. Please wait a moment and try again.".to_string(),
+        500..=599 => "Something went wrong on the server. Please try again later.".to_string(),
+        _ => format!("Request failed (status {}).", status),
+    }
+}
+
 /// Redirect to /login when an API call returns 401 Unauthorized.
 /// Skips auth endpoints so login/setup pages can handle their own 401s.
 #[cfg(target_arch = "wasm32")]
@@ -49,7 +80,9 @@ pub async fn get<T: DeserializeOwned>(url: &str) -> Result<T, String> {
         redirect_if_unauthorized(response.status(), url);
 
         if !response.ok() {
-            return Err(format!("HTTP error: {}", response.status()));
+            let status = response.status();
+            let error_text = response.text().await.unwrap_or_default();
+            return Err(clean_error(status, &error_text));
         }
 
         response
@@ -68,7 +101,9 @@ pub async fn get<T: DeserializeOwned>(url: &str) -> Result<T, String> {
             .map_err(|e| format!("Network error: {}", e))?;
 
         if !response.status().is_success() {
-            return Err(format!("HTTP error: {}", response.status()));
+            let status = response.status().as_u16();
+            let error_text = response.text().await.unwrap_or_default();
+            return Err(clean_error(status, &error_text));
         }
 
         response
@@ -165,8 +200,9 @@ pub async fn post<T: DeserializeOwned, B: Serialize>(url: &str, body: &B) -> Res
         redirect_if_unauthorized(response.status(), url);
 
         if !response.ok() {
+            let status = response.status();
             let error_text = response.text().await.unwrap_or_default();
-            return Err(format!("HTTP error {}: {}", response.status(), error_text));
+            return Err(clean_error(status, &error_text));
         }
 
         response
@@ -186,8 +222,9 @@ pub async fn post<T: DeserializeOwned, B: Serialize>(url: &str, body: &B) -> Res
             .map_err(|e| format!("Network error: {}", e))?;
 
         if !response.status().is_success() {
+            let status = response.status().as_u16();
             let error_text = response.text().await.unwrap_or_default();
-            return Err(format!("HTTP error: {}", error_text));
+            return Err(clean_error(status, &error_text));
         }
 
         response
@@ -343,8 +380,9 @@ pub async fn put<T: DeserializeOwned, B: Serialize>(url: &str, body: &B) -> Resu
         redirect_if_unauthorized(response.status(), url);
 
         if !response.ok() {
+            let status = response.status();
             let error_text = response.text().await.unwrap_or_default();
-            return Err(format!("HTTP error {}: {}", response.status(), error_text));
+            return Err(clean_error(status, &error_text));
         }
 
         response
@@ -364,8 +402,9 @@ pub async fn put<T: DeserializeOwned, B: Serialize>(url: &str, body: &B) -> Resu
             .map_err(|e| format!("Network error: {}", e))?;
 
         if !response.status().is_success() {
+            let status = response.status().as_u16();
             let error_text = response.text().await.unwrap_or_default();
-            return Err(format!("HTTP error: {}", error_text));
+            return Err(clean_error(status, &error_text));
         }
 
         response
@@ -406,8 +445,9 @@ pub async fn patch<T: DeserializeOwned, B: Serialize>(url: &str, body: &B) -> Re
         redirect_if_unauthorized(response.status(), url);
 
         if !response.ok() {
+            let status = response.status();
             let error_text = response.text().await.unwrap_or_default();
-            return Err(format!("HTTP error {}: {}", response.status(), error_text));
+            return Err(clean_error(status, &error_text));
         }
 
         response
@@ -427,8 +467,9 @@ pub async fn patch<T: DeserializeOwned, B: Serialize>(url: &str, body: &B) -> Re
             .map_err(|e| format!("Network error: {}", e))?;
 
         if !response.status().is_success() {
+            let status = response.status().as_u16();
             let error_text = response.text().await.unwrap_or_default();
-            return Err(format!("HTTP error: {}", error_text));
+            return Err(clean_error(status, &error_text));
         }
 
         response
@@ -467,8 +508,9 @@ pub async fn delete(url: &str) -> Result<(), String> {
         redirect_if_unauthorized(response.status(), url);
 
         if !response.ok() {
+            let status = response.status();
             let error_text = response.text().await.unwrap_or_default();
-            return Err(format!("HTTP error {}: {}", response.status(), error_text));
+            return Err(clean_error(status, &error_text));
         }
 
         Ok(())
@@ -484,8 +526,9 @@ pub async fn delete(url: &str) -> Result<(), String> {
             .map_err(|e| format!("Network error: {}", e))?;
 
         if !response.status().is_success() {
+            let status = response.status().as_u16();
             let error_text = response.text().await.unwrap_or_default();
-            return Err(format!("HTTP error: {}", error_text));
+            return Err(clean_error(status, &error_text));
         }
 
         Ok(())
@@ -509,13 +552,8 @@ impl HttpResponse {
 
     /// Extract a human-readable error message from the response body.
     /// Tries to parse as JSON `{"error": "..."}` and returns the error field;
-    /// falls back to the raw body text.
+    /// falls back to a friendly message based on status code.
     pub fn error_message(&self) -> String {
-        if let Ok(json) = serde_json::from_str::<serde_json::Value>(&self.body) {
-            if let Some(error) = json.get("error").and_then(|v| v.as_str()) {
-                return error.to_string();
-            }
-        }
-        self.body.clone()
+        clean_error(self.status, &self.body)
     }
 }

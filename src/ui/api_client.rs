@@ -84,7 +84,7 @@ pub async fn check_duplicate_url(url: &str) -> Result<Option<Link>, String> {
         // No duplicate found
         Ok(None)
     } else {
-        Err(format!("Server error: {}", response.status))
+        Err(response.error_message())
     }
 }
 

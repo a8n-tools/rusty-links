@@ -11,59 +11,32 @@ use crate::ui::utils::is_valid_url;
 use dioxus::prelude::*;
 use uuid::Uuid;
 
-/// Format error messages to be more user-friendly
+/// Format error messages to be more user-friendly.
+/// HTTP status-based errors are already cleaned by the http module;
+/// this handles non-HTTP errors from network/browser/preview logic.
 fn format_error(error: &str) -> String {
-    // Network errors
     if error.contains("Network error") || error.contains("fetch") {
         return "Unable to connect. Please check your internet connection and try again."
             .to_string();
     }
 
-    // Timeout errors
     if error.contains("timeout") || error.contains("Timeout") {
         return "The request timed out. The server might be busy - please try again.".to_string();
     }
 
-    // Server errors (5xx)
-    if error.contains("500") || error.contains("Internal Server Error") {
-        return "Something went wrong on our end. Please try again later.".to_string();
-    }
-    if error.contains("502") || error.contains("503") || error.contains("504") {
-        return "The server is temporarily unavailable. Please try again in a moment.".to_string();
-    }
-
-    // Client errors (4xx)
-    if error.contains("400") || error.contains("Bad Request") {
-        return "Invalid request. Please check the URL and try again.".to_string();
-    }
-    if error.contains("401") || error.contains("Unauthorized") {
-        return "You need to log in to perform this action.".to_string();
-    }
-    if error.contains("403") || error.contains("Forbidden") {
-        return "You don't have permission to access this resource.".to_string();
-    }
-    if error.contains("404") || error.contains("Not Found") {
-        return "The requested resource was not found.".to_string();
-    }
-    if error.contains("429") || error.contains("Too Many Requests") {
-        return "Too many requests. Please wait a moment and try again.".to_string();
-    }
-
-    // URL-specific errors
     if error.contains("Invalid URL") || error.contains("invalid url") {
         return "The URL format is invalid. Please check and try again.".to_string();
     }
+
     if error.contains("could not resolve") || error.contains("DNS") {
         return "Could not find the website. Please check the URL is correct.".to_string();
     }
 
-    // Metadata fetch errors
     if error.contains("Failed to fetch preview") {
         return "Could not load preview. The website might be unavailable or blocking requests."
             .to_string();
     }
 
-    // Default: return original error but clean it up
     error.trim().to_string()
 }
 
