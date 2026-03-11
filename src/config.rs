@@ -20,6 +20,8 @@ pub struct Config {
     pub saas_jwt_secret: String,
     #[cfg(feature = "saas")]
     pub saas_logout_url: String,
+    #[cfg(feature = "saas")]
+    pub saas_membership_url: String,
     // JWT configuration (standalone mode)
     #[cfg(feature = "standalone")]
     pub jwt_secret: String,
@@ -152,6 +154,10 @@ impl Config {
         let saas_logout_url = std::env::var("SAAS_LOGOUT_URL")
             .unwrap_or_else(|_| "http://localhost:18080/v1/auth/logout".to_string());
 
+        #[cfg(feature = "saas")]
+        let saas_membership_url = std::env::var("SAAS_MEMBERSHIP_URL")
+            .unwrap_or_else(|_| "http://localhost:5173/membership".to_string());
+
         // JWT configuration (standalone mode only)
         #[cfg(feature = "standalone")]
         let jwt_secret = std::env::var("JWT_SECRET").unwrap_or_else(|_| {
@@ -235,6 +241,8 @@ impl Config {
             saas_jwt_secret,
             #[cfg(feature = "saas")]
             saas_logout_url,
+            #[cfg(feature = "saas")]
+            saas_membership_url,
             #[cfg(feature = "standalone")]
             jwt_secret,
             #[cfg(feature = "standalone")]
@@ -287,6 +295,8 @@ mod tests {
             saas_jwt_secret: "test-secret".to_string(),
             #[cfg(feature = "saas")]
             saas_logout_url: "http://localhost:18080/v1/auth/logout".to_string(),
+            #[cfg(feature = "saas")]
+            saas_membership_url: "http://localhost:5173/membership".to_string(),
             #[cfg(feature = "standalone")]
             jwt_secret: "test_secret".to_string(),
             #[cfg(feature = "standalone")]

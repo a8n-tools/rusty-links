@@ -51,6 +51,22 @@ fn redirect_if_unauthorized(status: u16, url: &str) {
     }
 }
 
+/// Redirect to the membership page when an API call returns 403 with a redirect URL.
+/// This handles the SaaS non-member lockout: the user is authenticated but lacks
+/// an active membership.
+#[cfg(target_arch = "wasm32")]
+fn redirect_if_membership_required(status: u16, body: &str) {
+    if status == 403 {
+        if let Ok(json) = serde_json::from_str::<serde_json::Value>(body) {
+            if let Some(redirect) = json.get("redirect").and_then(|v| v.as_str()) {
+                if let Some(window) = web_sys::window() {
+                    let _ = window.location().set_href(redirect);
+                }
+            }
+        }
+    }
+}
+
 /// Make a GET request and deserialize the JSON response
 pub async fn get<T: DeserializeOwned>(url: &str) -> Result<T, String> {
     #[cfg(target_arch = "wasm32")]
@@ -82,6 +98,7 @@ pub async fn get<T: DeserializeOwned>(url: &str) -> Result<T, String> {
         if !response.ok() {
             let status = response.status();
             let error_text = response.text().await.unwrap_or_default();
+            redirect_if_membership_required(status, &error_text);
             return Err(clean_error(status, &error_text));
         }
 
@@ -146,6 +163,7 @@ pub async fn get_response(url: &str) -> Result<HttpResponse, String> {
             .map_err(|e| format!("Read error: {}", e))?;
 
         redirect_if_unauthorized(status, url);
+        redirect_if_membership_required(status, &text);
 
         Ok(HttpResponse { status, body: text })
     }
@@ -202,6 +220,7 @@ pub async fn post<T: DeserializeOwned, B: Serialize>(url: &str, body: &B) -> Res
         if !response.ok() {
             let status = response.status();
             let error_text = response.text().await.unwrap_or_default();
+            redirect_if_membership_required(status, &error_text);
             return Err(clean_error(status, &error_text));
         }
 
@@ -269,6 +288,7 @@ pub async fn post_response<B: Serialize>(url: &str, body: &B) -> Result<HttpResp
             .map_err(|e| format!("Read error: {}", e))?;
 
         redirect_if_unauthorized(status, url);
+        redirect_if_membership_required(status, &text);
 
         Ok(HttpResponse { status, body: text })
     }
@@ -326,6 +346,7 @@ pub async fn post_empty(url: &str) -> Result<HttpResponse, String> {
             .map_err(|e| format!("Read error: {}", e))?;
 
         redirect_if_unauthorized(status, url);
+        redirect_if_membership_required(status, &text);
 
         Ok(HttpResponse { status, body: text })
     }
@@ -382,6 +403,7 @@ pub async fn put<T: DeserializeOwned, B: Serialize>(url: &str, body: &B) -> Resu
         if !response.ok() {
             let status = response.status();
             let error_text = response.text().await.unwrap_or_default();
+            redirect_if_membership_required(status, &error_text);
             return Err(clean_error(status, &error_text));
         }
 
@@ -447,6 +469,7 @@ pub async fn patch<T: DeserializeOwned, B: Serialize>(url: &str, body: &B) -> Re
         if !response.ok() {
             let status = response.status();
             let error_text = response.text().await.unwrap_or_default();
+            redirect_if_membership_required(status, &error_text);
             return Err(clean_error(status, &error_text));
         }
 
@@ -510,6 +533,7 @@ pub async fn delete(url: &str) -> Result<(), String> {
         if !response.ok() {
             let status = response.status();
             let error_text = response.text().await.unwrap_or_default();
+            redirect_if_membership_required(status, &error_text);
             return Err(clean_error(status, &error_text));
         }
 

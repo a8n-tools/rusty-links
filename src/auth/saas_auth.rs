@@ -58,10 +58,9 @@ pub fn get_user_from_cookie(jar: &CookieJar, secret: &str) -> Option<SaasUserCla
         .and_then(|v| v.as_str())
         .map(String::from);
 
-    // Reject if membership is canceled
-    if membership_status.as_deref() == Some("canceled") {
-        return None;
-    }
+    // Note: membership access is enforced in the middleware, not here.
+    // All valid JWT holders are returned so the middleware can decide
+    // whether to redirect non-members to the membership page.
 
     // Extract admin status from JWT payload
     // Supports "is_admin" (bool) or "role"/"roles" containing "admin"

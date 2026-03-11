@@ -118,6 +118,7 @@ async fn main() {
         let host_url = config.host_url.clone();
         let saas_jwt_secret = config.saas_jwt_secret.clone();
         let saas_logout_url = config.saas_logout_url.clone();
+        let saas_membership_url = config.saas_membership_url.clone();
         dioxus_router.layer(axum::middleware::from_fn(
             move |jar: axum_extra::extract::CookieJar,
                   req: axum::http::Request<axum::body::Body>,
@@ -126,6 +127,7 @@ async fn main() {
                 let host_url = host_url.clone();
                 let saas_jwt_secret = saas_jwt_secret.clone();
                 let saas_logout_url = saas_logout_url.clone();
+                let saas_membership_url = saas_membership_url.clone();
                 async move {
                     let path = req.uri().path();
 
@@ -151,24 +153,38 @@ async fn main() {
                     }
 
                     // Check access_token cookie
-                    if rusty_links::auth::saas_auth::get_user_from_cookie(&jar, &saas_jwt_secret).is_some() {
-                        // Authenticated user hitting /login — send them to links instead
-                        if path == "/login" {
-                            return axum::response::Redirect::to("/links").into_response();
-                        }
-                        return next.run(req).await;
-                    }
+                    match rusty_links::auth::saas_auth::get_user_from_cookie(&jar, &saas_jwt_secret) {
+                        Some(claims) => {
+                            // Non-admin users must have active or grace_period membership
+                            if !claims.is_admin {
+                                let has_access = matches!(
+                                    claims.membership_status.as_deref(),
+                                    Some("active") | Some("grace_period")
+                                );
+                                if !has_access {
+                                    return axum::response::Redirect::to(&saas_membership_url).into_response();
+                                }
+                            }
 
-                    // Not authenticated — redirect to SaaS login
-                    // Use /links as the default return page (not /login)
-                    let return_path = if path == "/login" { "/links" } else { path };
-                    let return_to = format!("{}{}", host_url.trim_end_matches('/'), return_path);
-                    let redirect_url = format!(
-                        "{}?redirect={}",
-                        saas_login_url.trim_end_matches('/'),
-                        urlencoding::encode(&return_to)
-                    );
-                    axum::response::Redirect::to(&redirect_url).into_response()
+                            // Authenticated member hitting /login — send them to links instead
+                            if path == "/login" {
+                                return axum::response::Redirect::to("/links").into_response();
+                            }
+                            next.run(req).await
+                        }
+                        None => {
+                            // Not authenticated — redirect to SaaS login
+                            // Use /links as the default return page (not /login)
+                            let return_path = if path == "/login" { "/links" } else { path };
+                            let return_to = format!("{}{}", host_url.trim_end_matches('/'), return_path);
+                            let redirect_url = format!(
+                                "{}?redirect={}",
+                                saas_login_url.trim_end_matches('/'),
+                                urlencoding::encode(&return_to)
+                            );
+                            axum::response::Redirect::to(&redirect_url).into_response()
+                        }
+                    }
                 }
             },
         ))
