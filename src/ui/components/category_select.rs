@@ -1,3 +1,4 @@
+use crate::ui::components::dropdown_arrow::DropdownArrow;
 use crate::ui::http;
 use dioxus::prelude::*;
 use serde::Deserialize;
@@ -55,7 +56,7 @@ pub fn CategorySelect(selected_ids: Vec<Uuid>, on_change: EventHandler<Vec<Uuid>
                         }
                     }
                 }
-                span { class: "dropdown-arrow", if expanded() { "▲" } else { "▼" } }
+                DropdownArrow { expanded: expanded() }
             }
 
             if expanded() && !loading() {
