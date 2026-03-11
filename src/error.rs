@@ -133,6 +133,12 @@ pub enum AppError {
     /// Account is locked due to too many failed login attempts
     AccountLocked,
 
+    /// Membership required (SaaS mode)
+    ///
+    /// The user is authenticated but does not have an active membership.
+    /// The String contains the membership page URL for the frontend to redirect to.
+    MembershipRequired(String),
+
     /// Internal server error
     ///
     /// Used for unexpected errors that don't fit other categories.
@@ -241,6 +247,7 @@ impl AppError {
             AppError::Forbidden(_) => 403,
             AppError::NotFound { .. } => 404,
             AppError::Duplicate { .. } => 409,
+            AppError::MembershipRequired(_) => 403,
             AppError::AccountLocked => 429,
             AppError::Database(_) => 500,
             AppError::Io(_) => 500,
@@ -264,6 +271,7 @@ impl AppError {
             AppError::SessionExpired => "SESSION_EXPIRED",
             AppError::Unauthorized => "UNAUTHORIZED",
             AppError::Forbidden(_) => "FORBIDDEN",
+            AppError::MembershipRequired(_) => "MEMBERSHIP_REQUIRED",
             AppError::NotFound { .. } => "NOT_FOUND",
             AppError::Duplicate { .. } => "DUPLICATE_FIELD",
             AppError::AccountLocked => "ACCOUNT_LOCKED",
@@ -305,6 +313,7 @@ impl AppError {
             }
             AppError::Unauthorized => "You are not authorized to access this resource.".to_string(),
             AppError::Forbidden(msg) => msg.clone(),
+            AppError::MembershipRequired(_) => "Membership required".to_string(),
             AppError::NotFound { resource, .. } => {
                 format!("{} not found.", capitalize_first(resource))
             }
@@ -492,6 +501,9 @@ impl axum::response::IntoResponse for AppError {
             AppError::NotFound { resource, id } => {
                 tracing::debug!(resource = %resource, id = %id, "Resource not found");
             }
+            AppError::MembershipRequired(url) => {
+                tracing::info!(redirect = %url, "Membership required");
+            }
             AppError::AccountLocked => {
                 tracing::warn!("Account locked due to too many failed attempts");
             }
@@ -513,6 +525,20 @@ impl axum::response::IntoResponse for AppError {
             AppError::Json(e) => {
                 tracing::error!(error = %e, "JSON error");
             }
+        }
+
+        // MembershipRequired includes a redirect URL for the frontend
+        if let AppError::MembershipRequired(ref redirect_url) = self {
+            return (
+                StatusCode::FORBIDDEN,
+                Json(serde_json::json!({
+                    "error": "Membership required",
+                    "code": "MEMBERSHIP_REQUIRED",
+                    "status": 403,
+                    "redirect": redirect_url,
+                })),
+            )
+                .into_response();
         }
 
         // Convert error to API response

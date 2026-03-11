@@ -176,6 +176,24 @@ where
             AppError::SessionExpired
         })?;
 
+        // Non-admin users must have active or grace_period membership
+        if !claims.is_admin {
+            let has_access = matches!(
+                claims.membership_status.as_deref(),
+                Some("active") | Some("grace_period")
+            );
+            if !has_access {
+                tracing::info!(
+                    user_id = %user_id,
+                    membership_status = ?claims.membership_status,
+                    "Non-member access attempt"
+                );
+                return Err(AppError::MembershipRequired(
+                    config.saas_membership_url.clone(),
+                ));
+            }
+        }
+
         // Ensure the SaaS user exists in the local database.
         // The parent app manages authentication; we just need a local user row
         // so that foreign key constraints on links, tags, etc. are satisfied.
