@@ -1,20 +1,61 @@
+# Rusty Links - Task Runner
+
 # List available recipes
 default:
     @just --list
 
-# Run all checks (server, web, clippy, fmt)
-check: check-server check-web check-clippy check-fmt
+# Ensure .env exists (mode: standalone or saas)
+[private]
+ensure-env mode="standalone":
+    @test -f .env || cp .env.{{ mode }} .env
 
-# Check server compilation (standalone + saas)
-check-server: check-server-standalone check-server-saas
+# Install JS dependencies
+[private]
+ensure-npm:
+    @test -d node_modules || bun install
 
-# Check standalone server compilation
-check-server-standalone:
-    cargo check --features standalone,server
+# Build Tailwind CSS once
+css-build: ensure-npm
+    bun x @tailwindcss/cli --input tailwind.css --output assets/tailwind.css
 
-# Check saas server compilation
-check-server-saas:
-    cargo check --no-default-features --features saas,server
+# Watch and rebuild Tailwind CSS on changes
+css-watch: ensure-npm
+    bun x @tailwindcss/cli --input tailwind.css --output assets/tailwind.css --watch
+
+# Start development server in Docker (mode: standalone or saas)
+dev mode="standalone": (ensure-env mode) css-build
+    docker compose up --build --remove-orphans app
+
+# Start PostgreSQL container
+db-up:
+    docker compose up --detach postgres
+
+# Stop PostgreSQL container
+db-down:
+    docker compose down postgres
+
+# Stop all containers
+down:
+    docker compose down
+
+# Remove all containers, volumes, and networks
+clean:
+    docker compose down --volumes --remove-orphans
+
+# Run pending database migrations
+migrate-run:
+    sqlx migrate run
+
+# Create a new database migration
+migrate name:
+    sqlx migrate add {{ name }}
+
+# Prepare SQLx offline query data
+db-prepare:
+    cargo sqlx prepare
+
+# Run all checks (web, clippy, fmt)
+check: check-web check-clippy check-fmt
 
 # Check web/WASM compilation (standalone + saas)
 check-web: check-web-standalone check-web-saas
@@ -47,18 +88,14 @@ build:
 build-docker mode="standalone":
     docker buildx build --build-arg BUILD_MODE={{ mode }} --tag rusty-links:local -f oci-build/Dockerfile .
 
-# Start development server
-dev:
-    dx serve
-
 # Run tests
 test:
     cargo test
 
+# Run integration tests against a running instance
+test-integration url="http://localhost:8080":
+    bash scripts/integration-test.sh {{ url }}
+
 # Format code
 fmt:
     cargo fmt
-
-# Create a new database migration
-migrate name:
-    sqlx migrate add {{ name }}

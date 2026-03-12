@@ -1,6 +1,20 @@
 ---
 
 services:
+  postgres:
+    image: postgres:17-alpine
+    environment:
+      POSTGRES_USER: ${DB_USERNAME:-rustylinks}
+      POSTGRES_PASSWORD: ${DB_PASSWORD:-changeme_secure_password_here}
+      POSTGRES_DB: ${DB_NAME:-rustylinks}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready --username=${DB_USERNAME:-rustylinks}"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
   app:
     # Override build for development
     build:
@@ -12,17 +26,25 @@ services:
       - ./migrations:/app/migrations
       - ./Cargo.toml:/app/Cargo.toml
       - ./Cargo.lock:/app/Cargo.lock
-      # Use a volume for target to speed up builds
+      - ./Dioxus.toml:/app/Dioxus.toml
+      # Persist cargo registry and build artifacts across image rebuilds
+      - cargo_home:/root/.cargo
       - cargo_target:/app/target
+    env_file: .env
     environment:
       RUST_LOG: debug
       RUST_BACKTRACE: 1
-    # Override command to use cargo watch for auto-reload
-    command: cargo watch -x run
-    # For development, we can expose the container directly
-    stdin_open: true
-    tty: true
+      DATABASE_URL: postgresql://${DB_USERNAME:-rustylinks}:${DB_PASSWORD:-changeme_secure_password_here}@postgres/${DB_NAME:-rustylinks}
+    ports:
+      - "${HOST_PORT:-8080}:8080"
+    depends_on:
+      postgres:
+        condition: service_healthy
 
 volumes:
+  cargo_home:
+    driver: local
   cargo_target:
+    driver: local
+  postgres_data:
     driver: local
