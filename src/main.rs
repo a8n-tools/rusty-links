@@ -13,8 +13,6 @@ use sqlx::{postgres::PgPoolOptions, PgPool};
 #[cfg(feature = "server")]
 use std::time::Duration;
 #[cfg(feature = "server")]
-use tower_http::services::ServeDir;
-#[cfg(feature = "server")]
 use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
 
 #[cfg(feature = "server")]
@@ -196,7 +194,6 @@ async fn main() {
     // Also serve static assets from the assets directory
     let router = axum::Router::new()
         .nest("/api", api_router)
-        .nest_service("/assets", ServeDir::new("assets"))
         .route_service(
             "/tailwind.css",
             tower::util::service_fn(|_req: axum::http::Request<axum::body::Body>| async {
