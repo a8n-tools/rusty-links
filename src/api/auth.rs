@@ -372,6 +372,7 @@ pub async fn me_handler(
         email: user.email,
         name: user.name,
         is_admin: user.is_admin,
+        maintenance_mode: false,
     }))
 }
 
@@ -385,18 +386,24 @@ use axum_extra::extract::CookieJar;
 /// GET /api/auth/me (saas)
 ///
 /// Returns user info from the parent app's cookie.
+/// Includes maintenance_mode status so admin UIs can show a banner.
 #[cfg(feature = "saas")]
 pub async fn me_handler(
-    State(config): State<crate::config::Config>,
+    State(state): State<crate::api::AppState>,
     jar: CookieJar,
 ) -> Result<Json<crate::server_functions::auth::UserInfo>, AppError> {
-    let claims = saas_auth::get_user_from_cookie(&jar, &config.saas_jwt_secret)
+    let claims = saas_auth::get_user_from_cookie(&jar, &state.config.saas_jwt_secret)
         .ok_or(AppError::SessionExpired)?;
+
+    let maintenance_mode = state
+        .maintenance_mode
+        .load(std::sync::atomic::Ordering::Relaxed);
 
     Ok(Json(crate::server_functions::auth::UserInfo {
         id: claims.user_id,
         email: claims.email.unwrap_or_default(),
         name: String::new(),
         is_admin: claims.is_admin,
+        maintenance_mode,
     }))
 }
