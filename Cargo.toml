@@ -1,3 +1,9 @@
+[package]
+name = "rusty-links"
+version = "0.1.0"
+edition = "2021"
+default-run = "rusty-links"
+
 [[bin]]
 name = "rusty-links"
 path = "src/main.rs"
@@ -8,148 +14,77 @@ name = "rusty-links-saas"
 path = "src/main.rs"
 required-features = ["saas"]
 
-[package]
-name = "rusty-links"
-version = "1.0.0"
-edition = "2021"
-default-run = "rusty-links"
-
 [dependencies]
+# Web framework
+dioxus = { version = "0.7.1", features = ["fullstack", "router"] }
+dioxus-web = { version = "0.7.1", optional = true }
+axum = { version = "0.8.7", features = ["tokio"], optional = true }
+axum-extra = { version = "0.12.2", features = ["cookie"], optional = true }
+tower = { version = "0.5.2", features = ["util"], optional = true }
+tower-http = { version = "0.6.6", features = ["cors", "trace", "fs"], optional = true }
+http = { version = "1.0", optional = true }
+
+# Database
+sqlx = { version = "0.8.6", features = ["postgres", "runtime-tokio-native-tls", "migrate", "uuid", "chrono"], optional = true }
+
+# Async runtime
+tokio = { version = "1.48.0", features = ["full"], optional = true }
 futures = "0.3"
+
+# Serialization
+serde = { version = "1.0.228", features = ["derive"] }
 serde_json = "1.0.145"
+
+# HTTP client (for scraping - server only uses native TLS)
+# For WASM, we use target-specific dependency below
+
+# HTML parsing (using git until next release with selectors 0.33 / rustc-hash)
+scraper = { git = "https://github.com/rust-scraper/scraper" }
+
+# Configuration
 dotenvy = "0.15.7"
+
+# Logging
 tracing = "0.1.41"
+tracing-subscriber = { version = "0.3.20", features = ["json", "env-filter"] }
+
+# Utilities
+uuid = { version = "1.18.1", features = ["serde", "v4", "js"] }
 url = "2.5.7"
 urlencoding = "2.1"
+chrono = { version = "0.4.42", features = ["serde"] }
 regex = "1.12.2"
+native-tls = { version = "0.2.18", optional = true }
+
+# Password hashing (standalone + server only)
+argon2 = { version = "0.5", optional = true }
+bcrypt = { version = "0.15", optional = true }
+
+# JWT authentication
+jsonwebtoken = { version = "9.2", optional = true }
+
+# Base64 (for saas JWT payload decoding)
 base64 = "0.22"
+
+# Session management
 rand = "0.9.2"
+
+# WASM compatibility - must be in main dependencies to propagate to all transitive deps
 getrandom = "0.3.4"
 
-[dependencies.dioxus]
-version = "0.7.1"
-features = [
-    "fullstack",
-    "router",
-]
-
-[dependencies.dioxus-web]
-version = "0.7.1"
-optional = true
-
-[dependencies.axum]
-version = "0.8.7"
-features = ["tokio"]
-optional = true
-
-[dependencies.axum-extra]
-version = "0.12.2"
-features = ["cookie"]
-optional = true
-
-[dependencies.tower]
-version = "0.5.2"
-features = ["util"]
-optional = true
-
-[dependencies.tower-http]
-version = "0.6.6"
-features = [
-    "cors",
-    "trace",
-    "fs",
-]
-optional = true
-
-[dependencies.http]
-version = "1.0"
-optional = true
-
-[dependencies.sqlx]
-version = "0.8.6"
-features = [
-    "postgres",
-    "runtime-tokio-native-tls",
-    "migrate",
-    "uuid",
-    "chrono",
-]
-optional = true
-
-[dependencies.tokio]
-version = "1.48.0"
-features = ["full"]
-optional = true
-
-[dependencies.serde]
-version = "1.0.228"
-features = ["derive"]
-
-[dependencies.scraper]
-git = "https://github.com/rust-scraper/scraper"
-
-[dependencies.tracing-subscriber]
-version = "0.3.20"
-features = [
-    "json",
-    "env-filter",
-]
-
-[dependencies.uuid]
-version = "1.18.1"
-features = [
-    "serde",
-    "v4",
-    "js",
-]
-
-[dependencies.chrono]
-version = "0.4.42"
-features = ["serde"]
-
-[dependencies.native-tls]
-version = "0.2.18"
-optional = true
-
-[dependencies.argon2]
-version = "0.5"
-optional = true
-
-[dependencies.bcrypt]
-version = "0.15"
-optional = true
-
-[dependencies.jsonwebtoken]
-version = "9.2"
-optional = true
-
-[target.'cfg(not(target_arch = "wasm32"))'.dependencies.reqwest]
-version = "0.12.24"
-features = [
-    "json",
-    "cookies",
-]
+# Server-side reqwest (native TLS for scraping)
+[target.'cfg(not(target_arch = "wasm32"))'.dependencies]
+reqwest = { version = "0.12.24", features = ["json", "cookies"] }
 
 [target.'cfg(target_arch = "wasm32")'.dependencies]
+# gloo-net for browser HTTP requests (uses browser's native fetch API)
+gloo-net = { version = "0.6", features = ["json"] }
+getrandom = { version = "0.3.4", features = ["wasm_js"] }
 wasm-bindgen = "0.2"
 wasm-bindgen-futures = "0.4"
 js-sys = "0.3"
-
-[target.'cfg(target_arch = "wasm32")'.dependencies.gloo-net]
-version = "0.6"
-features = ["json"]
-
-[target.'cfg(target_arch = "wasm32")'.dependencies.getrandom]
-version = "0.3.4"
-features = ["wasm_js"]
-
-[target.'cfg(target_arch = "wasm32")'.dependencies.gloo-timers]
-version = "0.3"
-features = ["futures"]
-
-[target.'cfg(target_arch = "wasm32")'.dependencies.web-sys]
-version = "0.3"
-features = [
+gloo-timers = { version = "0.3", features = ["futures"] }
+web-sys = { version = "0.3", features = [
     "Window",
     "Document",
     "Element",
@@ -164,7 +99,7 @@ features = [
     "FileList",
     "File",
     "Storage",
-]
+] }
 
 [features]
 default = ["standalone"]
@@ -184,6 +119,8 @@ server = [
     "dep:argon2",
     "dep:bcrypt",
 ]
-web = ["dioxus/web"]
+web = [
+    "dioxus/web",
+]
 
 [dev-dependencies]
