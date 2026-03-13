@@ -36,6 +36,8 @@ pub struct UserInfo {
     pub email: String,
     pub name: String,
     pub is_admin: bool,
+    #[serde(default)]
+    pub maintenance_mode: bool,
 }
 
 /// Authentication response with JWT tokens (standalone mode)

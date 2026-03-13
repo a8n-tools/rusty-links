@@ -63,6 +63,11 @@ bcrypt = { version = "0.15", optional = true }
 # JWT authentication
 jsonwebtoken = { version = "9.2", optional = true }
 
+# Webhook signature verification (server only)
+hmac = { version = "0.12", optional = true }
+sha2 = { version = "0.10", optional = true }
+hex = { version = "0.4", optional = true }
+
 # Base64 (for saas JWT payload decoding)
 base64 = "0.22"
 
@@ -118,6 +123,9 @@ server = [
     "dep:native-tls",
     "dep:argon2",
     "dep:bcrypt",
+    "dep:hmac",
+    "dep:sha2",
+    "dep:hex",
 ]
 web = [
     "dioxus/web",
