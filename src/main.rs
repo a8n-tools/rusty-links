@@ -106,9 +106,14 @@ async fn main() {
     );
 
     // Build bind address from Dioxus CLI config (set by `dx serve`) with fallbacks:
-    //   IP   → CLI value, else 0.0.0.0  (not 127.0.0.1, which is unreachable inside Docker)
+    //   IP   → CLI value, else HOST_IP env, else 0.0.0.0  (not 127.0.0.1, which is unreachable inside Docker)
     //   Port → CLI value, else APP_PORT from config
     let ip = dioxus::cli_config::server_ip()
+        .or_else(|| {
+            std::env::var("HOST_IP")
+                .ok()
+                .and_then(|v| v.parse().ok())
+        })
         .unwrap_or(std::net::IpAddr::V4(std::net::Ipv4Addr::UNSPECIFIED));
     let port = dioxus::cli_config::server_port().unwrap_or(config.app_port);
     let address = std::net::SocketAddr::new(ip, port);
