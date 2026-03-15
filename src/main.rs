@@ -87,13 +87,33 @@ async fn main() {
 
     tracing::info!("Background scheduler started");
 
+    // Create maintenance state (SaaS mode only)
+    #[cfg(feature = "saas")]
+    let maintenance_mode = std::sync::Arc::new(std::sync::atomic::AtomicBool::new(false));
+    #[cfg(feature = "saas")]
+    let maintenance_message: std::sync::Arc<std::sync::RwLock<Option<String>>> =
+        std::sync::Arc::new(std::sync::RwLock::new(None));
+
     // Create API router
-    let api_router = api::create_router(pool.clone(), config.clone(), scheduler_shutdown);
+    let api_router = api::create_router(
+        pool.clone(),
+        config.clone(),
+        scheduler_shutdown,
+        #[cfg(feature = "saas")]
+        maintenance_mode.clone(),
+        #[cfg(feature = "saas")]
+        maintenance_message.clone(),
+    );
 
     // Build bind address from Dioxus CLI config (set by `dx serve`) with fallbacks:
-    //   IP   → CLI value, else 0.0.0.0  (not 127.0.0.1, which is unreachable inside Docker)
+    //   IP   → CLI value, else HOST_IP env, else 0.0.0.0  (not 127.0.0.1, which is unreachable inside Docker)
     //   Port → CLI value, else APP_PORT from config
     let ip = dioxus::cli_config::server_ip()
+        .or_else(|| {
+            std::env::var("HOST_IP")
+                .ok()
+                .and_then(|v| v.parse().ok())
+        })
         .unwrap_or(std::net::IpAddr::V4(std::net::Ipv4Addr::UNSPECIFIED));
     let port = dioxus::cli_config::server_port().unwrap_or(config.app_port);
     let address = std::net::SocketAddr::new(ip, port);
@@ -192,7 +212,7 @@ async fn main() {
     // API routes under /api will be handled by our custom router
     // Everything else will be handled by Dioxus
     // Also serve static assets from the assets directory
-    let router = axum::Router::new()
+    let mut router = axum::Router::new()
         .nest("/api", api_router)
         .route_service(
             "/tailwind.css",
@@ -207,6 +227,79 @@ async fn main() {
             }),
         )
         .merge(dioxus_router);
+
+    // In SaaS mode, add maintenance guard as the outermost middleware.
+    // When maintenance is active, only admins and allowlisted paths pass through.
+    #[cfg(feature = "saas")]
+    {
+        let mm = maintenance_mode.clone();
+        let mm_msg = maintenance_message.clone();
+        let jwt_secret = config.saas_jwt_secret.clone();
+        router = router.layer(axum::middleware::from_fn(
+            move |jar: axum_extra::extract::CookieJar,
+                  req: axum::http::Request<axum::body::Body>,
+                  next: axum::middleware::Next| {
+                let mm = mm.clone();
+                let mm_msg = mm_msg.clone();
+                let jwt_secret = jwt_secret.clone();
+                async move {
+                    // Fast path: maintenance off
+                    if !mm.load(std::sync::atomic::Ordering::SeqCst) {
+                        return next.run(req).await;
+                    }
+
+                    let path = req.uri().path();
+
+                    // Allowlisted paths always pass through
+                    if path.starts_with("/api/webhooks/")
+                        || path.starts_with("/api/health")
+                        || path == "/tailwind.css"
+                        || path.starts_with("/assets/")
+                    {
+                        return next.run(req).await;
+                    }
+
+                    // Admins bypass maintenance
+                    if let Some(claims) =
+                        rusty_links::auth::saas_auth::get_user_from_cookie(&jar, &jwt_secret)
+                    {
+                        if claims.is_admin {
+                            return next.run(req).await;
+                        }
+                    }
+
+                    let message = mm_msg
+                        .read()
+                        .unwrap()
+                        .clone()
+                        .unwrap_or_default();
+
+                    // API routes get JSON 503
+                    if path.starts_with("/api/") {
+                        return (
+                            axum::http::StatusCode::SERVICE_UNAVAILABLE,
+                            axum::Json(serde_json::json!({
+                                "error": "Service under maintenance",
+                                "maintenance": true,
+                                "message": message,
+                            })),
+                        )
+                            .into_response();
+                    }
+
+                    // Page routes get HTML 503
+                    let html = include_str!("maintenance.html")
+                        .replace("{{MAINTENANCE_MESSAGE}}", &message);
+                    (
+                        axum::http::StatusCode::SERVICE_UNAVAILABLE,
+                        [(axum::http::header::CONTENT_TYPE, "text/html; charset=utf-8")],
+                        html,
+                    )
+                        .into_response()
+                }
+            },
+        ));
+    }
 
     // Launch the server
     let listener = tokio::net::TcpListener::bind(address)

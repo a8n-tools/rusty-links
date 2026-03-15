@@ -3,6 +3,7 @@
 services:
   postgres:
     image: postgres:17-alpine
+    container_name: rusty-links-postgres-${USER}
     environment:
       POSTGRES_USER: ${DB_USERNAME:-rustylinks}
       POSTGRES_PASSWORD: ${DB_PASSWORD:-changeme_secure_password_here}
@@ -19,6 +20,7 @@ services:
     # Override build for development
     build:
       context: .
+    container_name: rusty-links-app-${USER}
     # Mount source code for hot reloading
     volumes:
       - ./src:/app/src
@@ -36,15 +38,15 @@ services:
       RUST_BACKTRACE: 1
       DATABASE_URL: postgresql://${DB_USERNAME:-rustylinks}:${DB_PASSWORD:-changeme_secure_password_here}@postgres/${DB_NAME:-rustylinks}
     ports:
-      - "${HOST_PORT:-8080}:8080"
+      - "${HOST_IP:-0.0.0.0}:${HOST_PORT:-4002}:4002"
     depends_on:
       postgres:
         condition: service_healthy
 
 volumes:
   cargo_home:
-    driver: local
+    name: rusty-links-cargo-${USER}
   cargo_target:
-    driver: local
+    name: rusty-links-target-${USER}
   postgres_data:
-    driver: local
+    name: rusty-links-postgres-${USER}

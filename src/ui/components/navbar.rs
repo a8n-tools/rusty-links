@@ -5,7 +5,16 @@ use dioxus::prelude::*;
 pub fn Navbar() -> Element {
     let mut loading = use_signal(|| false);
     let mut menu_open = use_signal(|| false);
+    let mut show_maintenance = use_signal(|| false);
     let nav = navigator();
+
+    // Fetch user info to check if admin + maintenance mode is active
+    use_future(move || async move {
+        if let Ok(info) = http::get::<crate::server_functions::auth::UserInfo>("/api/auth/me").await
+        {
+            show_maintenance.set(info.is_admin && info.maintenance_mode);
+        }
+    });
 
     let on_logout = move |_| {
         // In SaaS mode, navigate directly to /logout — the server middleware
@@ -67,6 +76,9 @@ pub fn Navbar() -> Element {
                         class: "hidden md:flex gap-2 lg:gap-3 items-center",
                         role: "menubar",
                         "aria-label": "Site navigation",
+                        if show_maintenance() {
+                            MaintenanceBadge {}
+                        }
                         NavLinks { on_click: close_menu }
                         LogoutButton { loading: loading(), on_logout: on_logout }
                     }
@@ -118,6 +130,9 @@ pub fn Navbar() -> Element {
                         role: "menu",
                         "aria-label": "Mobile navigation",
                         div { class: "flex flex-col gap-2",
+                            if show_maintenance() {
+                                MaintenanceBadge {}
+                            }
                             NavLinks { on_click: close_menu, mobile: true }
                             LogoutButton { loading: loading(), on_logout: on_logout, mobile: true }
                         }
@@ -206,6 +221,18 @@ fn LogoutButton(
             } else {
                 "Logout"
             }
+        }
+    }
+}
+
+#[component]
+fn MaintenanceBadge() -> Element {
+    rsx! {
+        span {
+            class: "inline-flex items-center gap-1.5 px-3 py-1.5 bg-amber-100 text-amber-800 border border-amber-300 rounded-md text-sm font-semibold whitespace-nowrap",
+            "aria-label": "Maintenance mode is active",
+            span { class: "w-2 h-2 bg-amber-500 rounded-full animate-pulse" }
+            "Maintenance Mode"
         }
     }
 }

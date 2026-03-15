@@ -10,6 +10,8 @@ pub mod licenses;
 pub mod links;
 pub mod scrape;
 pub mod tags;
+#[cfg(feature = "saas")]
+pub mod webhook;
 
 use axum::{
     routing::{delete, get, post},
@@ -27,6 +29,10 @@ pub struct AppState {
     pub pool: PgPool,
     pub config: Config,
     pub scheduler_shutdown: Arc<AtomicBool>,
+    #[cfg(feature = "saas")]
+    pub maintenance_mode: Arc<AtomicBool>,
+    #[cfg(feature = "saas")]
+    pub maintenance_message: Arc<std::sync::RwLock<Option<String>>>,
 }
 
 // Allow extracting PgPool from AppState
@@ -44,11 +50,21 @@ impl axum::extract::FromRef<AppState> for Config {
 }
 
 /// Create the main API router with all endpoints
-pub fn create_router(pool: PgPool, config: Config, scheduler_shutdown: Arc<AtomicBool>) -> Router {
+pub fn create_router(
+    pool: PgPool,
+    config: Config,
+    scheduler_shutdown: Arc<AtomicBool>,
+    #[cfg(feature = "saas")] maintenance_mode: Arc<AtomicBool>,
+    #[cfg(feature = "saas")] maintenance_message: Arc<std::sync::RwLock<Option<String>>>,
+) -> Router {
     let state = AppState {
         pool: pool.clone(),
         config,
         scheduler_shutdown,
+        #[cfg(feature = "saas")]
+        maintenance_mode,
+        #[cfg(feature = "saas")]
+        maintenance_message,
     };
 
     // Create health router with AppState
@@ -102,6 +118,11 @@ pub fn create_router(pool: PgPool, config: Config, scheduler_shutdown: Arc<Atomi
     #[cfg(feature = "standalone")]
     {
         router = router.nest("/admin", admin_router);
+    }
+
+    #[cfg(feature = "saas")]
+    {
+        router = router.route("/webhooks/maintenance", post(webhook::handle_maintenance_webhook));
     }
 
     router.with_state(state)

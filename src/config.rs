@@ -281,7 +281,7 @@ mod tests {
     fn test_masked_database_url() {
         let config = Config {
             database_url: "postgresql://user:password@localhost/rusty_links".to_string(),
-            app_port: 8080,
+            app_port: 4002,
             update_interval_days: 30,
             log_level: "info".to_string(),
             update_interval_hours: 24,
@@ -290,7 +290,7 @@ mod tests {
             #[cfg(feature = "saas")]
             saas_login_url: "http://localhost:5173/login".to_string(),
             #[cfg(feature = "saas")]
-            host_url: "http://localhost:8080".to_string(),
+            host_url: "http://localhost:4002".to_string(),
             #[cfg(feature = "saas")]
             saas_jwt_secret: "test-secret".to_string(),
             #[cfg(feature = "saas")]
