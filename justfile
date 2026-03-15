@@ -40,7 +40,22 @@ down:
 
 # Remove all containers, volumes, and networks
 clean:
-    docker compose down --volumes --remove-orphans
+    #!/usr/bin/env nu
+    docker compose down --remove-orphans
+    let suffix = $env.USER
+    let vols = [
+        $"rusty-links-cargo-($suffix)"
+        $"rusty-links-target-($suffix)"
+        $"rusty-links-postgres-($suffix)"
+        $"rusty-links-app-data-($suffix)"
+        $"rusty-links-db-data-($suffix)"
+    ]
+    let existing = docker volume ls --quiet | lines
+    for vol in $vols {
+        if $vol in $existing {
+            docker volume rm $vol
+        }
+    }
 
 # Run pending database migrations
 migrate-run:
@@ -93,7 +108,7 @@ test:
     cargo test
 
 # Run integration tests against a running instance
-test-integration url="http://localhost:8080":
+test-integration url="http://localhost:4002":
     bash scripts/integration-test.sh {{ url }}
 
 # Format code

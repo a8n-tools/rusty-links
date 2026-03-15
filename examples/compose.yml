@@ -11,14 +11,14 @@ services:
       dockerfile: Dockerfile
       args:
         BUILD_MODE: standalone
-    container_name: rusty-links-app
+    container_name: rusty-links-app-${USER}
     depends_on:
       db:
         condition: service_healthy
     restart: unless-stopped
     environment:
       DATABASE_URL: postgres://${DB_USERNAME:-rustylinks}:${DB_PASSWORD:-changeme}@db:5432/${DB_NAME:-rustylinks}
-      APP_PORT: 8080
+      APP_PORT: 4002
       UPDATE_INTERVAL_DAYS: ${UPDATE_INTERVAL_DAYS:-30}
       UPDATE_INTERVAL_HOURS: ${UPDATE_INTERVAL_HOURS:-24}
       BATCH_SIZE: ${BATCH_SIZE:-50}
@@ -27,7 +27,7 @@ services:
     volumes:
       - rusty-links-app-data:/data
     ports:
-      - "${HOST_PORT:-8080}:8080"
+      - "${HOST_IP:-0.0.0.0}:${HOST_PORT:-4002}:4002"
     networks:
       - rusty-links-private
 
@@ -35,7 +35,7 @@ services:
     # https://hub.docker.com/_/postgres
     # https://github.com/docker-library/postgres
     image: docker.io/postgres:17.2-alpine
-    container_name: rusty-links-db
+    container_name: rusty-links-db-${USER}
     restart: unless-stopped
     healthcheck:
       # See the README for healthcheck information.
@@ -62,11 +62,11 @@ services:
 
 volumes:
   rusty-links-app-data:
-    name: rusty-links-app-data
+    name: rusty-links-app-data-${USER}
   rusty-links-db-data:
-    name: rusty-links-db-data
+    name: rusty-links-db-data-${USER}
 
 networks:
   rusty-links-private:
-    name: rusty-links-private
+    name: rusty-links-private-${USER}
     driver: bridge
