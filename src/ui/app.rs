@@ -28,6 +28,11 @@ pub fn App() -> Element {
             rel: "icon",
             href: "/assets/favicon.ico",
         }
+        if cfg!(feature = "saas") {
+            document::Script {
+                src: "/saas-refresh.js",
+            }
+        }
         Router::<Route> {
             config: || RouterConfig::default().on_update(|_| None)
         }

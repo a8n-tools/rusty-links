@@ -160,7 +160,11 @@ async fn main() {
                         return axum::response::Redirect::to(&redirect_url).into_response();
                     }
 
-                    // Only protect app pages — skip API, assets, and framework routes
+                    // Only protect app pages — skip API, assets, framework routes, and refresh script
+                    if path == "/saas-refresh.js" {
+                        return next.run(req).await;
+                    }
+
                     let is_protected = matches!(
                         path,
                         "/" | "/links" | "/categories" | "/tags" | "/languages" | "/licenses" | "/login"
@@ -213,7 +217,32 @@ async fn main() {
     // Everything else will be handled by Dioxus
     // Also serve static assets from the assets directory
     let mut router = axum::Router::new()
-        .nest("/api", api_router)
+        .nest("/api", api_router);
+
+    // SaaS refresh JS: bake the refresh URL into the script at serve time
+    #[cfg(feature = "saas")]
+    {
+        let js = {
+            let refresh_url = config.saas_refresh_url.clone();
+            include_str!("../assets/saas-refresh.js").replace("{{SAAS_REFRESH_URL}}", &refresh_url)
+        };
+        router = router.route_service(
+            "/saas-refresh.js",
+            tower::util::service_fn(move |_req: axum::http::Request<axum::body::Body>| {
+                let js = js.clone();
+                async move {
+                    Ok::<_, std::convert::Infallible>(
+                        axum::response::Response::builder()
+                            .header("Content-Type", "application/javascript; charset=utf-8")
+                            .body(axum::body::Body::from(js))
+                            .unwrap(),
+                    )
+                }
+            }),
+        );
+    }
+
+    let mut router = router
         .route_service(
             "/tailwind.css",
             tower::util::service_fn(|_req: axum::http::Request<axum::body::Body>| async {
@@ -254,6 +283,7 @@ async fn main() {
                     if path.starts_with("/api/webhooks/")
                         || path.starts_with("/api/health")
                         || path == "/tailwind.css"
+                        || path == "/saas-refresh.js"
                         || path.starts_with("/assets/")
                     {
                         return next.run(req).await;
