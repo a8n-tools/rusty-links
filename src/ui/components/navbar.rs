@@ -231,7 +231,7 @@ fn MaintenanceBanner() -> Element {
             "aria-live": "polite",
             div { class: "flex items-center justify-center gap-2",
                 span { class: "w-2 h-2 bg-white rounded-full animate-pulse" }
-                "Maintenance mode is active — only admins can access the app"
+                "Maintenance mode is active"
             }
         }
     }
