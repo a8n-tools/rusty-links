@@ -56,6 +56,9 @@ pub fn Navbar() -> Element {
     };
 
     rsx! {
+        if show_maintenance() {
+            MaintenanceBanner {}
+        }
         nav {
             class: "bg-white border-b-2 border-gray-200 shadow-sm",
             role: "navigation",
@@ -76,9 +79,6 @@ pub fn Navbar() -> Element {
                         class: "hidden md:flex gap-2 lg:gap-3 items-center",
                         role: "menubar",
                         "aria-label": "Site navigation",
-                        if show_maintenance() {
-                            MaintenanceBadge {}
-                        }
                         NavLinks { on_click: close_menu }
                         LogoutButton { loading: loading(), on_logout: on_logout }
                     }
@@ -130,9 +130,6 @@ pub fn Navbar() -> Element {
                         role: "menu",
                         "aria-label": "Mobile navigation",
                         div { class: "flex flex-col gap-2",
-                            if show_maintenance() {
-                                MaintenanceBadge {}
-                            }
                             NavLinks { on_click: close_menu, mobile: true }
                             LogoutButton { loading: loading(), on_logout: on_logout, mobile: true }
                         }
@@ -226,13 +223,16 @@ fn LogoutButton(
 }
 
 #[component]
-fn MaintenanceBadge() -> Element {
+fn MaintenanceBanner() -> Element {
     rsx! {
-        span {
-            class: "inline-flex items-center gap-1.5 px-3 py-1.5 bg-amber-100 text-amber-800 border border-amber-300 rounded-md text-sm font-semibold whitespace-nowrap",
-            "aria-label": "Maintenance mode is active",
-            span { class: "w-2 h-2 bg-amber-500 rounded-full animate-pulse" }
-            "Maintenance Mode"
+        div {
+            class: "bg-amber-500 text-white text-center py-2 px-4 text-sm font-semibold",
+            role: "status",
+            "aria-live": "polite",
+            div { class: "flex items-center justify-center gap-2",
+                span { class: "w-2 h-2 bg-white rounded-full animate-pulse" }
+                "Maintenance mode is active — only admins can access the app"
+            }
         }
     }
 }
