@@ -146,6 +146,66 @@ where
     }
 }
 
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_claims_fields() {
+        let claims = Claims {
+            sub: "user@example.com".to_string(),
+            user_id: Uuid::new_v4().to_string(),
+            is_admin: true,
+            exp: 9999999999,
+        };
+        assert_eq!(claims.sub, "user@example.com");
+        assert!(claims.is_admin);
+    }
+
+    #[test]
+    fn test_claims_serialization() {
+        let user_id = Uuid::new_v4();
+        let claims = Claims {
+            sub: "test@test.com".to_string(),
+            user_id: user_id.to_string(),
+            is_admin: false,
+            exp: 12345,
+        };
+        let json = serde_json::to_string(&claims).unwrap();
+        assert!(json.contains("test@test.com"));
+        assert!(json.contains(&user_id.to_string()));
+    }
+
+    #[test]
+    fn test_claims_deserialization() {
+        let json = r#"{"sub":"u@t.com","user_id":"550e8400-e29b-41d4-a716-446655440000","is_admin":true,"exp":999}"#;
+        let claims: Claims = serde_json::from_str(json).unwrap();
+        assert_eq!(claims.sub, "u@t.com");
+        assert!(claims.is_admin);
+        assert_eq!(claims.exp, 999);
+    }
+
+    #[test]
+    fn test_authenticated_user_uuid() {
+        let user_id = Uuid::new_v4();
+        let auth = AuthenticatedUser { user_id };
+        assert_eq!(auth.user_id, user_id);
+    }
+
+    #[test]
+    fn test_admin_claims_wraps_claims() {
+        let claims = Claims {
+            sub: "admin@test.com".to_string(),
+            user_id: Uuid::new_v4().to_string(),
+            is_admin: true,
+            exp: 9999999999,
+        };
+        let admin = AdminClaims(claims.clone());
+        assert_eq!(admin.0.sub, "admin@test.com");
+        assert!(admin.0.is_admin);
+    }
+}
+
 #[cfg(all(feature = "saas", not(feature = "standalone")))]
 impl<S> FromRequestParts<S> for AuthenticatedUser
 where

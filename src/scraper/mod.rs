@@ -400,8 +400,35 @@ mod tests {
         "#;
         let document = Html::parse_document(html);
         let title = extract_title(&document);
-        // og:title should be preferred
         assert_eq!(title, Some("OG Title".to_string()));
+    }
+
+    #[test]
+    fn test_extract_title_none_when_missing() {
+        let html = r#"<html><head></head><body></body></html>"#;
+        let document = Html::parse_document(html);
+        assert_eq!(extract_title(&document), None);
+    }
+
+    #[test]
+    fn test_extract_title_empty_title_tag() {
+        let html = r#"<html><head><title>   </title></head></html>"#;
+        let document = Html::parse_document(html);
+        assert_eq!(extract_title(&document), None);
+    }
+
+    #[test]
+    fn test_extract_title_empty_og_title_falls_back() {
+        let html = r#"
+            <html>
+                <head>
+                    <meta property="og:title" content="   " />
+                    <title>Fallback Title</title>
+                </head>
+            </html>
+        "#;
+        let document = Html::parse_document(html);
+        assert_eq!(extract_title(&document), Some("Fallback Title".to_string()));
     }
 
     #[test]
@@ -420,6 +447,37 @@ mod tests {
     }
 
     #[test]
+    fn test_extract_description_og_preferred() {
+        let html = r#"
+            <html>
+                <head>
+                    <meta property="og:description" content="OG desc" />
+                    <meta name="description" content="Regular desc" />
+                </head>
+            </html>
+        "#;
+        let document = Html::parse_document(html);
+        assert_eq!(
+            extract_description(&document),
+            Some("OG desc".to_string())
+        );
+    }
+
+    #[test]
+    fn test_extract_description_none_when_missing() {
+        let html = r#"<html><head></head></html>"#;
+        let document = Html::parse_document(html);
+        assert_eq!(extract_description(&document), None);
+    }
+
+    #[test]
+    fn test_extract_description_empty_content() {
+        let html = r#"<html><head><meta name="description" content="  " /></head></html>"#;
+        let document = Html::parse_document(html);
+        assert_eq!(extract_description(&document), None);
+    }
+
+    #[test]
     fn test_extract_favicon_candidates() {
         let base = Url::parse("https://example.com/page").unwrap();
         let html = r#"
@@ -431,7 +489,6 @@ mod tests {
         "#;
         let document = Html::parse_document(html);
         let candidates = extract_favicon(&document, &base);
-        // Should have the declared favicon and the default fallback
         assert!(candidates.contains(&"https://example.com/favicon.ico".to_string()));
     }
 
@@ -445,10 +502,75 @@ mod tests {
         "#;
         let document = Html::parse_document(html);
         let candidates = extract_favicon(&document, &base);
-        // Should have the default /favicon.ico fallback
         assert_eq!(
             candidates,
             vec!["https://example.com/favicon.ico".to_string()]
         );
+    }
+
+    #[test]
+    fn test_extract_favicon_relative_url() {
+        let base = Url::parse("https://example.com/blog/post").unwrap();
+        let html = r#"<html><head><link rel="icon" href="icon.png" /></head></html>"#;
+        let document = Html::parse_document(html);
+        let candidates = extract_favicon(&document, &base);
+        assert!(candidates.contains(&"https://example.com/blog/icon.png".to_string()));
+    }
+
+    #[test]
+    fn test_extract_favicon_absolute_url() {
+        let base = Url::parse("https://example.com/page").unwrap();
+        let html = r#"<html><head><link rel="icon" href="https://cdn.example.com/icon.png" /></head></html>"#;
+        let document = Html::parse_document(html);
+        let candidates = extract_favicon(&document, &base);
+        assert!(candidates.contains(&"https://cdn.example.com/icon.png".to_string()));
+    }
+
+    #[test]
+    fn test_extract_favicon_apple_touch_icon() {
+        let base = Url::parse("https://example.com/").unwrap();
+        let html = r#"<html><head><link rel="apple-touch-icon" href="/apple-icon.png" /></head></html>"#;
+        let document = Html::parse_document(html);
+        let candidates = extract_favicon(&document, &base);
+        assert!(candidates.contains(&"https://example.com/apple-icon.png".to_string()));
+    }
+
+    #[test]
+    fn test_extract_favicon_multiple_candidates() {
+        let base = Url::parse("https://example.com/").unwrap();
+        let html = r#"
+            <html><head>
+                <link rel="icon" href="/icon.svg" />
+                <link rel="apple-touch-icon" href="/apple.png" />
+            </head></html>
+        "#;
+        let document = Html::parse_document(html);
+        let candidates = extract_favicon(&document, &base);
+        // Should have declared icons + default fallback
+        assert!(candidates.len() >= 3);
+    }
+
+    #[test]
+    fn test_scraped_metadata_default() {
+        let meta = ScrapedMetadata::default();
+        assert!(meta.title.is_none());
+        assert!(meta.description.is_none());
+        assert!(meta.favicon.is_none());
+    }
+
+    #[test]
+    fn test_valid_image_mime_types_coverage() {
+        // Ensure common formats are in the list
+        assert!(VALID_IMAGE_MIME_TYPES.contains(&"image/png"));
+        assert!(VALID_IMAGE_MIME_TYPES.contains(&"image/svg+xml"));
+        assert!(VALID_IMAGE_MIME_TYPES.contains(&"image/x-icon"));
+        assert!(VALID_IMAGE_MIME_TYPES.contains(&"image/webp"));
+    }
+
+    #[test]
+    fn test_valid_image_extensions_coverage() {
+        assert!(VALID_IMAGE_EXTENSIONS.contains(&".ico"));
+        assert!(VALID_IMAGE_EXTENSIONS.contains(&".svg"));
+        assert!(VALID_IMAGE_EXTENSIONS.contains(&".png"));
     }
 }

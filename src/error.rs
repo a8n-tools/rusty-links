@@ -595,4 +595,159 @@ mod tests {
         assert_eq!(capitalize_first("email"), "Email");
         assert_eq!(capitalize_first(""), "");
     }
+
+    #[test]
+    fn test_forbidden_error() {
+        let error = AppError::forbidden("Admin access required");
+        assert_eq!(error.status_code(), 403);
+        assert_eq!(error.error_code(), "FORBIDDEN");
+        assert!(error.to_string().contains("Admin access required"));
+    }
+
+    #[test]
+    fn test_invalid_credentials_error() {
+        let error = AppError::InvalidCredentials;
+        assert_eq!(error.status_code(), 401);
+        assert_eq!(error.error_code(), "INVALID_CREDENTIALS");
+        assert!(error.to_string().contains("Invalid email or password"));
+    }
+
+    #[test]
+    fn test_session_expired_error() {
+        let error = AppError::SessionExpired;
+        assert_eq!(error.status_code(), 401);
+        assert_eq!(error.error_code(), "SESSION_EXPIRED");
+        assert!(error.to_string().contains("session has expired"));
+    }
+
+    #[test]
+    fn test_unauthorized_error() {
+        let error = AppError::Unauthorized;
+        assert_eq!(error.status_code(), 403);
+        assert_eq!(error.error_code(), "UNAUTHORIZED");
+    }
+
+    #[test]
+    fn test_account_locked_error() {
+        let error = AppError::AccountLocked;
+        assert_eq!(error.status_code(), 429);
+        assert_eq!(error.error_code(), "ACCOUNT_LOCKED");
+        assert!(error.to_string().contains("temporarily locked"));
+    }
+
+    #[test]
+    fn test_membership_required_error() {
+        let error = AppError::MembershipRequired("https://example.com/membership".to_string());
+        assert_eq!(error.status_code(), 403);
+        assert_eq!(error.error_code(), "MEMBERSHIP_REQUIRED");
+        assert!(error.to_string().contains("Membership required"));
+    }
+
+    #[test]
+    fn test_configuration_error() {
+        let error = AppError::Configuration("Missing DATABASE_URL".to_string());
+        assert_eq!(error.status_code(), 503);
+        assert_eq!(error.error_code(), "CONFIGURATION_ERROR");
+        assert!(error.to_string().contains("Missing DATABASE_URL"));
+    }
+
+    #[test]
+    fn test_external_service_error() {
+        let error = AppError::ExternalService("GitHub API timeout".to_string());
+        assert_eq!(error.status_code(), 502);
+        assert_eq!(error.error_code(), "EXTERNAL_SERVICE_ERROR");
+        assert!(error.to_string().contains("GitHub API timeout"));
+    }
+
+    #[test]
+    fn test_internal_error() {
+        let error = AppError::Internal("unexpected state".to_string());
+        assert_eq!(error.status_code(), 500);
+        assert_eq!(error.error_code(), "INTERNAL_ERROR");
+        // Internal details should NOT be exposed to user
+        assert!(!error.to_string().contains("unexpected state"));
+        assert!(error.to_string().contains("internal error"));
+    }
+
+    #[test]
+    fn test_io_error_conversion() {
+        let io_err = std::io::Error::new(std::io::ErrorKind::NotFound, "file missing");
+        let error: AppError = io_err.into();
+        assert_eq!(error.status_code(), 500);
+        assert_eq!(error.error_code(), "IO_ERROR");
+    }
+
+    #[test]
+    fn test_json_error_conversion() {
+        let json_err = serde_json::from_str::<serde_json::Value>("invalid json").unwrap_err();
+        let error: AppError = json_err.into();
+        assert_eq!(error.status_code(), 500);
+        assert_eq!(error.error_code(), "JSON_ERROR");
+        assert!(error.to_string().contains("Invalid JSON"));
+    }
+
+    #[test]
+    fn test_url_parse_error_conversion() {
+        let url_err = url::Url::parse("not a url").unwrap_err();
+        let error: AppError = url_err.into();
+        assert_eq!(error.status_code(), 400);
+        assert_eq!(error.error_code(), "VALIDATION_ERROR");
+    }
+
+    #[test]
+    fn test_extract_field_from_constraint_standard() {
+        let msg = r#"duplicate key value violates unique constraint "uq_users_email""#;
+        assert_eq!(extract_field_from_constraint(msg), "email");
+    }
+
+    #[test]
+    fn test_extract_field_from_constraint_compound() {
+        let msg = r#"duplicate key value violates unique constraint "uq_links_user_domain_path""#;
+        assert_eq!(extract_field_from_constraint(msg), "user_domain_path");
+    }
+
+    #[test]
+    fn test_extract_field_from_constraint_fallback() {
+        let msg = "some other error message without quotes";
+        assert_eq!(extract_field_from_constraint(msg), "field");
+    }
+
+    #[test]
+    fn test_error_source_chain() {
+        use std::error::Error;
+
+        let io_err = std::io::Error::new(std::io::ErrorKind::Other, "disk full");
+        let error = AppError::Io(io_err);
+        assert!(error.source().is_some());
+
+        let error = AppError::InvalidCredentials;
+        assert!(error.source().is_none());
+    }
+
+    #[test]
+    fn test_all_status_codes_are_valid_http() {
+        let errors: Vec<AppError> = vec![
+            AppError::validation("f", "m"),
+            AppError::InvalidCredentials,
+            AppError::SessionExpired,
+            AppError::Unauthorized,
+            AppError::forbidden("msg"),
+            AppError::not_found("r", "id"),
+            AppError::duplicate("f"),
+            AppError::AccountLocked,
+            AppError::MembershipRequired("url".to_string()),
+            AppError::Configuration("c".to_string()),
+            AppError::ExternalService("e".to_string()),
+            AppError::Internal("i".to_string()),
+        ];
+
+        for error in errors {
+            let code = error.status_code();
+            assert!(
+                (100..600).contains(&code),
+                "Invalid HTTP status code: {}",
+                code
+            );
+        }
+    }
 }

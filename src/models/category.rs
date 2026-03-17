@@ -241,32 +241,33 @@ fn build_children(parent_id: Uuid, all_categories: &[Category]) -> Vec<CategoryW
 mod tests {
     use super::*;
 
+    fn make_category(
+        id: Uuid,
+        user_id: Uuid,
+        name: &str,
+        parent_id: Option<Uuid>,
+        depth: i32,
+    ) -> Category {
+        Category {
+            id,
+            user_id,
+            name: name.to_string(),
+            parent_id,
+            depth,
+            sort_order: None,
+            created_at: Utc::now(),
+        }
+    }
+
     #[test]
     fn test_build_category_tree() {
-        let now = Utc::now();
         let user_id = Uuid::new_v4();
         let root_id = Uuid::new_v4();
         let child_id = Uuid::new_v4();
 
         let categories = vec![
-            Category {
-                id: root_id,
-                user_id,
-                name: "Root".to_string(),
-                parent_id: None,
-                depth: 0,
-                sort_order: None,
-                created_at: now,
-            },
-            Category {
-                id: child_id,
-                user_id,
-                name: "Child".to_string(),
-                parent_id: Some(root_id),
-                depth: 1,
-                sort_order: None,
-                created_at: now,
-            },
+            make_category(root_id, user_id, "Root", None, 0),
+            make_category(child_id, user_id, "Child", Some(root_id), 1),
         ];
 
         let tree = build_category_tree(categories);
@@ -274,5 +275,69 @@ mod tests {
         assert_eq!(tree[0].category.name, "Root");
         assert_eq!(tree[0].children.len(), 1);
         assert_eq!(tree[0].children[0].category.name, "Child");
+    }
+
+    #[test]
+    fn test_build_category_tree_empty() {
+        let tree = build_category_tree(vec![]);
+        assert!(tree.is_empty());
+    }
+
+    #[test]
+    fn test_build_category_tree_multiple_roots() {
+        let user_id = Uuid::new_v4();
+        let categories = vec![
+            make_category(Uuid::new_v4(), user_id, "Root A", None, 0),
+            make_category(Uuid::new_v4(), user_id, "Root B", None, 0),
+        ];
+
+        let tree = build_category_tree(categories);
+        assert_eq!(tree.len(), 2);
+    }
+
+    #[test]
+    fn test_build_category_tree_three_levels() {
+        let user_id = Uuid::new_v4();
+        let root_id = Uuid::new_v4();
+        let mid_id = Uuid::new_v4();
+        let leaf_id = Uuid::new_v4();
+
+        let categories = vec![
+            make_category(root_id, user_id, "Root", None, 0),
+            make_category(mid_id, user_id, "Mid", Some(root_id), 1),
+            make_category(leaf_id, user_id, "Leaf", Some(mid_id), 2),
+        ];
+
+        let tree = build_category_tree(categories);
+        assert_eq!(tree.len(), 1);
+        assert_eq!(tree[0].children.len(), 1);
+        assert_eq!(tree[0].children[0].children.len(), 1);
+        assert_eq!(tree[0].children[0].children[0].category.name, "Leaf");
+    }
+
+    #[test]
+    fn test_build_category_tree_multiple_children() {
+        let user_id = Uuid::new_v4();
+        let root_id = Uuid::new_v4();
+
+        let categories = vec![
+            make_category(root_id, user_id, "Root", None, 0),
+            make_category(Uuid::new_v4(), user_id, "Child A", Some(root_id), 1),
+            make_category(Uuid::new_v4(), user_id, "Child B", Some(root_id), 1),
+            make_category(Uuid::new_v4(), user_id, "Child C", Some(root_id), 1),
+        ];
+
+        let tree = build_category_tree(categories);
+        assert_eq!(tree.len(), 1);
+        assert_eq!(tree[0].children.len(), 3);
+    }
+
+    #[test]
+    fn test_build_children_no_matches() {
+        let user_id = Uuid::new_v4();
+        let categories = vec![make_category(Uuid::new_v4(), user_id, "Root", None, 0)];
+
+        let children = build_children(Uuid::new_v4(), &categories);
+        assert!(children.is_empty());
     }
 }
