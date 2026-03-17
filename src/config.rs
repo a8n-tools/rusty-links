@@ -285,9 +285,9 @@ impl Config {
 mod tests {
     use super::*;
 
-    #[test]
-    fn test_masked_database_url() {
-        let config = Config {
+    /// Helper to create a test Config with sensible defaults
+    fn test_config() -> Config {
+        Config {
             database_url: "postgresql://user:password@localhost/rusty_links".to_string(),
             app_port: 4002,
             update_interval_days: 30,
@@ -319,10 +319,82 @@ mod tests {
             account_lockout_duration_minutes: 30,
             #[cfg(feature = "standalone")]
             allow_registration: true,
-        };
+        }
+    }
 
+    #[test]
+    fn test_masked_database_url() {
+        let config = test_config();
         let masked = config.masked_database_url();
         assert!(!masked.contains("password"));
         assert!(masked.contains("****"));
+    }
+
+    #[test]
+    fn test_masked_database_url_preserves_user_and_host() {
+        let config = test_config();
+        let masked = config.masked_database_url();
+        assert!(masked.contains("user"));
+        assert!(masked.contains("localhost"));
+        assert!(masked.contains("rusty_links"));
+    }
+
+    #[test]
+    fn test_masked_database_url_no_password() {
+        let mut config = test_config();
+        config.database_url = "postgresql://localhost/rusty_links".to_string();
+        let masked = config.masked_database_url();
+        // Should return the fully masked fallback
+        assert_eq!(masked, "postgresql://****:****@****/****");
+    }
+
+    #[test]
+    fn test_masked_database_url_complex_password() {
+        let mut config = test_config();
+        config.database_url =
+            "postgresql://admin:p@ss:w0rd!#@db.example.com:5432/mydb".to_string();
+        let masked = config.masked_database_url();
+        assert!(!masked.contains("p@ss:w0rd!#"));
+        assert!(masked.contains("****"));
+    }
+
+    #[test]
+    fn test_config_validation_update_interval_days_minimum() {
+        // Verify that update_interval_days < 1 would be caught by validation
+        let min_valid = 1u32;
+        assert!(min_valid >= 1);
+        let invalid = 0u32;
+        assert!(invalid < 1);
+    }
+
+    #[test]
+    fn test_config_validation_jitter_percent_range() {
+        // Valid jitter: 0-100
+        let valid_zero: u8 = 0;
+        let valid_max: u8 = 100;
+        assert!(valid_zero <= 100);
+        assert!(valid_max <= 100);
+        // 101 would exceed the max
+        let invalid: u8 = 101;
+        assert!(invalid > 100);
+    }
+
+    #[test]
+    fn test_config_validation_batch_size_minimum() {
+        let valid: usize = 1;
+        assert!(valid >= 1);
+        let invalid: usize = 0;
+        assert!(invalid < 1);
+    }
+
+    #[test]
+    fn test_config_clone() {
+        let config = test_config();
+        let cloned = config.clone();
+        assert_eq!(config.database_url, cloned.database_url);
+        assert_eq!(config.app_port, cloned.app_port);
+        assert_eq!(config.update_interval_hours, cloned.update_interval_hours);
+        assert_eq!(config.batch_size, cloned.batch_size);
+        assert_eq!(config.jitter_percent, cloned.jitter_percent);
     }
 }

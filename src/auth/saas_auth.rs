@@ -88,3 +88,207 @@ pub fn get_user_from_cookie(jar: &CookieJar, secret: &str) -> Option<SaasUserCla
         is_admin,
     })
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use axum_extra::extract::cookie::Cookie;
+
+    const TEST_SECRET: &str = "test-saas-secret";
+
+    fn make_jwt(claims: &serde_json::Value, secret: &str) -> String {
+        jsonwebtoken::encode(
+            &jsonwebtoken::Header::default(),
+            claims,
+            &jsonwebtoken::EncodingKey::from_secret(secret.as_bytes()),
+        )
+        .unwrap()
+    }
+
+    fn jar_with_token(token: &str) -> CookieJar {
+        CookieJar::new().add(Cookie::new("access_token", token.to_string()))
+    }
+
+    #[test]
+    fn test_extract_user_id_from_user_id_field() {
+        let claims = serde_json::json!({
+            "user_id": "abc-123",
+            "exp": 9999999999u64
+        });
+        let token = make_jwt(&claims, TEST_SECRET);
+        let jar = jar_with_token(&token);
+        let result = get_user_from_cookie(&jar, TEST_SECRET).unwrap();
+        assert_eq!(result.user_id, "abc-123");
+    }
+
+    #[test]
+    fn test_extract_user_id_from_sub_field() {
+        let claims = serde_json::json!({
+            "sub": "user-456",
+            "exp": 9999999999u64
+        });
+        let token = make_jwt(&claims, TEST_SECRET);
+        let jar = jar_with_token(&token);
+        let result = get_user_from_cookie(&jar, TEST_SECRET).unwrap();
+        assert_eq!(result.user_id, "user-456");
+    }
+
+    #[test]
+    fn test_extract_user_id_from_id_field() {
+        let claims = serde_json::json!({
+            "id": "user-789",
+            "exp": 9999999999u64
+        });
+        let token = make_jwt(&claims, TEST_SECRET);
+        let jar = jar_with_token(&token);
+        let result = get_user_from_cookie(&jar, TEST_SECRET).unwrap();
+        assert_eq!(result.user_id, "user-789");
+    }
+
+    #[test]
+    fn test_extract_email() {
+        let claims = serde_json::json!({
+            "user_id": "u1",
+            "email": "test@example.com",
+            "exp": 9999999999u64
+        });
+        let token = make_jwt(&claims, TEST_SECRET);
+        let jar = jar_with_token(&token);
+        let result = get_user_from_cookie(&jar, TEST_SECRET).unwrap();
+        assert_eq!(result.email, Some("test@example.com".to_string()));
+    }
+
+    #[test]
+    fn test_extract_membership_status() {
+        let claims = serde_json::json!({
+            "user_id": "u1",
+            "membership_status": "active",
+            "exp": 9999999999u64
+        });
+        let token = make_jwt(&claims, TEST_SECRET);
+        let jar = jar_with_token(&token);
+        let result = get_user_from_cookie(&jar, TEST_SECRET).unwrap();
+        assert_eq!(result.membership_status, Some("active".to_string()));
+    }
+
+    #[test]
+    fn test_is_admin_from_bool() {
+        let claims = serde_json::json!({
+            "user_id": "u1",
+            "is_admin": true,
+            "exp": 9999999999u64
+        });
+        let token = make_jwt(&claims, TEST_SECRET);
+        let jar = jar_with_token(&token);
+        let result = get_user_from_cookie(&jar, TEST_SECRET).unwrap();
+        assert!(result.is_admin);
+    }
+
+    #[test]
+    fn test_is_admin_from_role_string() {
+        let claims = serde_json::json!({
+            "user_id": "u1",
+            "role": "admin",
+            "exp": 9999999999u64
+        });
+        let token = make_jwt(&claims, TEST_SECRET);
+        let jar = jar_with_token(&token);
+        let result = get_user_from_cookie(&jar, TEST_SECRET).unwrap();
+        assert!(result.is_admin);
+    }
+
+    #[test]
+    fn test_is_admin_from_roles_array() {
+        let claims = serde_json::json!({
+            "user_id": "u1",
+            "roles": ["user", "admin"],
+            "exp": 9999999999u64
+        });
+        let token = make_jwt(&claims, TEST_SECRET);
+        let jar = jar_with_token(&token);
+        let result = get_user_from_cookie(&jar, TEST_SECRET).unwrap();
+        assert!(result.is_admin);
+    }
+
+    #[test]
+    fn test_not_admin_by_default() {
+        let claims = serde_json::json!({
+            "user_id": "u1",
+            "exp": 9999999999u64
+        });
+        let token = make_jwt(&claims, TEST_SECRET);
+        let jar = jar_with_token(&token);
+        let result = get_user_from_cookie(&jar, TEST_SECRET).unwrap();
+        assert!(!result.is_admin);
+    }
+
+    #[test]
+    fn test_not_admin_from_non_admin_role() {
+        let claims = serde_json::json!({
+            "user_id": "u1",
+            "role": "user",
+            "exp": 9999999999u64
+        });
+        let token = make_jwt(&claims, TEST_SECRET);
+        let jar = jar_with_token(&token);
+        let result = get_user_from_cookie(&jar, TEST_SECRET).unwrap();
+        assert!(!result.is_admin);
+    }
+
+    #[test]
+    fn test_invalid_secret_returns_none() {
+        let claims = serde_json::json!({
+            "user_id": "u1",
+            "exp": 9999999999u64
+        });
+        let token = make_jwt(&claims, "correct-secret");
+        let jar = jar_with_token(&token);
+        let result = get_user_from_cookie(&jar, "wrong-secret");
+        assert!(result.is_none());
+    }
+
+    #[test]
+    fn test_missing_cookie_returns_none() {
+        let jar = CookieJar::new();
+        let result = get_user_from_cookie(&jar, TEST_SECRET);
+        assert!(result.is_none());
+    }
+
+    #[test]
+    fn test_missing_user_id_returns_none() {
+        let claims = serde_json::json!({
+            "email": "test@test.com",
+            "exp": 9999999999u64
+        });
+        let token = make_jwt(&claims, TEST_SECRET);
+        let jar = jar_with_token(&token);
+        let result = get_user_from_cookie(&jar, TEST_SECRET);
+        assert!(result.is_none());
+    }
+
+    #[test]
+    fn test_user_id_field_takes_priority_over_sub() {
+        let claims = serde_json::json!({
+            "user_id": "from-user-id",
+            "sub": "from-sub",
+            "exp": 9999999999u64
+        });
+        let token = make_jwt(&claims, TEST_SECRET);
+        let jar = jar_with_token(&token);
+        let result = get_user_from_cookie(&jar, TEST_SECRET).unwrap();
+        assert_eq!(result.user_id, "from-user-id");
+    }
+
+    #[test]
+    fn test_is_admin_case_insensitive() {
+        let claims = serde_json::json!({
+            "user_id": "u1",
+            "role": "ADMIN",
+            "exp": 9999999999u64
+        });
+        let token = make_jwt(&claims, TEST_SECRET);
+        let jar = jar_with_token(&token);
+        let result = get_user_from_cookie(&jar, TEST_SECRET).unwrap();
+        assert!(result.is_admin);
+    }
+}

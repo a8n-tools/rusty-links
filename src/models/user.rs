@@ -366,6 +366,26 @@ mod tests {
         assert!(validate_email("user@@example.com").is_err());
     }
 
+    #[test]
+    fn test_validate_email_empty() {
+        assert!(validate_email("").is_err());
+    }
+
+    #[test]
+    fn test_validate_email_whitespace_only() {
+        assert!(validate_email("@.com").is_err());
+    }
+
+    #[test]
+    fn test_validate_email_numeric_local() {
+        assert!(validate_email("123@example.com").is_ok());
+    }
+
+    #[test]
+    fn test_validate_email_hyphenated_domain() {
+        assert!(validate_email("user@my-domain.com").is_ok());
+    }
+
     #[cfg(feature = "standalone")]
     #[test]
     fn test_password_hashing_and_verification() {
@@ -396,5 +416,52 @@ mod tests {
 
         assert!(verify_password(password, &hash1).expect("Verification should succeed"));
         assert!(verify_password(password, &hash2).expect("Verification should succeed"));
+    }
+
+    #[cfg(feature = "standalone")]
+    #[test]
+    fn test_password_hash_is_argon2id() {
+        let hash = hash_password("TestPass123!").expect("Hashing should succeed");
+        assert!(
+            hash.starts_with("$argon2id$"),
+            "Hash should use Argon2id algorithm"
+        );
+    }
+
+    #[test]
+    fn test_is_legacy_hash_bcrypt() {
+        assert!(is_legacy_hash(
+            "$2b$12$LJ3m4ys4PxPT6m3n5p6lqOJ"
+        ));
+        assert!(is_legacy_hash(
+            "$2a$12$LJ3m4ys4PxPT6m3n5p6lqOJ"
+        ));
+        assert!(is_legacy_hash(
+            "$2y$12$LJ3m4ys4PxPT6m3n5p6lqOJ"
+        ));
+    }
+
+    #[test]
+    fn test_is_legacy_hash_not_bcrypt() {
+        assert!(!is_legacy_hash(
+            "$argon2id$v=19$m=65536,t=3,p=4$salt$hash"
+        ));
+        assert!(!is_legacy_hash("not_a_hash"));
+        assert!(!is_legacy_hash(""));
+    }
+
+    #[test]
+    fn test_user_password_hash_not_serialized() {
+        let user = User {
+            id: Uuid::new_v4(),
+            email: "test@example.com".to_string(),
+            password_hash: "secret_hash".to_string(),
+            name: "Test".to_string(),
+            is_admin: false,
+            created_at: Utc::now(),
+        };
+        let json = serde_json::to_string(&user).unwrap();
+        assert!(!json.contains("secret_hash"));
+        assert!(!json.contains("password_hash"));
     }
 }

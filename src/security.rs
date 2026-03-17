@@ -344,4 +344,52 @@ mod tests {
         let ip = Ipv4Addr::new(1, 1, 1, 1); // Cloudflare DNS
         assert!(check_ipv4_not_private(&ip).is_ok());
     }
+
+    #[test]
+    fn test_ssrf_blocks_localhost_hostname() {
+        assert!(validate_url_for_ssrf("http://localhost").is_err());
+        assert!(validate_url_for_ssrf("http://localhost:3000").is_err());
+    }
+
+    #[test]
+    fn test_ssrf_blocks_no_hostname() {
+        assert!(validate_url_for_ssrf("http://").is_err());
+    }
+
+    #[test]
+    fn test_validate_password_exactly_8_chars() {
+        // Exactly 8 chars, meets all requirements
+        assert!(validate_password("P@ssw0r!").is_ok());
+    }
+
+    #[test]
+    fn test_validate_password_empty() {
+        let err = validate_password("").unwrap_err();
+        assert!(err.contains("8 characters"));
+    }
+
+    #[test]
+    fn test_validate_password_all_requirements_met() {
+        assert!(validate_password("MyP@ss1234!").is_ok());
+        assert!(validate_password("A1!bcdef").is_ok());
+    }
+
+    #[test]
+    fn test_validate_password_no_lowercase() {
+        // All uppercase + number + special — should still pass
+        // (no lowercase requirement exists)
+        assert!(validate_password("ABCDEF1!").is_ok());
+    }
+
+    #[test]
+    fn test_ssrf_ipv6_loopback() {
+        let ip = IpAddr::V6(std::net::Ipv6Addr::LOCALHOST);
+        assert!(check_ip_not_private(&ip).is_err());
+    }
+
+    #[test]
+    fn test_ssrf_ipv6_unspecified() {
+        let ip = IpAddr::V6(std::net::Ipv6Addr::UNSPECIFIED);
+        assert!(check_ip_not_private(&ip).is_err());
+    }
 }

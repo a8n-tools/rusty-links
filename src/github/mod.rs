@@ -236,6 +236,21 @@ mod tests {
     }
 
     #[test]
+    fn test_is_github_repo_http() {
+        assert!(is_github_repo("http://github.com/owner/repo"));
+    }
+
+    #[test]
+    fn test_is_github_repo_with_trailing_slash() {
+        assert!(is_github_repo("https://github.com/owner/repo/"));
+    }
+
+    #[test]
+    fn test_is_github_repo_empty_string() {
+        assert!(!is_github_repo(""));
+    }
+
+    #[test]
     fn test_parse_repo_from_url() {
         // Valid GitHub URLs
         assert_eq!(
@@ -259,5 +274,65 @@ mod tests {
         assert_eq!(parse_repo_from_url("https://gitlab.com/user/project"), None);
         assert_eq!(parse_repo_from_url("https://github.com/"), None);
         assert_eq!(parse_repo_from_url("not a url"), None);
+    }
+
+    #[test]
+    fn test_parse_repo_strips_git_suffix() {
+        let result = parse_repo_from_url("https://github.com/owner/my-repo.git");
+        assert_eq!(
+            result,
+            Some(("owner".to_string(), "my-repo".to_string()))
+        );
+    }
+
+    #[test]
+    fn test_parse_repo_with_deep_path() {
+        let result =
+            parse_repo_from_url("https://github.com/owner/repo/blob/main/src/lib.rs");
+        assert_eq!(
+            result,
+            Some(("owner".to_string(), "repo".to_string()))
+        );
+    }
+
+    #[test]
+    fn test_parse_repo_ssh_format() {
+        let result = parse_repo_from_url("git@github.com:my-org/my-project.git");
+        assert_eq!(
+            result,
+            Some(("my-org".to_string(), "my-project".to_string()))
+        );
+    }
+
+    #[test]
+    fn test_is_github_and_parse_consistency() {
+        let urls = vec![
+            "https://github.com/rust-lang/rust",
+            "https://github.com/owner/repo.git",
+            "git@github.com:owner/repo.git",
+            "https://github.com/a/b/tree/main",
+        ];
+        for url in urls {
+            assert!(
+                is_github_repo(url) == parse_repo_from_url(url).is_some(),
+                "Inconsistency for URL: {}",
+                url
+            );
+        }
+    }
+
+    #[test]
+    fn test_github_repo_metadata_fields() {
+        let meta = GitHubRepoMetadata {
+            stars: 1000,
+            description: Some("A test repo".to_string()),
+            archived: false,
+            last_commit: None,
+            license: Some("MIT".to_string()),
+            language: Some("Rust".to_string()),
+        };
+        assert_eq!(meta.stars, 1000);
+        assert!(!meta.archived);
+        assert_eq!(meta.license, Some("MIT".to_string()));
     }
 }

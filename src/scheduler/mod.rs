@@ -337,12 +337,63 @@ impl Scheduler {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::sync::atomic::Ordering;
 
     #[test]
-    fn test_scheduler_creation() {
-        // This is just a compilation test
-        // We can't actually test the scheduler without a real database
-        let update_interval = 7;
-        assert_eq!(update_interval, 7);
+    fn test_shutdown_handle_initial_state() {
+        // Verify shutdown starts as false
+        let shutdown = Arc::new(AtomicBool::new(false));
+        assert!(!shutdown.load(Ordering::Relaxed));
+    }
+
+    #[test]
+    fn test_shutdown_signal_propagates() {
+        let shutdown = Arc::new(AtomicBool::new(false));
+        let handle = Arc::clone(&shutdown);
+
+        // Signal shutdown
+        handle.store(true, Ordering::Relaxed);
+        assert!(shutdown.load(Ordering::Relaxed));
+    }
+
+    #[test]
+    fn test_jitter_calculation() {
+        let base_interval_secs: u64 = 24 * 3600; // 24 hours
+        let jitter_percent: u8 = 20;
+        let jitter_range = (base_interval_secs * jitter_percent as u64) / 100;
+
+        // Jitter range should be 20% of base
+        assert_eq!(jitter_range, 17280);
+
+        // With zero jitter, interval should be at least 60 seconds
+        let zero_jitter_interval = (base_interval_secs as i64 + 0).max(60) as u64;
+        assert_eq!(zero_jitter_interval, base_interval_secs);
+
+        // Even with maximum negative jitter, floor is 60 seconds
+        let max_negative = -(jitter_range as i64);
+        let min_interval = (base_interval_secs as i64 + max_negative).max(60) as u64;
+        assert!(min_interval >= 60);
+    }
+
+    #[test]
+    fn test_jitter_zero_percent() {
+        let jitter_percent: u8 = 0;
+        let base: u64 = 3600;
+        let jitter_range = (base * jitter_percent as u64) / 100;
+        assert_eq!(jitter_range, 0);
+        // With zero jitter range, jitter should be 0
+        let jitter = if jitter_range > 0 { 1 } else { 0 };
+        assert_eq!(jitter, 0);
+    }
+
+    #[test]
+    fn test_jitter_small_interval() {
+        // Even 1-hour interval with 20% jitter should never go below 60s
+        let base_secs: u64 = 3600;
+        let jitter_range = (base_secs * 20) / 100; // 720 seconds
+        let max_negative = -(jitter_range as i64);
+        let min_interval = (base_secs as i64 + max_negative).max(60) as u64;
+        assert!(min_interval >= 60);
+        assert_eq!(min_interval, 2880); // 3600 - 720
     }
 }

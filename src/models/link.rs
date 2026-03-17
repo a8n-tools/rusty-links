@@ -1427,7 +1427,6 @@ mod tests {
 
     #[test]
     fn test_github_detection() {
-        // Valid GitHub repo URLs
         let github_urls = [
             "https://github.com/rust-lang/rust",
             "https://github.com/owner/repo",
@@ -1442,5 +1441,90 @@ mod tests {
             assert_eq!(domain, "github.com");
             assert!(parts.len() >= 2, "Should have owner and repo in path");
         }
+    }
+
+    #[test]
+    fn test_domain_extraction() {
+        let cases = vec![
+            ("https://example.com/page", "example.com", Some("/page")),
+            ("https://docs.rs/tokio/latest", "docs.rs", Some("/tokio/latest")),
+            ("https://example.com/", "example.com", None),
+            ("https://example.com", "example.com", None),
+        ];
+
+        for (url_str, expected_domain, expected_path) in cases {
+            let parsed = Url::parse(url_str).unwrap();
+            let domain = parsed.host_str().unwrap();
+            let path = {
+                let p = parsed.path();
+                if p.is_empty() || p == "/" {
+                    None
+                } else {
+                    Some(p)
+                }
+            };
+            assert_eq!(domain, expected_domain, "Domain mismatch for {}", url_str);
+            assert_eq!(path, expected_path, "Path mismatch for {}", url_str);
+        }
+    }
+
+    #[test]
+    fn test_github_detection_not_repo() {
+        // GitHub URLs that are NOT repos (only one path segment)
+        let url = Url::parse("https://github.com/rust-lang").unwrap();
+        let domain = url.host_str().unwrap();
+        let path = url.path();
+        let parts: Vec<&str> = path.trim_matches('/').split('/').collect();
+        let is_repo = domain == "github.com" && parts.len() >= 2;
+        assert!(!is_repo);
+    }
+
+    #[test]
+    fn test_github_detection_root() {
+        let url = Url::parse("https://github.com/").unwrap();
+        let path = url.path();
+        let path_opt = if path.is_empty() || path == "/" {
+            None
+        } else {
+            Some(path.to_string())
+        };
+        let is_repo = url.host_str() == Some("github.com")
+            && path_opt.as_ref().map_or(false, |p| {
+                let parts: Vec<&str> = p.trim_matches('/').split('/').collect();
+                parts.len() >= 2
+            });
+        assert!(!is_repo);
+    }
+
+    #[test]
+    fn test_non_github_domain() {
+        let url = Url::parse("https://gitlab.com/owner/repo").unwrap();
+        let domain = url.host_str().unwrap();
+        assert_ne!(domain, "github.com");
+    }
+
+    #[test]
+    fn test_link_search_params_defaults() {
+        let params = LinkSearchParams::default();
+        assert!(params.query.is_none());
+        assert!(params.status.is_none());
+        assert!(params.is_github.is_none());
+        assert!(params.category_id.is_none());
+        assert!(params.tag_id.is_none());
+        assert!(params.language_id.is_none());
+        assert!(params.license_id.is_none());
+        assert!(params.sort_by.is_none());
+        assert!(params.sort_order.is_none());
+        assert!(params.page.is_none());
+        assert!(params.per_page.is_none());
+    }
+
+    #[test]
+    fn test_update_link_defaults() {
+        let update = UpdateLink::default();
+        assert!(update.url.is_none());
+        assert!(update.title.is_none());
+        assert!(update.category_ids.is_none());
+        assert!(update.tag_ids.is_none());
     }
 }
