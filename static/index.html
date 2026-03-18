@@ -68,7 +68,7 @@
     .nav-links {
       display: flex;
       gap: 1.5rem;
-      flex: 1;
+      margin-left: auto;
     }
 
     .nav-links a {
@@ -156,11 +156,19 @@
     }
 
     .hero-badge a {
-      color: hsl(240 20% 82%);
+      color: var(--primary);
+      font-weight: 700;
       transition: color 0.15s;
     }
 
-    .hero-badge a:hover { color: #fff; }
+    .hero-badge a:hover { color: #fb923c; }
+
+    .hero-icon {
+      font-size: 4rem;
+      line-height: 1;
+      margin-bottom: 1.25rem;
+      display: block;
+    }
 
     .hero h1 {
       font-size: clamp(2.4rem, 6vw, 3.5rem);
@@ -497,9 +505,9 @@
       <span>&gt;_</span>
       <span>Part of <a href="https://pugtsurani.net/">a8n-tools</a> suite</span>
     </div>
+    <span class="hero-icon">🔖</span>
     <h1>
-      Your links.<br>
-      <span class="gradient-text">Organized.</span>
+      <span style="color: #f97316; font-weight: 800;">Rusty Links</span><span class="gradient-text"> - Bookmark Manager</span>
     </h1>
     <p>
       Organize, search, and manage your bookmarks with automatic metadata extraction.
