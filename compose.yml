@@ -29,6 +29,7 @@ services:
       - ./Cargo.toml:/app/Cargo.toml
       - ./Cargo.lock:/app/Cargo.lock
       - ./Dioxus.toml:/app/Dioxus.toml
+      - ./static:/app/static
       # Persist cargo registry and build artifacts across image rebuilds
       - cargo_home:/root/.cargo
       - cargo_target:/app/target

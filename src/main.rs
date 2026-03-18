@@ -254,8 +254,25 @@ async fn main() {
                         .unwrap(),
                 )
             }),
-        )
-        .merge(dioxus_router);
+        );
+
+    // Landing page — served before the Dioxus router so it takes precedence at "/"
+    // The page itself redirects authenticated users to /links via localStorage check.
+    #[cfg(feature = "standalone")]
+    let mut router = router.route_service(
+        "/",
+        tower::util::service_fn(|_req: axum::http::Request<axum::body::Body>| async {
+            let html = include_str!("../static/index.html");
+            Ok::<_, std::convert::Infallible>(
+                axum::response::Response::builder()
+                    .header("Content-Type", "text/html; charset=utf-8")
+                    .body(axum::body::Body::from(html))
+                    .unwrap(),
+            )
+        }),
+    );
+
+    let mut router = router.merge(dioxus_router);
 
     // In SaaS mode, add maintenance guard as the outermost middleware.
     // When maintenance is active, only admins and allowlisted paths pass through.
