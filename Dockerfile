@@ -2,7 +2,7 @@
 FROM rust:1-slim-trixie
 
 RUN apt-get update && apt-get install --yes --no-install-recommends \
-    pkg-config libssl-dev curl \
+    pkg-config libssl-dev curl nodejs npm \
     && rm -rf /var/lib/apt/lists/*
 
 # Install WASM target
@@ -22,6 +22,11 @@ WORKDIR /app
 COPY Cargo.toml Cargo.lock ./
 COPY migrations/ ./migrations/
 
+# Install Node.js dependencies (for tailwindcss)
+COPY package.json ./
+COPY tailwind.css ./
+RUN npm install
+
 # Pre-build dependencies (no source code, no nightly, no DB needed)
 RUN mkdir src && \
     echo "fn main() {}" > src/main.rs && \
@@ -33,4 +38,4 @@ RUN mkdir src && \
 EXPOSE 8080
 
 # Build full app (WASM + server) then run the server binary produced by dx build
-CMD ["sh", "-c", "dx build --features standalone && exec target/dx/rusty-links/debug/web/rusty-links"]
+CMD ["sh", "-c", "npx @tailwindcss/cli --input tailwind.css --output assets/tailwind.css && dx build --features standalone && exec target/dx/rusty-links/debug/web/rusty-links"]
