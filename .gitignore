@@ -5,6 +5,9 @@
 # Tailwind generated output
 assets/tailwind.css
 
+# Claude Code local settings (machine-specific)
+.claude/settings.local.json
+
 # Database data directory (bind mount)
 data/
 
