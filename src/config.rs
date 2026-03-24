@@ -49,7 +49,12 @@ impl Config {
     /// - Values cannot be parsed (e.g., APP_PORT is not a valid number)
     /// - Values fail validation (e.g., UPDATE_INTERVAL_DAYS < 1)
     pub fn from_env() -> Result<Self, AppError> {
-        // Load .env file if it exists (ignore errors if file doesn't exist)
+        // Load feature-specific .env file, falling back to .env
+        #[cfg(feature = "saas")]
+        let _ = dotenvy::from_filename(".env.saas").or_else(|_| dotenvy::dotenv());
+        #[cfg(feature = "standalone")]
+        let _ = dotenvy::from_filename(".env.standalone").or_else(|_| dotenvy::dotenv());
+        #[cfg(not(any(feature = "saas", feature = "standalone")))]
         let _ = dotenvy::dotenv();
 
         // Load required variables
