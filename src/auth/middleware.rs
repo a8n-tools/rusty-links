@@ -262,18 +262,32 @@ where
             .email
             .filter(|e| !e.is_empty())
             .unwrap_or_else(|| format!("{}@saas.local", user_id));
-        sqlx::query(
+        let result = sqlx::query(
             "INSERT INTO users (id, email, password_hash, name, is_admin) VALUES ($1, $2, '', '', $3) ON CONFLICT (id) DO UPDATE SET is_admin = $3",
         )
         .bind(user_id)
         .bind(&email)
         .bind(claims.is_admin)
         .execute(&pool)
-        .await
-        .map_err(|e| {
-            tracing::error!(error = %e, user_id = %user_id, "Failed to provision SaaS user");
-            AppError::Database(e)
-        })?;
+        .await;
+
+        // If the email is already taken by a different user_id, retry with a
+        // unique fallback email so we don't violate the users_email_key constraint.
+        if result.is_err() {
+            let fallback_email = format!("{}@saas.local", user_id);
+            sqlx::query(
+                "INSERT INTO users (id, email, password_hash, name, is_admin) VALUES ($1, $2, '', '', $3) ON CONFLICT (id) DO UPDATE SET is_admin = $3",
+            )
+            .bind(user_id)
+            .bind(&fallback_email)
+            .bind(claims.is_admin)
+            .execute(&pool)
+            .await
+            .map_err(|e| {
+                tracing::error!(error = %e, user_id = %user_id, "Failed to provision SaaS user");
+                AppError::Database(e)
+            })?;
+        }
 
         Ok(AuthenticatedUser { user_id })
     }
