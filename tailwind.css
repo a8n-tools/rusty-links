@@ -388,7 +388,7 @@
 
     .btn-secondary {
         padding: 10px 20px;
-        background: #e2e8f0;
+        background: var(--color-surface-300);
         color: var(--color-text-primary);
         border: 1px solid var(--color-border);
         border-radius: var(--radius-md);
@@ -399,7 +399,7 @@
     }
 
     .btn-secondary:hover:not(:disabled) {
-        background: #cbd5e0;
+        background: var(--color-surface-400);
     }
 
     .btn-danger {
@@ -420,7 +420,7 @@
 
     .btn-delete {
         padding: 10px 20px;
-        background: white;
+        background: var(--color-surface-50);
         color: var(--color-error-500);
         border: 1px solid var(--color-error-500);
         border-radius: var(--radius-md);
@@ -494,7 +494,7 @@
     }
 
     .btn-cancel:hover {
-        background: #4a5568;
+        background: var(--color-text-contrast);
     }
 
     .btn-add {
@@ -803,7 +803,7 @@
         padding: 0.5rem 1rem;
         border: 1px solid var(--color-border);
         border-radius: var(--radius-md);
-        background-color: white;
+        background-color: var(--color-surface-50);
         font-size: 0.875rem;
         cursor: pointer;
         transition: border-color 0.2s;
@@ -847,7 +847,7 @@
         border: 2px solid var(--color-border);
         border-radius: var(--radius-lg);
         font-size: 1rem;
-        background-color: white;
+        background-color: var(--color-surface-50);
         transition: all 0.2s;
     }
 
@@ -878,7 +878,7 @@
     }
 
     .search-clear:hover {
-        background-color: #f3f4f6;
+        background-color: var(--color-surface-200);
         color: var(--color-primary-500);
     }
 
@@ -929,7 +929,7 @@
         padding: 0.5rem 0.75rem;
         border: 1px solid var(--color-border);
         border-radius: var(--radius-md);
-        background-color: white;
+        background-color: var(--color-surface-50);
         font-size: 0.875rem;
         cursor: pointer;
         transition: border-color 0.2s;
@@ -986,7 +986,7 @@
         padding: 8px 16px;
         border: 1px solid var(--color-border);
         border-radius: var(--radius-md);
-        background: white;
+        background: var(--color-surface-50);
         cursor: pointer;
         font-size: 0.875rem;
         color: var(--color-text-primary);
@@ -1004,7 +1004,7 @@
         top: 100%;
         left: 0;
         margin-top: 4px;
-        background: white;
+        background: var(--color-surface-50);
         border: 1px solid var(--color-border);
         border-radius: var(--radius-lg);
         box-shadow: var(--shadow-lg);
@@ -1131,7 +1131,7 @@
         padding: 0.5rem 0.75rem;
         border: 1px solid var(--color-border);
         border-radius: var(--radius-md);
-        background-color: white;
+        background-color: var(--color-surface-50);
         font-size: 0.875rem;
         cursor: pointer;
         transition: border-color 0.2s;
@@ -1157,7 +1157,7 @@
         font-size: 1.25rem;
         border: 1px solid var(--color-border);
         border-radius: var(--radius-md);
-        background-color: white;
+        background-color: var(--color-surface-50);
         cursor: pointer;
         transition: all 0.2s;
     }
@@ -1213,8 +1213,8 @@
     }
 
     .status-unknown {
-        background-color: #f3f4f6;
-        color: #6b7280;
+        background-color: var(--color-surface-200);
+        color: var(--color-text-muted);
     }
 
     .status-badge {
@@ -1422,7 +1422,7 @@
         padding: 8px 12px;
         border: 1px solid var(--color-border);
         border-radius: var(--radius-sm);
-        background: white;
+        background: var(--color-surface-50);
         cursor: pointer;
         font-size: 0.875rem;
         color: var(--color-text-primary);
@@ -1581,7 +1581,7 @@
     }
 
     .modal-container {
-        background: white;
+        background: var(--color-surface-50);
         border-radius: var(--radius-xl);
         max-width: 90vw;
         max-height: calc(100vh - 32px);
@@ -2187,7 +2187,7 @@
         align-self: flex-start;
         padding: 6px 12px;
         font-size: 0.8125rem;
-        background: white;
+        background: var(--color-surface-50);
         border: 1px solid var(--color-border);
         border-radius: var(--radius-md);
         cursor: pointer;
@@ -2273,7 +2273,7 @@
 
     /* Confirm Dialog */
     .confirm-dialog {
-        background: white;
+        background: var(--color-surface-50);
         border-radius: var(--radius-xl);
         padding: 32px;
         max-width: 400px;
@@ -2445,7 +2445,7 @@
 
     /* Category Tree */
     .category-tree {
-        background: white;
+        background: var(--color-surface-50);
         border: 1px solid var(--color-border);
         border-radius: var(--radius-lg);
         padding: 16px;
@@ -2558,7 +2558,7 @@
 
     /* Flat List */
     .flat-list {
-        background: white;
+        background: var(--color-surface-50);
         border: 1px solid var(--color-border);
         border-radius: var(--radius-lg);
         padding: 8px;

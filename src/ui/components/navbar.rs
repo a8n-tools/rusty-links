@@ -60,14 +60,14 @@ pub fn Navbar() -> Element {
             MaintenanceBanner {}
         }
         nav {
-            class: "bg-white border-b-2 border-gray-200 shadow-sm",
+            class: "bg-surface-50 border-b-2 border-surface-400 shadow-sm",
             role: "navigation",
             "aria-label": "Main navigation",
             div { class: "max-w-7xl mx-auto px-4 sm:px-6",
                 div { class: "flex justify-between items-center py-4",
                     // Logo
                     a {
-                        class: "text-xl sm:text-2xl font-bold text-orange-700 hover:text-orange-600 no-underline flex items-center gap-2",
+                        class: "text-xl sm:text-2xl font-bold text-primary-500 hover:text-accent-500 no-underline flex items-center gap-2",
                         href: "/links",
                         "aria-label": "Rusty Links home",
                         span { "aria-hidden": "true", "\u{1F517}" }
@@ -85,7 +85,7 @@ pub fn Navbar() -> Element {
 
                     // Mobile hamburger button (hidden on desktop)
                     button {
-                        class: "md:hidden p-2 rounded-md text-gray-700 hover:bg-gray-100 focus:outline-none focus:ring-2 focus:ring-orange-500",
+                        class: "md:hidden p-2 rounded-md text-text-secondary hover:bg-surface-200 focus:outline-none focus:ring-2 focus:ring-primary-500",
                         onclick: toggle_menu,
                         "aria-expanded": if menu_open() { "true" } else { "false" },
                         "aria-controls": "mobile-menu",
@@ -126,7 +126,7 @@ pub fn Navbar() -> Element {
                 if menu_open() {
                     div {
                         id: "mobile-menu",
-                        class: "md:hidden py-4 border-t border-gray-200",
+                        class: "md:hidden py-4 border-t border-surface-400",
                         role: "menu",
                         "aria-label": "Mobile navigation",
                         div { class: "flex flex-col gap-2",
@@ -143,9 +143,9 @@ pub fn Navbar() -> Element {
 #[component]
 fn NavLinks(on_click: EventHandler<MouseEvent>, #[props(default = false)] mobile: bool) -> Element {
     let base_class = if mobile {
-        "block w-full px-4 py-3 bg-gray-100 text-gray-800 rounded-md font-medium hover:bg-gray-200 transition-colors no-underline text-left"
+        "block w-full px-4 py-3 bg-surface-200 text-text-primary rounded-md font-medium hover:bg-surface-300 transition-colors no-underline text-left"
     } else {
-        "px-4 py-2.5 bg-gray-200 text-gray-800 rounded-md font-medium hover:bg-gray-300 transition-colors no-underline whitespace-nowrap"
+        "px-4 py-2.5 bg-surface-200 text-text-primary rounded-md font-medium hover:bg-surface-300 transition-colors no-underline whitespace-nowrap"
     };
 
     rsx! {
@@ -199,9 +199,9 @@ fn LogoutButton(
     #[props(default = false)] mobile: bool,
 ) -> Element {
     let base_class = if mobile {
-        "block w-full px-4 py-3 bg-gray-100 text-gray-800 rounded-md font-medium hover:bg-gray-200 transition-colors disabled:opacity-50 disabled:cursor-not-allowed text-left"
+        "block w-full px-4 py-3 bg-surface-200 text-text-primary rounded-md font-medium hover:bg-surface-300 transition-colors disabled:opacity-50 disabled:cursor-not-allowed text-left"
     } else {
-        "px-4 py-2.5 bg-gray-200 text-gray-800 rounded-md font-medium hover:bg-gray-300 transition-colors disabled:opacity-50 disabled:cursor-not-allowed whitespace-nowrap"
+        "px-4 py-2.5 bg-surface-200 text-text-primary rounded-md font-medium hover:bg-surface-300 transition-colors disabled:opacity-50 disabled:cursor-not-allowed whitespace-nowrap"
     };
 
     rsx! {
@@ -213,7 +213,7 @@ fn LogoutButton(
             "aria-label": if loading { "Logging out, please wait" } else { "Logout from application" },
             "aria-busy": if loading { "true" } else { "false" },
             if loading {
-                span { class: "inline-block w-4 h-4 border-2 border-gray-600 border-t-transparent rounded-full animate-spin mr-2" }
+                span { class: "inline-block w-4 h-4 border-2 border-text-muted border-t-transparent rounded-full animate-spin mr-2" }
                 "Logging out..."
             } else {
                 "Logout"
