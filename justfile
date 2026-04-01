@@ -55,12 +55,15 @@ clean:
         $"rusty-links-cargo-($suffix)"
         $"rusty-links-target-($suffix)"
         $"rusty-links-postgres-($suffix)"
-        $"rusty-links-app-data-($suffix)"
-        $"rusty-links-db-data-($suffix)"
     ]
     let existing = docker volume ls --quiet | lines
     for vol in $vols {
         if $vol in $existing {
+            # Force-remove any containers still holding this volume
+            let holders = docker ps -aq --filter $"volume=($vol)" | lines
+            for c in $holders {
+                docker rm -f $c
+            }
             docker volume rm $vol
         }
     }
