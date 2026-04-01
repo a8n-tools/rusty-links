@@ -35,7 +35,7 @@ RUN mkdir src && \
 
 # Source code is mounted via volumes in compose.yml
 
-EXPOSE 8080
+EXPOSE 4002
 
-# Build full app (WASM + server) then run the server binary produced by dx build
-CMD ["sh", "-c", "npx @tailwindcss/cli --input tailwind.css --output assets/tailwind.css && dx build --features standalone && exec target/dx/rusty-links/debug/web/rusty-links"]
+# Build tailwind then launch the dev server (builds WASM + server and serves)
+CMD ["sh", "-c", "npx @tailwindcss/cli --input tailwind.css --output assets/tailwind.css && dx serve --features standalone --port 4002"]
