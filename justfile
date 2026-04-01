@@ -4,6 +4,9 @@
 default:
     @just --list
 
+# Use the per-user dev compose file
+compose := "docker compose -f compose.dev.yml "
+
 # Ensure .env exists (mode: standalone or saas)
 [private]
 ensure-env mode="standalone":
@@ -24,24 +27,28 @@ css-watch: ensure-npm
 
 # Start development server in Docker (mode: standalone or saas)
 dev mode="standalone": (ensure-env mode) css-build
-    docker compose up --build --remove-orphans app
+    {{ compose }}up --build --remove-orphans app
+
+# Start local development server in Docker — no Traefik, localhost ports (mode: standalone or saas)
+dev-local mode="standalone": (ensure-env mode) css-build
+    docker compose -f compose.local.yml up --build --remove-orphans app
 
 # Start PostgreSQL container
 db-up:
-    docker compose up --detach postgres
+    {{ compose }}up --detach postgres
 
 # Stop PostgreSQL container
 db-down:
-    docker compose down postgres
+    {{ compose }}down postgres
 
 # Stop all containers
 down:
-    docker compose down
+    {{ compose }}down
 
 # Remove all containers, volumes, and networks
 clean:
     #!/usr/bin/env nu
-    docker compose down --remove-orphans
+    docker compose -f compose.dev.yml down --remove-orphans
     let suffix = $env.USER
     let vols = [
         $"rusty-links-cargo-($suffix)"
