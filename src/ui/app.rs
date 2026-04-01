@@ -70,9 +70,26 @@ pub enum Route {
 
 #[component]
 fn ProtectedLayout() -> Element {
-    #[cfg(feature = "standalone")]
+    // The auth guard must only run on the WASM target where localStorage exists.
+    //
+    // On the server (SSR), is_authenticated() always returns false (non-WASM stub),
+    // so the original #[cfg(feature = "standalone")] gate caused the server to emit
+    // a redirect to /login on every protected-route render. The browser would briefly
+    // show the login page before WASM hydrated and corrected the auth state.
+    //
+    // Returning a *different* element on the server (e.g. a spinner) instead also
+    // fails: Dioxus hydrates by reconciling the server-rendered DOM with the WASM
+    // virtual DOM. A spinner vs full Outlet content is a structural mismatch that
+    // causes "wasm-bindgen: imported JS function ... threw an error" during DOM
+    // reconciliation.
+    //
+    // Correct fix: gate the guard to wasm32 only. The server always renders Outlet
+    // (consistent with what WASM will render for an authenticated user), so hydration
+    // is a no-op reconciliation. The guard then runs synchronously on the client
+    // where localStorage is available, redirecting unauthenticated users without
+    // any DOM mismatch.
+    #[cfg(all(feature = "standalone", target_arch = "wasm32"))]
     if !crate::ui::auth_state::is_authenticated() {
-        #[cfg(target_arch = "wasm32")]
         spawn(async move {
             let path = web_sys::window()
                 .and_then(|w| w.location().pathname().ok())
@@ -80,10 +97,9 @@ fn ProtectedLayout() -> Element {
             let _ = crate::server_functions::auth::log_unauthenticated_access(path).await;
             navigator().push(Route::LoginPage {});
         });
-        #[cfg(not(target_arch = "wasm32"))]
-        navigator().push(Route::LoginPage {});
         return rsx! {};
     }
+
     rsx! { Outlet::<Route> {} }
 }
 
