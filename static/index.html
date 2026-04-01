@@ -11,6 +11,19 @@
     if (localStorage.getItem('auth_token')) {
       window.location.replace('/links');
     }
+    // Check if setup is needed and update auth links accordingly
+    document.addEventListener('DOMContentLoaded', () => {
+      fetch('/api/auth/check-setup')
+        .then(r => r.json())
+        .then(data => {
+          if (data.setup_required) {
+            document.querySelectorAll('[data-auth-link]').forEach(a => {
+              a.href = '/setup';
+            });
+          }
+        })
+        .catch(() => {});
+    });
   </script>
   <style>
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
@@ -493,8 +506,8 @@
         <a href="#about">About</a>
       </div>
       <div class="nav-actions">
-        <a href="/login" class="login">Log In</a>
-        <a href="https://pugtsurani.net/register" class="btn-primary">Get Started</a>
+        <a href="/login" class="login" data-auth-link>Log In</a>
+        <a href="/login" class="btn-primary" data-auth-link>Get Started</a>
       </div>
     </div>
   </nav>
@@ -514,8 +527,8 @@
       Built with Rust for blazing fast performance.
     </p>
     <div class="hero-cta">
-      <a href="https://pugtsurani.net/register" class="btn-primary">Get Started &rarr;</a>
-      <a href="/login" class="btn-secondary">Log In</a>
+      <a href="/login" class="btn-primary" data-auth-link>Get Started &rarr;</a>
+      <a href="/login" class="btn-secondary" data-auth-link>Log In</a>
     </div>
   </section>
 
@@ -603,7 +616,7 @@
   <section class="cta-band">
     <h2>Stop losing links. Start organizing.</h2>
     <p>Create an account and import your first bookmarks in under a minute.</p>
-    <a href="https://pugtsurani.net/register" class="btn-ghost">Create Account &rarr;</a>
+    <a href="/login" class="btn-ghost" data-auth-link>Create Account &rarr;</a>
   </section>
 
   <!-- FOOTER -->
@@ -627,8 +640,8 @@
         <div class="footer-col">
           <h4>Account</h4>
           <ul>
-            <li><a href="/login">Log In</a></li>
-            <li><a href="https://pugtsurani.net/register">Sign Up</a></li>
+            <li><a href="/login" data-auth-link>Log In</a></li>
+            <li><a href="/login" data-auth-link>Sign Up</a></li>
           </ul>
         </div>
 
