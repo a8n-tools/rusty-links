@@ -60,7 +60,7 @@ pub fn Navbar() -> Element {
             MaintenanceBanner {}
         }
         nav {
-            class: "bg-surface-50 border-b-2 border-surface-400 shadow-sm",
+            class: "bg-surface-50 border-b border-surface-300 shadow-sm",
             role: "navigation",
             "aria-label": "Main navigation",
             div { class: "max-w-7xl mx-auto px-4 sm:px-6",
@@ -126,7 +126,7 @@ pub fn Navbar() -> Element {
                 if menu_open() {
                     div {
                         id: "mobile-menu",
-                        class: "md:hidden py-4 border-t border-surface-400",
+                        class: "md:hidden py-4 border-t border-surface-300",
                         role: "menu",
                         "aria-label": "Mobile navigation",
                         div { class: "flex flex-col gap-2",
@@ -143,9 +143,9 @@ pub fn Navbar() -> Element {
 #[component]
 fn NavLinks(on_click: EventHandler<MouseEvent>, #[props(default = false)] mobile: bool) -> Element {
     let base_class = if mobile {
-        "block w-full px-4 py-3 bg-surface-200 text-text-primary rounded-md font-medium hover:bg-surface-300 transition-colors no-underline text-left"
+        "block w-full px-4 py-3 text-text-muted rounded-md font-medium hover:bg-surface-200 hover:text-text-primary transition-colors no-underline text-left text-sm"
     } else {
-        "px-4 py-2.5 bg-surface-200 text-text-primary rounded-md font-medium hover:bg-surface-300 transition-colors no-underline whitespace-nowrap"
+        "px-3 py-2 text-text-muted font-medium hover:text-text-primary transition-colors no-underline whitespace-nowrap text-sm"
     };
 
     rsx! {
@@ -199,9 +199,9 @@ fn LogoutButton(
     #[props(default = false)] mobile: bool,
 ) -> Element {
     let base_class = if mobile {
-        "block w-full px-4 py-3 bg-surface-200 text-text-primary rounded-md font-medium hover:bg-surface-300 transition-colors disabled:opacity-50 disabled:cursor-not-allowed text-left"
+        "block w-full px-4 py-3 bg-transparent border border-surface-300 text-text-primary rounded-md font-medium hover:bg-surface-200 transition-colors disabled:opacity-50 disabled:cursor-not-allowed text-left text-sm"
     } else {
-        "px-4 py-2.5 bg-surface-200 text-text-primary rounded-md font-medium hover:bg-surface-300 transition-colors disabled:opacity-50 disabled:cursor-not-allowed whitespace-nowrap"
+        "px-3 py-2 bg-transparent border border-surface-300 text-text-primary rounded-md font-medium hover:bg-surface-200 transition-colors disabled:opacity-50 disabled:cursor-not-allowed whitespace-nowrap text-sm"
     };
 
     rsx! {
