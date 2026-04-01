@@ -5,7 +5,16 @@
       "Bash(tree:*)",
       "Bash(cat:*)",
       "Bash(chmod:*)",
-      "Bash(mkdir:*)"
+      "Bash(mkdir:*)",
+      "Bash(dx --version)",
+      "Bash(cargo --version)",
+      "Bash(psql -U postgres -c \"\\\\l\")",
+      "Bash(psql -c \"\\\\l\")",
+      "Bash(docker ps:*)",
+      "Bash(git:*)",
+      "Bash(curl --silent --request POST http://localhost:8080/api/auth/register --header \"Content-Type: application/json\" --data '{\"\"\"\"username\"\"\"\":\"\"\"\"longle\"\"\"\",\"\"\"\"password\"\"\"\":\"\"\"\"Khonghople1@\"\"\"\"}')",
+      "Bash(curl --silent --request POST http://localhost:8080/api/auth/register --header \"Content-Type: application/json\" --data '{\"\"\"\"username\"\"\"\":\"\"\"\"longle\"\"\"\",\"\"\"\"email\"\"\"\":\"\"\"\"longle@localhost\"\"\"\",\"\"\"\"password\"\"\"\":\"\"\"\"Khonghople1@\"\"\"\"}')",
+      "Bash(curl --silent --request POST http://localhost:8080/api/auth/register --header \"Content-Type: application/json\" --data '{\"\"\"\"username\"\"\"\":\"\"\"\"longle\"\"\"\",\"\"\"\"email\"\"\"\":\"\"\"\"longle@local.dev\"\"\"\",\"\"\"\"password\"\"\"\":\"\"\"\"Khonghople1@\"\"\"\"}')"
     ],
     "deny": [],
     "ask": []

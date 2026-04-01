@@ -7,35 +7,35 @@
    ============================================================================ */
 
 @theme {
-    /* Primary colors - Rust themed */
-    --color-primary-50: #fef7f4;
-    --color-primary-100: #fdeee8;
-    --color-primary-200: #fbd5c5;
-    --color-primary-300: #f7b299;
-    --color-primary-400: #f08560;
-    --color-primary-500: #b7410e;
-    --color-primary-600: #9a3a0a;
-    --color-primary-700: #8b3109;
-    --color-primary-800: #6d2607;
-    --color-primary-900: #4a1a05;
+    /* Primary colors - a8n-tools orange */
+    --color-primary-50: #fff7ed;
+    --color-primary-100: #ffedd5;
+    --color-primary-200: #fed7aa;
+    --color-primary-300: #fdba74;
+    --color-primary-400: #fb923c;
+    --color-primary-500: #f97316;
+    --color-primary-600: #ea6c0a;
+    --color-primary-700: #c2570b;
+    --color-primary-800: #9a4008;
+    --color-primary-900: #7c2d07;
 
     /* Secondary/Accent colors */
-    --color-accent-500: #d4621a;
-    --color-accent-600: #b7410e;
-    --color-accent-700: #8b3109;
+    --color-accent-500: #f97316;
+    --color-accent-600: #ea6c0a;
+    --color-accent-700: #c2570b;
 
-    /* Surface colors */
-    --color-surface-50: #fff;
-    --color-surface-100: #faf8f6;
-    --color-surface-200: #f5f1ed;
-    --color-surface-300: #ebe7e3;
-    --color-surface-400: #ddd5cc;
+    /* Surface colors - a8n-tools light theme */
+    --color-surface-50: hsl(240 25% 100%);
+    --color-surface-100: hsl(240 20% 98%);
+    --color-surface-200: hsl(240 20% 95%);
+    --color-surface-300: hsl(240 15% 90%);
+    --color-surface-400: hsl(240 15% 85%);
 
-    /* Text colors */
-    --color-text-primary: #2c2418;
-    --color-text-secondary: #4a4541;
-    --color-text-muted: #6b6560;
-    --color-text-contrast: #1a1a1a;
+    /* Text colors - a8n-tools */
+    --color-text-primary: hsl(240 24% 10%);
+    --color-text-secondary: hsl(240 15% 30%);
+    --color-text-muted: hsl(240 10% 46%);
+    --color-text-contrast: hsl(240 24% 5%);
 
     /* Semantic colors */
     --color-error-50: #fef2f2;
@@ -58,10 +58,10 @@
     --color-info-600: #1565c0;
 
     /* Border color */
-    --color-border: #ddd5cc;
+    --color-border: hsl(240 15% 90%);
 
     /* Font families */
-    --font-sans: -apple-system, blinkmacsystemfont, "Segoe UI", roboto, "Helvetica Neue", arial, sans-serif;
+    --font-sans: ui-sans-serif, system-ui, sans-serif;
     --font-mono: "Courier New", courier, monospace;
 
     /* Shadows */
@@ -69,10 +69,10 @@
     --shadow-md: 0 4px 6px rgb(0 0 0 / 10%);
     --shadow-lg: 0 4px 12px rgb(0 0 0 / 15%);
     --shadow-xl: 0 20px 60px rgb(0 0 0 / 30%);
-    --shadow-primary: 0 4px 8px rgb(183 65 14 / 20%);
-    --shadow-primary-sm: 0 2px 8px rgb(183 65 14 / 20%);
-    --shadow-focus: 0 0 0 3px rgb(183 65 14 / 10%);
-    --shadow-focus-lg: 0 0 0 3px rgb(183 65 14 / 20%);
+    --shadow-primary: 0 10px 15px -3px rgb(249 115 22 / 25%);
+    --shadow-primary-sm: 0 2px 8px rgb(249 115 22 / 20%);
+    --shadow-focus: 0 0 0 3px rgb(249 115 22 / 10%);
+    --shadow-focus-lg: 0 0 0 3px rgb(249 115 22 / 20%);
 
     /* Border radius */
     --radius-sm: 4px;
@@ -94,9 +94,10 @@
 @layer base {
     body {
         font-family: var(--font-sans);
-        background-color: var(--color-surface-200);
+        background-color: var(--color-surface-100);
         color: var(--color-text-primary);
         line-height: 1.6;
+        color-scheme: light;
     }
 
     a {
@@ -361,20 +362,21 @@
 
     .btn-primary {
         padding: 10px 20px;
-        background: var(--color-primary-500);
+        background: linear-gradient(to right, #f97316, #6366f1);
         color: white;
         border: none;
         border-radius: var(--radius-md);
         cursor: pointer;
-        font-weight: 500;
+        font-weight: 600;
         font-size: 1rem;
-        transition: background 0.2s;
+        box-shadow: 0 10px 15px -3px rgb(249 115 22 / 25%);
+        transition: opacity 0.2s, box-shadow 0.2s, transform 0.2s;
     }
 
     .btn-primary:hover:not(:disabled) {
-        background-color: var(--color-accent-500);
+        opacity: 0.9;
         transform: translateY(-1px);
-        box-shadow: var(--shadow-primary);
+        box-shadow: 0 10px 20px -3px rgb(249 115 22 / 35%);
     }
 
     .btn-primary:active:not(:disabled) {
@@ -844,10 +846,11 @@
     .search-input {
         width: 100%;
         padding: 12px 40px 12px 44px;
-        border: 2px solid var(--color-border);
-        border-radius: var(--radius-lg);
+        border: 1px solid var(--color-border);
+        border-radius: var(--radius-md);
         font-size: 1rem;
         background-color: var(--color-surface-50);
+        color: var(--color-text-primary);
         transition: all 0.2s;
     }
 
@@ -996,7 +999,7 @@
 
     .filter-button:hover {
         background: var(--color-surface-200);
-        border-color: var(--color-primary-500);
+        border-color: var(--color-border);
     }
 
     .filter-menu {
@@ -2627,7 +2630,7 @@
         text-align: center;
         background: var(--color-surface-50);
         border: 1px solid var(--color-border);
-        border-radius: var(--radius-lg);
+        border-radius: var(--radius-md);
     }
 
     .empty-icon {
@@ -3448,266 +3451,7 @@
     }
 }
 
-@media (prefers-color-scheme: dark) {
-    @theme {
-        /* Dark surfaces - darker backgrounds */
-        --color-surface-50: #1a1a1a;
-        --color-surface-100: #242424;
-        --color-surface-200: #2d2d2d;
-        --color-surface-300: #383838;
-        --color-surface-400: #484848;
-
-        /* Light text for dark mode - high contrast */
-        --color-text-primary: #f0f0f0;
-        --color-text-secondary: #d0d0d0;
-        --color-text-contrast: #fff;
-        --color-text-muted: #a0a0a0;
-
-        /* Borders visible on dark */
-        --color-border: #505050;
-
-        /* Brighter accent colors for dark mode */
-        --color-primary-500: #ff8a65;
-        --color-primary-600: #ff7043;
-        --color-primary-700: #f4511e;
-        --color-accent-500: #ff7043;
-        --color-accent-600: #f4511e;
-
-        /* Semantic colors adjusted for dark mode */
-        --color-error-50: #3d1f1f;
-        --color-error-100: #5c2a2a;
-        --color-error-500: #ef5350;
-        --color-error-600: #f44336;
-        --color-error-700: #ff6659;
-        --color-success-50: #1a3d2a;
-        --color-success-100: #2a5c3a;
-        --color-success-500: #66bb6a;
-        --color-success-600: #4caf50;
-        --color-success-700: #81c784;
-        --color-warning-50: #3d3015;
-        --color-warning-100: #5c4a20;
-        --color-warning-500: #ffb74d;
-        --color-warning-600: #ffa726;
-        --color-info-50: #1a2d3d;
-        --color-info-100: #2a445c;
-        --color-info-500: #64b5f6;
-        --color-info-600: #42a5f5;
-    }
-
-    body {
-        background: var(--color-surface-200);
-        color: var(--color-text-primary);
-    }
-
-    /* Override hardcoded white/light backgrounds */
-    .flat-list,
-    .category-tree,
-    .modal-container,
-    .confirm-dialog,
-    .auth-card,
-    .table-container,
-    .links-table,
-    .filter-menu,
-    .toast {
-        background: var(--color-surface-100);
-    }
-
-    .links-table th {
-        background: var(--color-surface-300);
-    }
-
-    .links-table tbody tr:nth-child(even) {
-        background: var(--color-surface-200);
-    }
-
-    .links-table tbody tr:hover,
-    .links-table tbody tr:nth-child(even):hover {
-        background: var(--color-surface-300);
-    }
-
-    .tree-node-content:hover,
-    .flat-list-item-content:hover,
-    .filter-option:hover {
-        background: var(--color-surface-300);
-    }
-
-    .item-name:hover,
-    .category-name:hover {
-        background: var(--color-surface-200);
-    }
-
-    .btn-secondary {
-        background: var(--color-surface-300);
-        color: var(--color-text-primary);
-        border-color: var(--color-border);
-    }
-
-    .btn-secondary:hover:not(:disabled) {
-        background: var(--color-surface-400);
-    }
-
-    .form-input,
-    .search-input,
-    .filter-search,
-    .url-input,
-    .inline-edit-input,
-    .status-filter,
-    .sort-select,
-    .filter-group select,
-    input[type="text"],
-    input[type="email"],
-    input[type="password"],
-    input[type="url"],
-    textarea,
-    select {
-        background: var(--color-surface-100);
-        color: var(--color-text-primary);
-        border-color: var(--color-border);
-    }
-
-    .readonly-field div {
-        background: var(--color-surface-200);
-        color: var(--color-text-primary);
-    }
-
-    .modal-footer {
-        background: var(--color-surface-200);
-    }
-
-    .pagination,
-    .pagination-btn {
-        background: var(--color-surface-100);
-    }
-
-    .pagination-btn:hover:not(:disabled) {
-        background: var(--color-surface-300);
-    }
-
-    .sort-order-btn {
-        background: var(--color-surface-100);
-    }
-
-    .sort-order-btn:hover {
-        background: var(--color-surface-300);
-    }
-
-    .add-category-input,
-    .add-item-input {
-        background: var(--color-surface-300);
-    }
-
-    .chip {
-        background: var(--color-primary-600);
-    }
-
-    .filter-chip {
-        background: var(--color-primary-600);
-    }
-
-    .info-box {
-        background: var(--color-info-50);
-        border-color: var(--color-info-500);
-        color: var(--color-info-600);
-    }
-
-    .error-box {
-        background: var(--color-error-50);
-        border-color: var(--color-error-500);
-        color: var(--color-error-600);
-    }
-
-    .search-clear:hover {
-        background: var(--color-surface-300);
-    }
-
-    .link-logo-placeholder {
-        background: var(--color-surface-300);
-    }
-
-    .empty-state {
-        background: var(--color-surface-100);
-    }
-
-    .sort-container,
-    .filter-panel {
-        background: var(--color-surface-100);
-    }
-
-    .search-results-info {
-        background: var(--color-surface-100);
-    }
-
-    /* Filter buttons */
-    .filter-button {
-        background: var(--color-surface-100);
-        color: var(--color-text-primary);
-        border-color: var(--color-border);
-    }
-
-    .filter-button:hover {
-        background: var(--color-surface-300);
-    }
-
-    .reset-filters {
-        background: var(--color-surface-400);
-        color: var(--color-text-primary);
-    }
-
-    .reset-filters:hover {
-        background: var(--color-primary-600);
-        color: white;
-    }
-
-    /* Navbar buttons */
-    nav button,
-    nav a[role="menuitem"] {
-        background: var(--color-surface-300);
-        color: var(--color-text-primary);
-    }
-
-    nav button:hover,
-    nav a[role="menuitem"]:hover {
-        background: var(--color-surface-400);
-    }
-
-    /* Primary button adjustments */
-    .btn-primary {
-        background: var(--color-primary-500);
-        color: white;
-    }
-
-    .btn-primary:hover:not(:disabled) {
-        background: var(--color-primary-600);
-    }
-
-    /* Delete button */
-    .btn-delete {
-        background: var(--color-surface-100);
-        color: var(--color-error-500);
-        border-color: var(--color-error-500);
-    }
-
-    .btn-delete:hover {
-        background: var(--color-error-500);
-        color: white;
-    }
-
-    /* Icon buttons */
-    .btn-icon {
-        background: var(--color-surface-200);
-        color: var(--color-text-primary);
-    }
-
-    .btn-icon:hover {
-        background: var(--color-surface-300);
-    }
-
-    /* Add link button */
-    .btn-add-link {
-        background: var(--color-primary-500);
-        color: white;
-    }
-}
+/* Dark mode intentionally disabled — app uses a8n-tools light theme only. */
 
 /* ============================================================================
    Add Link Page Styles
