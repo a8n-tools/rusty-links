@@ -60,7 +60,7 @@ pub fn Navbar() -> Element {
             MaintenanceBanner {}
         }
         nav {
-            class: "bg-surface-50 border-b border-surface-300 shadow-sm",
+            class: "bg-surface-50 border-b border-surface-300",
             role: "navigation",
             "aria-label": "Main navigation",
             div { class: "max-w-7xl mx-auto px-4 sm:px-6",
@@ -199,9 +199,9 @@ fn LogoutButton(
     #[props(default = false)] mobile: bool,
 ) -> Element {
     let base_class = if mobile {
-        "block w-full px-4 py-3 bg-transparent border border-surface-300 text-text-primary rounded-md font-medium hover:bg-surface-200 transition-colors disabled:opacity-50 disabled:cursor-not-allowed text-left text-sm"
+        "block w-full px-4 py-3 bg-transparent border border-surface-300 text-text-muted rounded-md font-medium hover:bg-surface-200 hover:text-text-primary transition-colors disabled:opacity-50 disabled:cursor-not-allowed text-left text-sm"
     } else {
-        "px-3 py-2 bg-transparent border border-surface-300 text-text-primary rounded-md font-medium hover:bg-surface-200 transition-colors disabled:opacity-50 disabled:cursor-not-allowed whitespace-nowrap text-sm"
+        "px-3 py-2 bg-transparent border border-surface-300 text-text-muted rounded-md font-medium hover:bg-surface-200 hover:text-text-primary transition-colors disabled:opacity-50 disabled:cursor-not-allowed whitespace-nowrap text-sm"
     };
 
     rsx! {
