@@ -31,7 +31,7 @@ dev mode="standalone": (ensure-env mode) css-build
 
 # Start local development server in Docker — no Traefik, localhost ports (mode: standalone or saas)
 dev-local mode="standalone": (ensure-env mode) css-build
-    docker compose -f compose.local.yml up --build --remove-orphans app
+    docker compose up --build --remove-orphans app
 
 # Start PostgreSQL container
 db-up:
