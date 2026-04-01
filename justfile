@@ -48,7 +48,8 @@ down:
 # Remove all containers, volumes, and networks
 clean:
     #!/usr/bin/env nu
-    docker compose -f compose.dev.yml down --remove-orphans
+    docker compose -f compose.dev.yml down --volumes --remove-orphans
+    docker compose down --volumes --remove-orphans
     let suffix = $env.USER
     let vols = [
         $"rusty-links-cargo-($suffix)"

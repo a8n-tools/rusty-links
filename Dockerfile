@@ -38,4 +38,4 @@ RUN mkdir src && \
 EXPOSE 4002
 
 # Build tailwind then launch the dev server (builds WASM + server and serves)
-CMD ["sh", "-c", "npx @tailwindcss/cli --input tailwind.css --output assets/tailwind.css && dx serve --features standalone --port 4002"]
+CMD ["sh", "-c", "npx @tailwindcss/cli --input tailwind.css --output assets/tailwind.css && dx serve --features standalone --port 4002 --addr 0.0.0.0"]
