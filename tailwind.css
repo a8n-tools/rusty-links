@@ -266,7 +266,7 @@
     .page-header h1 {
         font-size: 2rem;
         font-weight: 700;
-        color: var(--color-primary-500);
+        color: #f97316;
     }
 
     /* Auth Pages */
@@ -775,7 +775,7 @@
     .links-title {
         font-size: 2rem;
         font-weight: 700;
-        color: var(--color-primary-500);
+        color: #f97316;
         margin-bottom: 0.5rem;
     }
 
@@ -3416,8 +3416,8 @@
    ============================================================================ */
 
 @media (prefers-contrast: high) {
-    @theme {
-        --color-primary-500: #a83f0f;
+    :root {
+        --color-primary-500: #c2530a;
         --color-accent-500: #8b3410;
         --color-border: #000;
         --color-text-primary: #000;
