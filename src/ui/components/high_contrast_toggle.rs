@@ -19,7 +19,11 @@ pub fn HighContrastToggle(#[props(default = false)] mobile: bool) -> Element {
 
                 if is_on {
                     if let Some(body) = window.document().and_then(|d| d.body()) {
-                        let _ = body.class_list().add_1("high-contrast");
+                        let classes = body.class_name();
+                        if !classes.contains("high-contrast") {
+                            let new_classes = format!("{classes} high-contrast");
+                            body.set_class_name(new_classes.trim());
+                        }
                     }
                     active.set(true);
                 }
@@ -36,10 +40,15 @@ pub fn HighContrastToggle(#[props(default = false)] mobile: bool) -> Element {
             if let Some(window) = web_sys::window() {
                 // Toggle class on body
                 if let Some(body) = window.document().and_then(|d| d.body()) {
+                    let classes = body.class_name();
                     if new_state {
-                        let _ = body.class_list().add_1("high-contrast");
+                        if !classes.contains("high-contrast") {
+                            let new_classes = format!("{classes} high-contrast");
+                            body.set_class_name(new_classes.trim());
+                        }
                     } else {
-                        let _ = body.class_list().remove_1("high-contrast");
+                        let new_classes = classes.replace("high-contrast", "");
+                        body.set_class_name(new_classes.trim());
                     }
                 }
 
