@@ -57,7 +57,7 @@ pub fn HighContrastToggle(#[props(default = false)] mobile: bool) -> Element {
     let btn_class = if mobile {
         "flex items-center justify-center w-full px-4 py-3 bg-transparent border border-surface-300 text-text-muted rounded-md font-medium hover:bg-surface-200 hover:text-text-primary transition-colors text-sm gap-2"
     } else {
-        "p-2 rounded-md text-text-muted hover:bg-surface-200 hover:text-text-primary transition-colors"
+        "btn-icon text-text-muted hover:text-text-primary"
     };
 
     rsx! {
