@@ -70,29 +70,46 @@ docker compose down -v
 
 ## Development Mode
 
-For local development with hot reloading:
+Two compose files are available for development:
 
-### 1. Start Development Services
+| File | Purpose | Command |
+|------|---------|---------|
+| `compose.dev.yml` | Per-user instances on shared dev server via Traefik (`{USER}-links.a8n.run`) | `just dev` |
+| `compose.yml` | Local-only development with localhost ports | `just dev-local` |
 
-```bash
-docker compose -f compose.yml -f compose.dev.yml up
-```
+Both mount source code as volumes for hot reloading via `dx serve`, enable debug logging, and persist cargo registry/build artifacts across rebuilds.
 
-This will:
-- Mount source code as volumes
-- Use `cargo watch` for auto-reloading
-- Enable debug logging
-- Preserve build cache in a volume
-
-### 2. Make Code Changes
-
-Any changes to `src/`, `assets/`, or `Cargo.toml` will trigger automatic rebuild and restart.
-
-### 3. Stop Development Services
+### Using the Justfile (recommended)
 
 ```bash
-docker compose -f compose.yml -f compose.dev.yml down
+# Shared dev server (Traefik-backed, per-user subdomain)
+just dev                  # standalone mode (default)
+just dev saas             # saas mode
+
+# Local-only (localhost:4002, no Traefik)
+just dev-local            # standalone mode (default)
+just dev-local saas       # saas mode
+
+# Stop containers
+just down
+
+# Stop and remove all containers + volumes
+just clean
 ```
+
+### Direct Docker Compose
+
+```bash
+# Shared dev server
+docker compose -f compose.dev.yml up --build --remove-orphans app
+
+# Local-only
+docker compose up --build --remove-orphans app
+```
+
+### Make Code Changes
+
+Any changes to `src/`, `assets/`, `migrations/`, `static/`, `Cargo.toml`, `Cargo.lock`, or `Dioxus.toml` will trigger automatic rebuild via `dx serve`.
 
 ## Production Deployment
 
@@ -375,14 +392,14 @@ HOST_PORT=3000
 ### Environment-Specific Compose Files
 
 ```bash
-# Production
-docker compose -f compose.yml up -d
+# Local development (localhost ports)
+docker compose up --build app
 
-# Development
-docker compose -f compose.yml -f compose.dev.yml up
+# Shared dev server (Traefik-backed per-user instances)
+docker compose -f compose.dev.yml up --build app
 
-# Staging (create compose.staging.yml)
-docker compose -f compose.yml -f compose.staging.yml up -d
+# Production (see examples/compose.yml)
+docker compose -f examples/compose.yml up -d
 ```
 
 ## Cleanup
