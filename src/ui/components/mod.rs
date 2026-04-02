@@ -3,6 +3,7 @@ pub mod category_select;
 pub mod dropdown_arrow;
 pub mod empty_state;
 pub mod error;
+pub mod high_contrast_toggle;
 pub mod language_select;
 pub mod license_select;
 pub mod loading;
