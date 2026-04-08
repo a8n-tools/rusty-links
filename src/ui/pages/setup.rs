@@ -35,6 +35,28 @@ pub fn Setup() -> Element {
             return;
         }
 
+        if !password_val.chars().any(|c| c.is_uppercase()) {
+            error.set(Some(
+                "Password must contain at least one uppercase letter".to_string(),
+            ));
+            return;
+        }
+
+        if !password_val.chars().any(|c| c.is_numeric()) {
+            error.set(Some(
+                "Password must contain at least one number".to_string(),
+            ));
+            return;
+        }
+
+        if !password_val.chars().any(|c| !c.is_alphanumeric()) {
+            error.set(Some(
+                "Password must contain at least one special character (e.g., !@#$%^&*)"
+                    .to_string(),
+            ));
+            return;
+        }
+
         spawn(async move {
             loading.set(true);
             error.set(None);
@@ -122,7 +144,7 @@ pub fn Setup() -> Element {
                             class: "form-input",
                             r#type: "password",
                             id: "password",
-                            placeholder: "Enter a secure password (min. 8 characters)",
+                            placeholder: "Min. 8 chars, uppercase, number, special char",
                             value: "{password}",
                             disabled: loading(),
                             oninput: move |evt| password.set(evt.value()),
