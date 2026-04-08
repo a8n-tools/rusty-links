@@ -66,8 +66,11 @@ pub fn HighContrastToggle(#[props(default = false)] mobile: bool) -> Element {
     let btn_class = if mobile {
         "flex items-center justify-center w-full px-4 py-3 bg-transparent border border-surface-300 text-text-muted rounded-md font-medium hover:bg-surface-200 hover:text-text-primary transition-colors text-sm gap-2"
     } else {
-        "btn-icon text-text-muted hover:text-text-primary"
+        "inline-flex items-center justify-center w-7 h-7 rounded text-text-muted hover:text-text-primary hover:bg-surface-200 transition-colors"
     };
+
+    let icon_on = if active() { "" } else { "hidden" };
+    let icon_off = if active() { "hidden" } else { "" };
 
     rsx! {
         button {
@@ -77,44 +80,41 @@ pub fn HighContrastToggle(#[props(default = false)] mobile: bool) -> Element {
             "aria-label": "Toggle high contrast",
             "aria-pressed": if active() { "true" } else { "false" },
             role: "menuitem",
-            if active() {
-                // Filled circle-half icon (high contrast ON)
-                svg {
-                    class: "w-5 h-5",
-                    fill: "currentColor",
-                    "viewBox": "0 0 24 24",
-                    "aria-hidden": "true",
-                    circle {
-                        cx: "12",
-                        cy: "12",
-                        r: "10",
-                        stroke: "currentColor",
-                        "stroke-width": "2",
-                        fill: "none",
-                    }
-                    path {
-                        d: "M12 2a10 10 0 0 1 0 20V2z",
-                    }
-                }
-            } else {
-                // Outline circle-half icon (high contrast OFF)
-                svg {
-                    class: "w-5 h-5",
+            // Filled circle-half icon (high contrast ON)
+            svg {
+                class: "w-4 h-4 {icon_on}",
+                fill: "currentColor",
+                "viewBox": "0 0 24 24",
+                "aria-hidden": "true",
+                circle {
+                    cx: "12",
+                    cy: "12",
+                    r: "10",
+                    stroke: "currentColor",
+                    "stroke-width": "2",
                     fill: "none",
-                    "viewBox": "0 0 24 24",
-                    "aria-hidden": "true",
-                    circle {
-                        cx: "12",
-                        cy: "12",
-                        r: "10",
-                        stroke: "currentColor",
-                        "stroke-width": "2",
-                    }
-                    path {
-                        d: "M12 2v20",
-                        stroke: "currentColor",
-                        "stroke-width": "2",
-                    }
+                }
+                path {
+                    d: "M12 2a10 10 0 0 1 0 20V2z",
+                }
+            }
+            // Outline circle-half icon (high contrast OFF)
+            svg {
+                class: "w-4 h-4 {icon_off}",
+                fill: "none",
+                "viewBox": "0 0 24 24",
+                "aria-hidden": "true",
+                circle {
+                    cx: "12",
+                    cy: "12",
+                    r: "10",
+                    stroke: "currentColor",
+                    "stroke-width": "2",
+                }
+                path {
+                    d: "M12 2v20",
+                    stroke: "currentColor",
+                    "stroke-width": "2",
                 }
             }
             if mobile {
