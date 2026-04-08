@@ -1,35 +1,25 @@
 use dioxus::prelude::*;
 
+/// Check if high-contrast class is already on body (set by high-contrast-init.js).
+fn is_high_contrast_active() -> bool {
+    #[cfg(target_arch = "wasm32")]
+    {
+        web_sys::window()
+            .and_then(|w| w.document())
+            .and_then(|d| d.body())
+            .map(|b| b.class_name().contains("high-contrast"))
+            .unwrap_or(false)
+    }
+    #[cfg(not(target_arch = "wasm32"))]
+    {
+        false
+    }
+}
+
 #[component]
 pub fn HighContrastToggle(#[props(default = false)] mobile: bool) -> Element {
-    let mut active = use_signal(|| false);
-
-    // On mount, read localStorage and apply class if needed
-    use_effect(move || {
-        #[cfg(target_arch = "wasm32")]
-        {
-            if let Some(window) = web_sys::window() {
-                let is_on = window
-                    .local_storage()
-                    .ok()
-                    .flatten()
-                    .and_then(|s| s.get_item("high-contrast").ok().flatten())
-                    .map(|v| v == "true")
-                    .unwrap_or(false);
-
-                if is_on {
-                    if let Some(body) = window.document().and_then(|d| d.body()) {
-                        let classes = body.class_name();
-                        if !classes.contains("high-contrast") {
-                            let new_classes = format!("{classes} high-contrast");
-                            body.set_class_name(new_classes.trim());
-                        }
-                    }
-                    active.set(true);
-                }
-            }
-        }
-    });
+    // Initialize from body class — the init script already applied it before hydration
+    let mut active = use_signal(is_high_contrast_active);
 
     let toggle = move |_| {
         let new_state = !active();
