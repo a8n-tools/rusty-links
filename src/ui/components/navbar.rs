@@ -1,3 +1,4 @@
+use crate::ui::components::high_contrast_toggle::HighContrastToggle;
 use crate::ui::http;
 use dioxus::prelude::*;
 
@@ -80,6 +81,7 @@ pub fn Navbar() -> Element {
                         role: "menubar",
                         "aria-label": "Site navigation",
                         NavLinks { on_click: close_menu }
+                        HighContrastToggle {}
                         LogoutButton { loading: loading(), on_logout: on_logout }
                     }
 
@@ -131,6 +133,7 @@ pub fn Navbar() -> Element {
                         "aria-label": "Mobile navigation",
                         div { class: "flex flex-col gap-2",
                             NavLinks { on_click: close_menu, mobile: true }
+                            HighContrastToggle { mobile: true }
                             LogoutButton { loading: loading(), on_logout: on_logout, mobile: true }
                         }
                     }

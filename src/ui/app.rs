@@ -28,6 +28,9 @@ pub fn App() -> Element {
             rel: "icon",
             href: "/assets/favicon.ico",
         }
+        document::Script {
+            src: "/high-contrast-init.js",
+        }
         if cfg!(feature = "saas") {
             document::Script {
                 src: "/saas-refresh.js",

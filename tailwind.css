@@ -3429,6 +3429,19 @@
     }
 }
 
+body.high-contrast {
+    --color-primary-500: #c2530a;
+    --color-accent-500: #8b3410;
+    --color-border: #000;
+    --color-text-primary: #000;
+    --color-text-secondary: #1a1a1a;
+}
+
+body.high-contrast button,
+body.high-contrast .btn {
+    border: 2px solid currentcolor;
+}
+
 @media (prefers-reduced-motion: reduce) {
     *,
     *::before,
