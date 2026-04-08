@@ -1,16 +1,36 @@
-use crate::server_functions::auth::SetupRequest;
+use crate::server_functions::auth::{check_setup, SetupRequest};
 use crate::ui::app::Route;
 use crate::ui::http;
 use dioxus::prelude::*;
 
 #[component]
 pub fn Setup() -> Element {
+    let nav = navigator();
+    let setup_check = use_resource(check_setup);
     let mut email = use_signal(String::new);
     let mut password = use_signal(String::new);
     let mut name = use_signal(String::new);
     let mut loading = use_signal(|| false);
     let mut error = use_signal(|| Option::<String>::None);
-    let nav = navigator();
+
+    // Redirect away if setup is already complete (users exist)
+    match setup_check.read().as_ref() {
+        Some(Ok(false)) => {
+            nav.push(Route::LoginPage {});
+            return rsx! {};
+        }
+        Some(Ok(true)) => {}
+        // Still loading or error — don't render the form yet
+        _ => {
+            return rsx! {
+                div { class: "auth-container",
+                    div { class: "loading-container",
+                        div { class: "spinner spinner-medium" }
+                    }
+                }
+            };
+        }
+    }
 
     let on_submit = move |evt: FormEvent| {
         evt.prevent_default();
