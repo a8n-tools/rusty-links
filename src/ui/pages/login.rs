@@ -53,7 +53,7 @@ pub fn Login() -> Element {
                         // Login successful, redirect to links page
                         nav.push(Route::LinksPage {});
                     } else {
-                        error.set(Some("Invalid credentials".to_string()));
+                        error.set(Some(resp.error_message()));
                     }
                 }
                 Err(e) => {
