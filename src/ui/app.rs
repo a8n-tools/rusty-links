@@ -71,11 +71,29 @@ pub enum Route {
     NotFound { route: Vec<String> },
 }
 
+/// Result of verifying a stored JWT against the server.
+///
+/// Distinguishes "token is bad" from "couldn't verify" so transient backend
+/// failures (DB not ready, proxy 502, network blip) don't masquerade as
+/// authentication failures and boot the user back to /login.
 #[cfg(feature = "standalone")]
-async fn verify_auth() -> bool {
+#[derive(Clone, Copy, PartialEq)]
+enum AuthVerdict {
+    /// Server confirmed the token is valid (2xx).
+    Valid,
+    /// Server explicitly rejected the token (401/403). Clear it and redirect.
+    Invalid,
+    /// Couldn't verify: network error, 5xx, or any other status. Retain the
+    /// token and let individual pages surface their own fetch errors.
+    Unknown,
+}
+
+#[cfg(feature = "standalone")]
+async fn verify_auth() -> AuthVerdict {
     match http::get_response("/api/auth/me").await {
-        Ok(resp) => resp.is_success(),
-        Err(_) => false,
+        Ok(resp) if resp.is_success() => AuthVerdict::Valid,
+        Ok(resp) if resp.status == 401 || resp.status == 403 => AuthVerdict::Invalid,
+        _ => AuthVerdict::Unknown,
     }
 }
 
@@ -114,8 +132,12 @@ fn ProtectedLayout() -> Element {
     // Defense-in-depth: verify the token with the server on mount. A stale
     // token (e.g. left over from a previous session with a different
     // JWT_SECRET) will pass the localStorage presence check above but fail
-    // here, so we clear it and send the user to /login instead of leaving
-    // them stuck on a permanently-loading page.
+    // here, so we clear it and send the user to /login.
+    //
+    // IMPORTANT: only redirect on `Invalid` (401/403). Transient backend
+    // failures (DB warming, proxy 502, network blip) return `Unknown` — we
+    // keep the token and render Outlet so the child page can show its own
+    // error instead of silently bouncing the user to /login.
     //
     // `use_resource` must be called on both SSR and WASM to keep hook counts
     // consistent for hydration. On SSR the resource is never consulted (the
@@ -127,8 +149,10 @@ fn ProtectedLayout() -> Element {
 
     #[cfg(all(feature = "standalone", target_arch = "wasm32"))]
     {
-        let check = *_auth_check.read();
-        if let Some(false) = check {
+        // Read once into an owned Copy value so the signal guard is dropped
+        // before the early return.
+        let verdict: Option<AuthVerdict> = *_auth_check.read();
+        if verdict == Some(AuthVerdict::Invalid) {
             crate::ui::auth_state::clear_auth();
             navigator().push(Route::LoginPage {});
             return rsx! {};

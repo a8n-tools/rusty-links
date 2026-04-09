@@ -57,7 +57,14 @@ pub fn Login() -> Element {
                     }
                 }
                 Err(e) => {
-                    error.set(Some(format!("Login failed: {}", e)));
+                    // Log the raw error for debugging; show the user a
+                    // generic retry hint (server starting up, DB not yet
+                    // loaded, flaky network, etc.).
+                    tracing::warn!("Login request failed: {}", e);
+                    error.set(Some(
+                        "Can't reach the server right now. Please try again in a moment."
+                            .to_string(),
+                    ));
                 }
             }
 

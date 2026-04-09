@@ -17,9 +17,16 @@ fn clean_error(status: u16, body: &str) -> String {
         }
     }
 
-    // If body is non-empty and not JSON, return it as-is (but trim)
+    // If body is short plain text (not JSON, not HTML), return it as-is.
+    // HTML bodies (reverse-proxy error pages, dx's dev index, etc.) and
+    // oversized blobs fall through to the status-code fallback so the user
+    // sees a useful message instead of raw markup.
     let trimmed = body.trim();
-    if !trimmed.is_empty() && !trimmed.starts_with('{') {
+    if !trimmed.is_empty()
+        && !trimmed.starts_with('{')
+        && !trimmed.starts_with('<')
+        && trimmed.len() <= 200
+    {
         return trimmed.to_string();
     }
 
@@ -34,6 +41,59 @@ fn clean_error(status: u16, body: &str) -> String {
         429 => "Too many requests. Please wait a moment and try again.".to_string(),
         500..=599 => "Something went wrong on the server. Please try again later.".to_string(),
         _ => format!("Request failed (status {}).", status),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::clean_error;
+
+    #[test]
+    fn extracts_error_field_from_json() {
+        let body = r#"{"error":"A database error occurred. Please try again later.","code":"DATABASE_ERROR","status":500}"#;
+        assert_eq!(
+            clean_error(500, body),
+            "A database error occurred. Please try again later."
+        );
+    }
+
+    #[test]
+    fn short_plain_text_passes_through() {
+        assert_eq!(clean_error(400, "bad request syntax"), "bad request syntax");
+    }
+
+    #[test]
+    fn html_proxy_error_page_falls_through_to_generic() {
+        let body = "<html><head><title>502 Bad Gateway</title></head><body><h1>Bad Gateway</h1></body></html>";
+        assert_eq!(
+            clean_error(502, body),
+            "Something went wrong on the server. Please try again later."
+        );
+    }
+
+    #[test]
+    fn empty_body_falls_through_to_generic() {
+        assert_eq!(
+            clean_error(500, ""),
+            "Something went wrong on the server. Please try again later."
+        );
+    }
+
+    #[test]
+    fn json_without_error_field_falls_through() {
+        assert_eq!(
+            clean_error(500, r#"{"something":"else"}"#),
+            "Something went wrong on the server. Please try again later."
+        );
+    }
+
+    #[test]
+    fn oversized_plain_text_falls_through() {
+        let body = "x".repeat(500);
+        assert_eq!(
+            clean_error(500, &body),
+            "Something went wrong on the server. Please try again later."
+        );
     }
 }
 
