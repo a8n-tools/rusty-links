@@ -1,16 +1,79 @@
-use crate::server_functions::auth::SetupRequest;
+use crate::server_functions::auth::{check_setup, SetupRequest};
 use crate::ui::app::Route;
 use crate::ui::http;
 use dioxus::prelude::*;
 
+enum SetupCheckState {
+    Loading,
+    SetupNeeded,
+    Redirecting,
+    Error(String),
+}
+
 #[component]
 pub fn Setup() -> Element {
+    let nav = navigator();
+    let setup_check = use_resource(check_setup);
     let mut email = use_signal(String::new);
     let mut password = use_signal(String::new);
     let mut name = use_signal(String::new);
     let mut loading = use_signal(|| false);
     let mut error = use_signal(|| Option::<String>::None);
-    let nav = navigator();
+    // `hydrated` stays false during SSR and on the initial WASM render (so
+    // hydration reconciles identically), then flips to true in `use_effect`,
+    // which only runs on the client after mount. We use this to keep the
+    // submit button disabled until the onsubmit handler is actually attached,
+    // preventing a native HTML form submission (GET to current URL) if the
+    // user clicks "Create Account" before WASM has hydrated.
+    let mut hydrated = use_signal(|| false);
+    use_effect(move || {
+        hydrated.set(true);
+    });
+
+    // Extract an owned view of the setup-check state so the read guard does
+    // not span the early returns below.
+    let state = match setup_check.read().as_ref() {
+        None => SetupCheckState::Loading,
+        Some(Ok(true)) => SetupCheckState::SetupNeeded,
+        Some(Ok(false)) => SetupCheckState::Redirecting,
+        Some(Err(e)) => SetupCheckState::Error(e.to_string()),
+    };
+
+    match state {
+        SetupCheckState::Loading => {
+            return rsx! {
+                div { class: "auth-container",
+                    div { class: "loading-container",
+                        div { class: "spinner spinner-medium" }
+                    }
+                }
+            };
+        }
+        SetupCheckState::Redirecting => {
+            // Same pattern as Home in app.rs: navigate during render and
+            // show a redirect message until the route change takes effect.
+            nav.push(Route::LoginPage {});
+            return rsx! {
+                div { class: "auth-container",
+                    div { class: "loading-container",
+                        div { class: "spinner spinner-medium" }
+                        p { class: "loading-message", "Redirecting to login..." }
+                    }
+                }
+            };
+        }
+        SetupCheckState::Error(msg) => {
+            return rsx! {
+                div { class: "auth-container",
+                    div { class: "auth-card",
+                        h1 { class: "auth-title", "Error" }
+                        p { class: "message message-error", "Failed to check setup status: {msg}" }
+                    }
+                }
+            };
+        }
+        SetupCheckState::SetupNeeded => {}
+    }
 
     let on_submit = move |evt: FormEvent| {
         evt.prevent_default();
@@ -32,6 +95,28 @@ pub fn Setup() -> Element {
 
         if password_val.len() < 8 {
             error.set(Some("Password must be at least 8 characters".to_string()));
+            return;
+        }
+
+        if !password_val.chars().any(|c| c.is_uppercase()) {
+            error.set(Some(
+                "Password must contain at least one uppercase letter".to_string(),
+            ));
+            return;
+        }
+
+        if !password_val.chars().any(|c| c.is_numeric()) {
+            error.set(Some(
+                "Password must contain at least one number".to_string(),
+            ));
+            return;
+        }
+
+        if !password_val.chars().any(|c| !c.is_alphanumeric()) {
+            error.set(Some(
+                "Password must contain at least one special character (e.g., !@#$%^&*)"
+                    .to_string(),
+            ));
             return;
         }
 
@@ -88,7 +173,15 @@ pub fn Setup() -> Element {
                     div { class: "message message-error", "{err}" }
                 }
 
-                form { class: "form", onsubmit: on_submit,
+                form {
+                    class: "form",
+                    // Defense against pre-hydration clicks: if the browser
+                    // falls back to native form submission (because WASM
+                    // hasn't attached onsubmit yet), `javascript:void(0)`
+                    // makes the submission a no-op instead of a GET to the
+                    // current URL that would wipe the user's typed input.
+                    action: "javascript:void(0)",
+                    onsubmit: on_submit,
                     div { class: "form-group",
                         label { class: "form-label", r#for: "name", "Name" }
                         input {
@@ -122,7 +215,7 @@ pub fn Setup() -> Element {
                             class: "form-input",
                             r#type: "password",
                             id: "password",
-                            placeholder: "Enter a secure password (min. 8 characters)",
+                            placeholder: "Min. 8 chars, uppercase, number, special char",
                             value: "{password}",
                             disabled: loading(),
                             oninput: move |evt| password.set(evt.value()),
@@ -132,10 +225,13 @@ pub fn Setup() -> Element {
                     button {
                         class: "btn btn-primary btn-full",
                         r#type: "submit",
-                        disabled: loading(),
+                        disabled: loading() || !hydrated(),
                         if loading() {
                             span { class: "loading" }
                             "Creating Account..."
+                        } else if !hydrated() {
+                            span { class: "loading" }
+                            "Initializing..."
                         } else {
                             "Create Account"
                         }

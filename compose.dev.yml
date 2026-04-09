@@ -39,6 +39,9 @@ services:
       RUST_LOG: debug
       RUST_BACKTRACE: 1
       DATABASE_URL: postgresql://${DB_USERNAME:-rustylinks}:${DB_PASSWORD:-changeme_secure_password_here}@postgres/${DB_NAME:-rustylinks}
+      SETUP_DEFAULT_ADMIN_EMAIL: ${SETUP_DEFAULT_ADMIN_EMAIL:-admin@a8n.run}
+      SETUP_DEFAULT_ADMIN_PASSWORD: ${SETUP_DEFAULT_ADMIN_PASSWORD:-admin1234}
+      SETUP_DEFAULT_ADMIN_NAME: ${SETUP_DEFAULT_ADMIN_NAME:-Admin}
     expose:
       - "4002"
     networks:

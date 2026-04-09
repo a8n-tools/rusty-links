@@ -7,10 +7,26 @@
   <meta name="description" content="Self-hosted bookmark manager with automatic metadata extraction. Built with Rust." />
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css" crossorigin="anonymous" />
   <script>
-    // Redirect authenticated users straight to the app
-    if (localStorage.getItem('auth_token')) {
-      window.location.replace('/links');
-    }
+    // Verify the stored token before redirecting. A stale token (e.g. from a
+    // previous session with a different JWT_SECRET) must not trap the landing
+    // page in a redirect loop to /links.
+    (function () {
+      var token = localStorage.getItem('auth_token');
+      if (!token) return;
+      fetch('/api/auth/me', {
+        headers: { 'Authorization': 'Bearer ' + token }
+      }).then(function (r) {
+        if (r.ok) {
+          window.location.replace('/links');
+        } else if (r.status === 401 || r.status === 403) {
+          localStorage.removeItem('auth_token');
+          localStorage.removeItem('refresh_token');
+          localStorage.removeItem('auth_email');
+        }
+      }).catch(function () {
+        // Network error — leave state untouched so the user can retry.
+      });
+    })();
     // Check if setup is needed and update auth links accordingly
     document.addEventListener('DOMContentLoaded', () => {
       fetch('/api/auth/check-setup')

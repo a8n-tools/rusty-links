@@ -80,6 +80,54 @@ async fn main() {
     // Initialize global database pool for server functions
     rusty_links::server_functions::auth::set_db_pool(pool.clone());
 
+    // Create default admin from environment variables if no users exist (standalone only)
+    #[cfg(feature = "standalone")]
+    {
+        if let (Ok(email), Ok(password)) = (
+            std::env::var("SETUP_DEFAULT_ADMIN_EMAIL"),
+            std::env::var("SETUP_DEFAULT_ADMIN_PASSWORD"),
+        ) {
+            let name = std::env::var("SETUP_DEFAULT_ADMIN_NAME")
+                .unwrap_or_else(|_| "Admin".to_string());
+
+            match rusty_links::models::check_user_exists(&pool).await {
+                Ok(false) => {
+                    tracing::info!(
+                        email = %email,
+                        "Creating default admin from SETUP_DEFAULT_ADMIN_* environment variables"
+                    );
+                    match rusty_links::models::User::create(&pool, &email, &password, &name).await {
+                        Ok(user) => {
+                            tracing::info!(
+                                user_id = %user.id,
+                                email = %user.email,
+                                is_admin = user.is_admin,
+                                "Default admin created successfully"
+                            );
+                        }
+                        Err(e) => {
+                            tracing::error!(
+                                error = %e,
+                                "Failed to create default admin"
+                            );
+                        }
+                    }
+                }
+                Ok(true) => {
+                    tracing::debug!(
+                        "Skipping default admin creation: users already exist"
+                    );
+                }
+                Err(e) => {
+                    tracing::error!(
+                        error = %e,
+                        "Failed to check user existence for default admin setup"
+                    );
+                }
+            }
+        }
+    }
+
     // Start background scheduler
     let scheduler_instance = scheduler::Scheduler::new(pool.clone(), config.clone());
     let scheduler_shutdown = scheduler_instance.shutdown_handle();
