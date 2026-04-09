@@ -3,6 +3,13 @@ use crate::ui::app::Route;
 use crate::ui::http;
 use dioxus::prelude::*;
 
+enum SetupCheckState {
+    Loading,
+    SetupNeeded,
+    Redirecting,
+    Error(String),
+}
+
 #[component]
 pub fn Setup() -> Element {
     let nav = navigator();
@@ -13,33 +20,17 @@ pub fn Setup() -> Element {
     let mut loading = use_signal(|| false);
     let mut error = use_signal(|| Option::<String>::None);
 
-    // Navigate away once we learn setup is already complete. Running this in
-    // an effect (rather than during render) avoids side-effects in the render
-    // phase and lets the page show a proper redirect message.
-    use_effect(move || {
-        if let Some(Ok(false)) = setup_check.read().as_ref() {
-            nav.push(Route::LoginPage {});
-        }
-    });
-
-    // Decide what to render based on the setup-check state. We extract an
-    // owned enum so the signal read guard doesn't span the early returns.
-    enum CheckState {
-        Loading,
-        SetupNeeded,
-        Redirecting,
-        Error(String),
-    }
-
+    // Extract an owned view of the setup-check state so the read guard does
+    // not span the early returns below.
     let state = match setup_check.read().as_ref() {
-        None => CheckState::Loading,
-        Some(Ok(true)) => CheckState::SetupNeeded,
-        Some(Ok(false)) => CheckState::Redirecting,
-        Some(Err(e)) => CheckState::Error(e.to_string()),
+        None => SetupCheckState::Loading,
+        Some(Ok(true)) => SetupCheckState::SetupNeeded,
+        Some(Ok(false)) => SetupCheckState::Redirecting,
+        Some(Err(e)) => SetupCheckState::Error(e.to_string()),
     };
 
     match state {
-        CheckState::Loading => {
+        SetupCheckState::Loading => {
             return rsx! {
                 div { class: "auth-container",
                     div { class: "loading-container",
@@ -48,7 +39,10 @@ pub fn Setup() -> Element {
                 }
             };
         }
-        CheckState::Redirecting => {
+        SetupCheckState::Redirecting => {
+            // Same pattern as Home in app.rs: navigate during render and
+            // show a redirect message until the route change takes effect.
+            nav.push(Route::LoginPage {});
             return rsx! {
                 div { class: "auth-container",
                     div { class: "loading-container",
@@ -58,7 +52,7 @@ pub fn Setup() -> Element {
                 }
             };
         }
-        CheckState::Error(msg) => {
+        SetupCheckState::Error(msg) => {
             return rsx! {
                 div { class: "auth-container",
                     div { class: "auth-card",
@@ -68,7 +62,7 @@ pub fn Setup() -> Element {
                 }
             };
         }
-        CheckState::SetupNeeded => {}
+        SetupCheckState::SetupNeeded => {}
     }
 
     let on_submit = move |evt: FormEvent| {
