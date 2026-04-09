@@ -71,6 +71,14 @@ pub enum Route {
     NotFound { route: Vec<String> },
 }
 
+#[cfg(feature = "standalone")]
+async fn verify_auth() -> bool {
+    match http::get_response("/api/auth/me").await {
+        Ok(resp) => resp.is_success(),
+        Err(_) => false,
+    }
+}
+
 #[component]
 fn ProtectedLayout() -> Element {
     // The auth guard must only run on the WASM target where localStorage exists.
@@ -101,6 +109,30 @@ fn ProtectedLayout() -> Element {
             navigator().push(Route::LoginPage {});
         });
         return rsx! {};
+    }
+
+    // Defense-in-depth: verify the token with the server on mount. A stale
+    // token (e.g. left over from a previous session with a different
+    // JWT_SECRET) will pass the localStorage presence check above but fail
+    // here, so we clear it and send the user to /login instead of leaving
+    // them stuck on a permanently-loading page.
+    //
+    // `use_resource` must be called on both SSR and WASM to keep hook counts
+    // consistent for hydration. On SSR the resource is never consulted (the
+    // check below is wasm32-only) so the server still renders Outlet. The
+    // `_auth_check` underscore prefix silences the unused-variable warning
+    // on the non-wasm32 SSR build.
+    #[cfg(feature = "standalone")]
+    let _auth_check = use_resource(verify_auth);
+
+    #[cfg(all(feature = "standalone", target_arch = "wasm32"))]
+    {
+        let check = *_auth_check.read();
+        if let Some(false) = check {
+            crate::ui::auth_state::clear_auth();
+            navigator().push(Route::LoginPage {});
+            return rsx! {};
+        }
     }
 
     rsx! { Outlet::<Route> {} }
