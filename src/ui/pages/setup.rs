@@ -13,15 +13,33 @@ pub fn Setup() -> Element {
     let mut loading = use_signal(|| false);
     let mut error = use_signal(|| Option::<String>::None);
 
-    // Redirect away if setup is already complete (users exist)
-    match setup_check.read().as_ref() {
-        Some(Ok(false)) => {
+    // Navigate away once we learn setup is already complete. Running this in
+    // an effect (rather than during render) avoids side-effects in the render
+    // phase and lets the page show a proper redirect message.
+    use_effect(move || {
+        if let Some(Ok(false)) = setup_check.read().as_ref() {
             nav.push(Route::LoginPage {});
-            return rsx! {};
         }
-        Some(Ok(true)) => {}
-        // Still loading or error — don't render the form yet
-        _ => {
+    });
+
+    // Decide what to render based on the setup-check state. We extract an
+    // owned enum so the signal read guard doesn't span the early returns.
+    enum CheckState {
+        Loading,
+        SetupNeeded,
+        Redirecting,
+        Error(String),
+    }
+
+    let state = match setup_check.read().as_ref() {
+        None => CheckState::Loading,
+        Some(Ok(true)) => CheckState::SetupNeeded,
+        Some(Ok(false)) => CheckState::Redirecting,
+        Some(Err(e)) => CheckState::Error(e.to_string()),
+    };
+
+    match state {
+        CheckState::Loading => {
             return rsx! {
                 div { class: "auth-container",
                     div { class: "loading-container",
@@ -30,6 +48,27 @@ pub fn Setup() -> Element {
                 }
             };
         }
+        CheckState::Redirecting => {
+            return rsx! {
+                div { class: "auth-container",
+                    div { class: "loading-container",
+                        div { class: "spinner spinner-medium" }
+                        p { class: "loading-message", "Redirecting to login..." }
+                    }
+                }
+            };
+        }
+        CheckState::Error(msg) => {
+            return rsx! {
+                div { class: "auth-container",
+                    div { class: "auth-card",
+                        h1 { class: "auth-title", "Error" }
+                        p { class: "message message-error", "Failed to check setup status: {msg}" }
+                    }
+                }
+            };
+        }
+        CheckState::SetupNeeded => {}
     }
 
     let on_submit = move |evt: FormEvent| {
