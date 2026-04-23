@@ -210,7 +210,6 @@ mod tests {
 impl<S> FromRequestParts<S> for AuthenticatedUser
 where
     S: Send + Sync,
-    crate::config::Config: axum::extract::FromRef<S>,
     sqlx::PgPool: axum::extract::FromRef<S>,
 {
     type Rejection = AppError;
@@ -219,76 +218,70 @@ where
         use axum::extract::FromRef;
         use axum_extra::extract::CookieJar;
 
-        let config = crate::config::Config::from_ref(state);
         let pool = sqlx::PgPool::from_ref(state);
         let ip = client_ip(parts);
         let path = parts.uri.path().to_string();
 
+        // --- Path 1: rl_session cookie ---
         let jar = CookieJar::from_headers(&parts.headers);
-        let claims =
-            crate::auth::saas_auth::get_user_from_cookie(&jar, &config.saas_jwt_secret)
-                .ok_or_else(|| {
-                    tracing::info!(ip = %ip, path = %path, "Unauthenticated access attempt (no valid cookie)");
-                    AppError::SessionExpired
-                })?;
-        let user_id: Uuid = claims.user_id.parse().map_err(|_| {
-            tracing::info!(ip = %ip, path = %path, "Unauthenticated access attempt (invalid user ID in cookie)");
-            AppError::SessionExpired
-        })?;
-
-        // Non-admin users must have active or grace_period membership
-        if !claims.is_admin {
-            let has_access = matches!(
-                claims.membership_status.as_deref(),
-                Some("active") | Some("grace_period")
-            );
-            if !has_access {
-                tracing::info!(
-                    user_id = %user_id,
-                    membership_status = ?claims.membership_status,
-                    "Non-member access attempt"
-                );
-                return Err(AppError::MembershipRequired(
-                    config.saas_membership_url.clone(),
-                ));
+        if let Some(cookie) = jar.get("rl_session") {
+            match crate::auth::oidc_rp::get_user_from_session(&pool, cookie.value()).await {
+                Ok(Some(user_id)) => return Ok(AuthenticatedUser { user_id }),
+                Ok(None) => {
+                    tracing::info!(ip = %ip, path = %path, "Session cookie invalid or expired");
+                    return Err(AppError::SessionExpired);
+                }
+                Err(e) => {
+                    tracing::warn!(error = %e, "Session lookup error");
+                    return Err(AppError::SessionExpired);
+                }
             }
         }
 
-        // Ensure the SaaS user exists in the local database.
-        // The parent app manages authentication; we just need a local user row
-        // so that foreign key constraints on links, tags, etc. are satisfied.
-        // Admin status is synced from the parent app's JWT on every request.
-        let email = claims
-            .email
-            .filter(|e| !e.is_empty())
-            .unwrap_or_else(|| format!("{}@saas.local", user_id));
-        let result = sqlx::query(
-            "INSERT INTO users (id, email, password_hash, name, is_admin) VALUES ($1, $2, '', '', $3) ON CONFLICT (id) DO UPDATE SET is_admin = $3",
-        )
-        .bind(user_id)
-        .bind(&email)
-        .bind(claims.is_admin)
-        .execute(&pool)
-        .await;
+        // --- Path 2: Bearer at+jwt ---
+        let auth_header = parts
+            .headers
+            .get("Authorization")
+            .and_then(|v| v.to_str().ok());
 
-        // If the email is already taken by a different user_id, retry with a
-        // unique fallback email so we don't violate the users_email_key constraint.
-        if result.is_err() {
-            let fallback_email = format!("{}@saas.local", user_id);
-            sqlx::query(
-                "INSERT INTO users (id, email, password_hash, name, is_admin) VALUES ($1, $2, '', '', $3) ON CONFLICT (id) DO UPDATE SET is_admin = $3",
-            )
-            .bind(user_id)
-            .bind(&fallback_email)
-            .bind(claims.is_admin)
-            .execute(&pool)
-            .await
-            .map_err(|e| {
-                tracing::error!(error = %e, user_id = %user_id, "Failed to provision SaaS user");
-                AppError::Database(e)
-            })?;
+        if let Some(header) = auth_header {
+            if let Some(token) = header.strip_prefix("Bearer ") {
+                // Retrieve the OidcVerifier from request extensions (added by main.rs layer).
+                let verifier = parts
+                    .extensions
+                    .get::<std::sync::Arc<crate::auth::oidc_rs::OidcVerifier>>()
+                    .cloned()
+                    .ok_or_else(|| {
+                        tracing::warn!("OidcVerifier extension not found in request extensions");
+                        AppError::SessionExpired
+                    })?;
+
+                let at_claims = verifier.verify(token).await.map_err(|e| {
+                    tracing::info!(ip = %ip, path = %path, error = %e, "Bearer token rejected");
+                    AppError::SessionExpired
+                })?;
+
+                let saas_uuid: Uuid = at_claims.sub.parse().map_err(|_| AppError::SessionExpired)?;
+
+                let row = sqlx::query_as::<_, (Uuid, Option<chrono::DateTime<chrono::Utc>>)>(
+                    "SELECT id, suspended_at FROM users WHERE saas_user_id = $1",
+                )
+                .bind(saas_uuid)
+                .fetch_optional(&pool)
+                .await
+                .map_err(AppError::Database)?
+                .ok_or(AppError::SessionExpired)?;
+
+                let (user_id_found, suspended_at) = row;
+                if suspended_at.is_some() {
+                    return Err(AppError::Forbidden("Account suspended".into()));
+                }
+
+                return Ok(AuthenticatedUser { user_id: user_id_found });
+            }
         }
 
-        Ok(AuthenticatedUser { user_id })
+        tracing::info!(ip = %ip, path = %path, "Unauthenticated access attempt (no session or bearer)");
+        Err(AppError::SessionExpired)
     }
 }

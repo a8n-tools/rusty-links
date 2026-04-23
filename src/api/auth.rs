@@ -378,21 +378,17 @@ pub async fn me_handler(
 
 // ── SaaS mode handlers ───────────────────────────────────────────────
 
-#[cfg(feature = "saas")]
-use crate::auth::saas_auth;
-#[cfg(feature = "saas")]
-use axum_extra::extract::CookieJar;
-
 /// GET /api/auth/me (saas)
 ///
-/// Returns user info from the parent app's cookie.
+/// Returns user info from the OIDC session.
 /// Includes maintenance_mode status so admin UIs can show a banner.
-#[cfg(feature = "saas")]
+#[cfg(all(feature = "saas", not(feature = "standalone")))]
 pub async fn me_handler(
     State(state): State<crate::api::AppState>,
-    jar: CookieJar,
+    auth_user: crate::auth::middleware::AuthenticatedUser,
 ) -> Result<Json<crate::server_functions::auth::UserInfo>, AppError> {
-    let claims = saas_auth::get_user_from_cookie(&jar, &state.config.saas_jwt_secret)
+    let user = User::find_by_id(&state.pool, auth_user.user_id)
+        .await?
         .ok_or(AppError::SessionExpired)?;
 
     let maintenance_mode = state
@@ -400,10 +396,10 @@ pub async fn me_handler(
         .load(std::sync::atomic::Ordering::Relaxed);
 
     Ok(Json(crate::server_functions::auth::UserInfo {
-        id: claims.user_id,
-        email: claims.email.unwrap_or_default(),
-        name: String::new(),
-        is_admin: claims.is_admin,
+        id: user.id.to_string(),
+        email: user.email,
+        name: user.name,
+        is_admin: user.is_admin,
         maintenance_mode,
     }))
 }

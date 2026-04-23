@@ -74,6 +74,12 @@ base64 = "0.22"
 # Session management
 rand = "0.9.2"
 
+# JTI idempotency + JWKS cache (saas mode)
+moka = { version = "0.12", features = ["future"], optional = true }
+
+# Cookie max-age handling (saas mode — cookie crate re-exports this)
+time = { version = "0.3", optional = true }
+
 # WASM compatibility - must be in main dependencies to propagate to all transitive deps
 getrandom = "0.3.4"
 
@@ -126,6 +132,8 @@ server = [
     "dep:hmac",
     "dep:sha2",
     "dep:hex",
+    "dep:moka",
+    "dep:time",
 ]
 web = [
     "dioxus/web",

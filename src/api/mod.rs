@@ -33,48 +33,49 @@ pub struct AppState {
     pub maintenance_mode: Arc<AtomicBool>,
     #[cfg(feature = "saas")]
     pub maintenance_message: Arc<std::sync::RwLock<Option<String>>>,
+    #[cfg(feature = "saas")]
+    pub oidc_verifier: Arc<crate::auth::oidc_rs::OidcVerifier>,
 }
 
-// Allow extracting PgPool from AppState
 impl axum::extract::FromRef<AppState> for PgPool {
     fn from_ref(state: &AppState) -> PgPool {
         state.pool.clone()
     }
 }
 
-// Allow extracting Config from AppState (needed by JWT middleware)
 impl axum::extract::FromRef<AppState> for Config {
     fn from_ref(state: &AppState) -> Config {
         state.config.clone()
     }
 }
 
-/// Create the main API router with all endpoints
+/// Create the main API router with all endpoints.
 pub fn create_router(
     pool: PgPool,
     config: Config,
     scheduler_shutdown: Arc<AtomicBool>,
     #[cfg(feature = "saas")] maintenance_mode: Arc<AtomicBool>,
     #[cfg(feature = "saas")] maintenance_message: Arc<std::sync::RwLock<Option<String>>>,
+    #[cfg(feature = "saas")] oidc_verifier: Arc<crate::auth::oidc_rs::OidcVerifier>,
 ) -> Router {
     let state = AppState {
         pool: pool.clone(),
-        config,
+        config: config.clone(),
         scheduler_shutdown,
         #[cfg(feature = "saas")]
         maintenance_mode,
         #[cfg(feature = "saas")]
         maintenance_message,
+        #[cfg(feature = "saas")]
+        oidc_verifier: oidc_verifier.clone(),
     };
 
-    // Create health router with AppState
     let health_router = Router::new()
         .route("/health", get(health::health))
         .route("/health/database", get(health::database_health))
         .route("/health/scheduler", get(health::scheduler_health))
         .with_state(state.clone());
 
-    // Create auth router (feature-gated)
     #[cfg(feature = "standalone")]
     let auth_router = {
         Router::new()
@@ -89,22 +90,18 @@ pub fn create_router(
 
     #[cfg(all(feature = "saas", not(feature = "standalone")))]
     let auth_router = {
-        Router::new()
-            .route("/me", get(auth::me_handler))
-            .route("/check-setup", get(auth::check_setup_handler))
+        Router::new().route("/me", get(auth::me_handler))
     };
 
     #[cfg(not(any(feature = "standalone", feature = "saas")))]
-    let auth_router = { Router::new().route("/check-setup", get(auth::check_setup_handler)) };
+    let auth_router = Router::new();
 
-    // Create admin router (standalone only)
     #[cfg(feature = "standalone")]
     let admin_router = Router::new()
         .route("/users", get(admin::list_users))
         .route("/users/{user_id}", delete(admin::delete_user))
         .route("/users/{user_id}/promote", post(admin::promote_user));
 
-    // Create main API router
     let mut router = Router::new()
         .merge(health_router)
         .nest("/auth", auth_router)
@@ -122,7 +119,9 @@ pub fn create_router(
 
     #[cfg(feature = "saas")]
     {
-        router = router.route("/webhooks/maintenance", post(webhook::handle_maintenance_webhook));
+        router = router
+            .route("/webhooks/maintenance", post(webhook::handle_maintenance_webhook))
+            .layer(axum::Extension(oidc_verifier));
     }
 
     router.with_state(state)
