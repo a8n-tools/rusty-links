@@ -14,7 +14,7 @@ RUN curl --location --silent --show-error \
     | tar --extract --gzip --directory /usr/local/cargo/bin
 RUN cargo binstall dioxus-cli --no-confirm
 
-RUN mkdir -p /app /data /config
+RUN mkdir -p /app /app/dist /data /config
 
 WORKDIR /app
 
@@ -27,10 +27,14 @@ COPY package.json ./
 COPY tailwind.css ./
 RUN npm install
 
+# Feature set: "standalone" or "saas" (controls auth mode)
+ARG FEATURES=standalone
+ENV APP_FEATURES=${FEATURES}
+
 # Pre-build dependencies (no source code, no nightly, no DB needed)
 RUN mkdir src && \
     echo "fn main() {}" > src/main.rs && \
-    cargo build --features standalone,server && \
+    cargo build --features ${FEATURES},server && \
     rm -rf src
 
 # Source code is mounted via volumes in compose.yml
@@ -38,4 +42,4 @@ RUN mkdir src && \
 EXPOSE 4002
 
 # Build tailwind then launch the dev server (builds WASM + server and serves)
-CMD ["sh", "-c", "npx @tailwindcss/cli --input tailwind.css --output assets/tailwind.css && dx serve --features standalone --port 4002 --addr 0.0.0.0"]
+CMD ["sh", "-c", "npx @tailwindcss/cli --input tailwind.css --output assets/tailwind.css && dx serve --features ${APP_FEATURES} --port 4002 --addr 0.0.0.0"]

@@ -29,6 +29,12 @@ css-watch: ensure-npm
 dev mode="standalone": (ensure-env mode) css-build
     {{ compose }}up --build --remove-orphans app
 
+# Start development server in Docker with SSO (saas mode, detached, Traefik-routed)
+dev-sso: (ensure-env "saas") css-build
+    FEATURES=saas {{ compose }}up --build --detach --remove-orphans app
+    @echo ""
+    @echo "  App: https://{{env('USER')}}-links.a8n.run"
+
 # Start local development server in Docker — no Traefik, localhost ports (mode: standalone or saas)
 dev-local mode="standalone": (ensure-env mode) css-build
     docker compose up --build --remove-orphans app
@@ -36,6 +42,10 @@ dev-local mode="standalone": (ensure-env mode) css-build
 # Start PostgreSQL container
 db-up:
     {{ compose }}up --detach postgres
+
+# Tail app logs
+logs:
+    {{ compose }}logs --follow app
 
 # Stop PostgreSQL container
 db-down:
@@ -151,7 +161,7 @@ create-release bump:
     # Pull latest changes
     git pull --rebase origin main
 
-	# Calculate next version
+    # Calculate next version
     let current = (open Cargo.toml | get package.version | split row "." | each { into int })
     let next = match $bump {
         "major" => [$"($current.0 + 1)" "0" "0"],

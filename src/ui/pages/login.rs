@@ -1,10 +1,36 @@
-use crate::server_functions::auth::LoginRequest;
-use crate::ui::app::Route;
-use crate::ui::http;
 use dioxus::prelude::*;
 
+// In saas mode authentication is handled by the OIDC provider, so the
+// email/password form is replaced with a redirect to /oauth2/login.
+// Both cfg variants render the same spinner on SSR so hydration stays
+// consistent; only the WASM build triggers the actual browser redirect.
+
+#[cfg(feature = "saas")]
 #[component]
 pub fn Login() -> Element {
+    #[cfg(target_arch = "wasm32")]
+    use_effect(move || {
+        if let Some(window) = web_sys::window() {
+            let _ = window.location().set_href("/oauth2/login");
+        }
+    });
+    rsx! {
+        div { class: "auth-container",
+            div { class: "loading-container",
+                div { class: "spinner spinner-medium" }
+                p { class: "loading-message", "Redirecting to login..." }
+            }
+        }
+    }
+}
+
+#[cfg(not(feature = "saas"))]
+#[component]
+pub fn Login() -> Element {
+    use crate::server_functions::auth::LoginRequest;
+    use crate::ui::app::Route;
+    use crate::ui::http;
+
     let mut email = use_signal(String::new);
     let mut password = use_signal(String::new);
     let mut loading = use_signal(|| false);
@@ -27,7 +53,6 @@ pub fn Login() -> Element {
         let email_val = email();
         let password_val = password();
 
-        // Basic validation
         if email_val.is_empty() || password_val.is_empty() {
             error.set(Some("Please fill in all fields".to_string()));
             return;
@@ -47,7 +72,6 @@ pub fn Login() -> Element {
             match response {
                 Ok(resp) => {
                     if resp.is_success() {
-                        // Parse auth response and store tokens
                         #[cfg(feature = "standalone")]
                         {
                             if let Ok(auth_resp) =
@@ -60,16 +84,12 @@ pub fn Login() -> Element {
                                 );
                             }
                         }
-                        // Login successful, redirect to links page
                         nav.push(Route::LinksPage {});
                     } else {
                         error.set(Some(resp.error_message()));
                     }
                 }
                 Err(e) => {
-                    // Log the raw error for debugging; show the user a
-                    // generic retry hint (server starting up, DB not yet
-                    // loaded, flaky network, etc.).
                     tracing::warn!("Login request failed: {}", e);
                     error.set(Some(
                         "Can't reach the server right now. Please try again in a moment."
