@@ -36,6 +36,8 @@ services:
       - ./static:/app/static
       - cargo_home:/root/.cargo
       - dx_out:/app/target/dx
+      - cargo_target_server:/app/target/server-dev
+      - cargo_target_wasm:/app/target/wasm-dev
     env_file: .env
     environment:
       RUST_LOG: debug
@@ -71,6 +73,10 @@ volumes:
     name: rusty-links-cargo-${USER}
   dx_out:
     name: rusty-links-dx-${USER}
+  cargo_target_server:
+    name: rusty-links-target-server-${USER}
+  cargo_target_wasm:
+    name: rusty-links-target-wasm-${USER}
   postgres_data:
     name: rusty-links-postgres-${USER}
 

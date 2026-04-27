@@ -63,7 +63,9 @@ clean:
     let suffix = $env.USER
     let vols = [
         $"rusty-links-cargo-($suffix)"
-        $"rusty-links-target-($suffix)"
+        $"rusty-links-dx-($suffix)"
+        $"rusty-links-target-server-($suffix)"
+        $"rusty-links-target-wasm-($suffix)"
         $"rusty-links-postgres-($suffix)"
     ]
     let existing = docker volume ls --quiet | lines
@@ -77,6 +79,16 @@ clean:
             docker volume rm $vol
         }
     }
+
+# Open a dev session via the /dev/seed-session endpoint (saas mode, debug builds only)
+seed-session:
+    @echo "Opening: https://{{env('USER')}}-links.a8n.run/dev/seed-session"
+    xdg-open "https://{{env('USER')}}-links.a8n.run/dev/seed-session"
+
+# Clear the dev session via the /dev/logout endpoint (saas mode, debug builds only)
+logout:
+    @echo "Opening: https://{{env('USER')}}-links.a8n.run/dev/logout"
+    xdg-open "https://{{env('USER')}}-links.a8n.run/dev/logout"
 
 # Run pending database migrations
 migrate-run:

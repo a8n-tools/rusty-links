@@ -1,11 +1,13 @@
 //! OIDC Relying Party (BFF) — Authorization Code + PKCE flow for browser clients.
 //!
 //! Routes:
-//! - `GET  /oauth2/login`               — start the OIDC auth flow
-//! - `GET  /oauth2/callback`            — exchange code for tokens, create session
-//! - `GET  /oauth2/logout`              — RP-initiated logout
-//! - `POST /oauth2/backchannel-logout`  — receive OIDC Back-Channel Logout tokens
-//! - `POST /oauth2/lifecycle-event`     — receive SaaS user lifecycle events
+//! - `GET  /oauth2/login`               - start the OIDC auth flow
+//! - `GET  /oauth2/callback`            - exchange code for tokens, create session
+//! - `GET  /oauth2/logout`              - RP-initiated logout
+//! - `POST /oauth2/backchannel-logout`  - receive OIDC Back-Channel Logout tokens
+//! - `POST /oauth2/lifecycle-event`     - receive SaaS user lifecycle events
+//! - `GET  /dev/seed-session`           - (debug builds only) inject a dev session and redirect to /links
+//! - `GET  /dev/logout`                 - (debug builds only) clear session cookie and redirect to /login
 
 pub mod jit;
 
@@ -585,6 +587,94 @@ pub async fn get_user_from_session(
     }
 }
 
+// ── Dev-only session seed (debug builds only) ─────────────────────────────────
+
+/// `GET /dev/logout`
+///
+/// Clears the local session cookie and redirects to `/login` without touching
+/// the OIDC provider. Only compiled in debug builds.
+#[cfg(debug_assertions)]
+pub async fn dev_logout(
+    State(state): State<OidcRpState>,
+    jar: CookieJar,
+) -> Result<Response, AppError> {
+    if let Some(cookie) = jar.get("rl_session") {
+        let token_hash = hash_session_token(cookie.value());
+        sqlx::query("DELETE FROM user_sessions WHERE session_token_hash = $1")
+            .bind(token_hash.as_slice())
+            .execute(&state.pool)
+            .await
+            .ok();
+    }
+
+    let secure = state.config.redirect_uri.starts_with("https://");
+    let cleared = clear_session_cookie(secure);
+    let jar = jar.remove(cleared);
+
+    Ok((jar, Redirect::to("/login")).into_response())
+}
+
+/// `GET /dev/seed-session`
+///
+/// Upserts a fixed dev user, issues a real session cookie, and redirects to
+/// `/links`. Only compiled and registered in debug builds so it cannot exist
+/// in a release binary.
+#[cfg(debug_assertions)]
+pub async fn dev_seed_session(
+    State(state): State<OidcRpState>,
+    jar: CookieJar,
+) -> Result<Response, AppError> {
+    const DEV_EMAIL: &str = "dev@dev.local";
+    const DEV_SAAS_UUID: &str = "00000000-0000-0000-0000-000000000001";
+
+    sqlx::query(
+        "INSERT INTO users (email, password_hash, name, is_admin, saas_user_id)
+         VALUES ($1, 'not-used', 'Dev User', true, $2)
+         ON CONFLICT (email) DO UPDATE
+             SET saas_user_id = EXCLUDED.saas_user_id,
+                 name         = EXCLUDED.name,
+                 is_admin     = EXCLUDED.is_admin",
+    )
+    .bind(DEV_EMAIL)
+    .bind(Uuid::parse_str(DEV_SAAS_UUID).unwrap())
+    .execute(&state.pool)
+    .await?;
+
+    let user_id: Uuid =
+        sqlx::query_scalar("SELECT id FROM users WHERE email = $1")
+            .bind(DEV_EMAIL)
+            .fetch_one(&state.pool)
+            .await?;
+
+    let session_version: i32 =
+        sqlx::query_scalar("SELECT session_version FROM users WHERE id = $1")
+            .bind(user_id)
+            .fetch_one(&state.pool)
+            .await?;
+
+    let session_token = random_b64url(32);
+    let token_hash = hash_session_token(&session_token);
+    let expires_at = Utc::now() + chrono::Duration::days(30);
+
+    sqlx::query(
+        "INSERT INTO user_sessions (session_token_hash, user_id, session_version, expires_at)
+         VALUES ($1, $2, $3, $4)
+         ON CONFLICT DO NOTHING",
+    )
+    .bind(token_hash.as_slice())
+    .bind(user_id)
+    .bind(session_version)
+    .bind(expires_at)
+    .execute(&state.pool)
+    .await?;
+
+    let secure = state.config.redirect_uri.starts_with("https://");
+    let cookie = build_session_cookie(&session_token, state.config.session_ttl_seconds, secure);
+    let jar = jar.add(cookie);
+
+    Ok((jar, Redirect::to("/links")).into_response())
+}
+
 // ── Router ────────────────────────────────────────────────────────────────────
 
 pub fn create_router(
@@ -605,11 +695,20 @@ pub fn create_router(
         jti_cache,
     };
 
-    Router::new()
+    #[cfg_attr(not(debug_assertions), allow(unused_mut))]
+    let mut router = Router::new()
         .route("/oauth2/login", get(login))
         .route("/oauth2/callback", get(callback))
         .route("/oauth2/logout", get(logout))
         .route("/oauth2/backchannel-logout", post(backchannel_logout))
-        .route("/oauth2/lifecycle-event", post(lifecycle_event))
-        .with_state(state)
+        .route("/oauth2/lifecycle-event", post(lifecycle_event));
+
+    #[cfg(debug_assertions)]
+    {
+        router = router
+            .route("/dev/seed-session", get(dev_seed_session))
+            .route("/dev/logout", get(dev_logout));
+    }
+
+    router.with_state(state)
 }
