@@ -25,7 +25,7 @@ services:
       args:
         FEATURES: ${FEATURES:-standalone}
     container_name: rusty-links-app-${USER}
-    restart: "no"
+    restart: unless-stopped
     volumes:
       - ./src:/app/src
       - ./assets:/app/assets

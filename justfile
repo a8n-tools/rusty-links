@@ -51,9 +51,15 @@ logs:
 db-down:
     {{ compose }}down postgres
 
-# Stop all containers
+# Stop all containers (also removes the dx_out volume to prevent stale-binary crash loops on next start)
 down:
-    {{ compose }}down
+    #!/usr/bin/env nu
+    docker compose -f compose.dev.yml down --remove-orphans
+    let vol = $"rusty-links-dx-($env.USER)"
+    let existing = (docker volume ls --quiet | lines)
+    if $vol in $existing {
+        docker volume rm $vol
+    }
 
 # Remove all containers, volumes, and networks
 clean:

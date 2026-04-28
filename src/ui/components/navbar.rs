@@ -7,32 +7,36 @@ pub fn Navbar() -> Element {
     let mut loading = use_signal(|| false);
     let mut menu_open = use_signal(|| false);
     let mut show_maintenance = use_signal(|| false);
+    let mut auth_via_oidc = use_signal(|| false);
     let nav = navigator();
 
-    // Fetch user info to check if admin + maintenance mode is active
+    // Fetch user info to check admin status, maintenance mode, and auth method.
     use_future(move || async move {
         if let Ok(info) = http::get::<crate::server_functions::auth::UserInfo>("/api/auth/me").await
         {
             show_maintenance.set(info.is_admin && info.maintenance_mode);
+            auth_via_oidc.set(info.auth_via_oidc);
         }
     });
 
     let on_logout = move |_| {
-        // In SaaS mode, navigate directly to /logout — the server middleware
-        // redirects to the SaaS platform's logout endpoint to clear cookies.
-        #[cfg(feature = "saas")]
+        // In saas mode all browser sessions are cookie-based OIDC sessions.
+        // Always redirect to the RP-initiated logout endpoint so both the local
+        // session and the IdP session are terminated, regardless of whether the
+        // auth_via_oidc signal has resolved yet.
+        #[cfg(all(feature = "saas", target_arch = "wasm32"))]
         {
-            #[cfg(target_arch = "wasm32")]
             if let Some(window) = web_sys::window() {
-                let _ = window.location().set_href("/logout");
+                let _ = window.location().set_href("/oauth2/logout");
                 return;
             }
         }
 
+        // For password-auth sessions (standalone) or non-WASM builds: call the
+        // REST logout endpoint to invalidate the server-side token.
         spawn(async move {
             loading.set(true);
 
-            // Use REST API for logout (invalidates refresh tokens server-side)
             let result = http::post_empty("/api/auth/logout").await;
 
             // Always clear client-side tokens, even if server call fails

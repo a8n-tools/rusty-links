@@ -303,7 +303,7 @@ async fn main() {
                     // Check if the session belongs to an admin — admins bypass maintenance.
                     let jar = axum_extra::extract::CookieJar::from_headers(req.headers());
                     if let Some(cookie) = jar.get("rl_session") {
-                        if let Ok(Some(user_id)) = rusty_links::auth::oidc_rp::get_user_from_session(
+                        if let Ok(Some((user_id, _))) = rusty_links::auth::oidc_rp::get_user_from_session(
                             &pool_mm,
                             cookie.value(),
                         )
