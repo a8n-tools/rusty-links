@@ -191,8 +191,9 @@ mod tests {
     #[test]
     fn test_authenticated_user_uuid() {
         let user_id = Uuid::new_v4();
-        let auth = AuthenticatedUser { user_id };
+        let auth = AuthenticatedUser { user_id, auth_via_oidc: false };
         assert_eq!(auth.user_id, user_id);
+        assert!(!auth.auth_via_oidc);
     }
 
     #[test]
