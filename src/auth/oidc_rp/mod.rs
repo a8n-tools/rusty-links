@@ -136,6 +136,7 @@ struct RpSessionRow {
 
 struct UserSessionRow {
     user_id: Uuid,
+    auth_via_oidc: bool,
     session_version: i32,
     expires_at: chrono::DateTime<Utc>,
     user_session_version: i32,
@@ -341,13 +342,14 @@ pub async fn callback(
         Utc::now() + chrono::Duration::seconds(state.config.session_ttl_seconds as i64);
 
     sqlx::query(
-        "INSERT INTO user_sessions (session_token_hash, user_id, session_version, expires_at)
-         VALUES ($1, $2, $3, $4)",
+        "INSERT INTO user_sessions (session_token_hash, user_id, session_version, expires_at, auth_via_oidc)
+         VALUES ($1, $2, $3, $4, $5)",
     )
     .bind(token_hash.as_slice())
     .bind(provisioned.id)
     .bind(provisioned.session_version)
     .bind(expires_at)
+    .bind(true)
     .execute(&state.pool)
     .await?;
 
@@ -546,14 +548,15 @@ pub async fn lifecycle_event(
 
 /// Look up a user by raw session cookie value.  Returns `None` if the session
 /// is missing, expired, or has been invalidated via `session_version`.
+/// On success returns `(user_id, auth_via_oidc)`.
 pub async fn get_user_from_session(
     pool: &PgPool,
     session_token: &str,
-) -> Result<Option<Uuid>, AppError> {
+) -> Result<Option<(Uuid, bool)>, AppError> {
     let token_hash = hash_session_token(session_token);
 
-    let row = sqlx::query_as::<_, (Uuid, i32, chrono::DateTime<Utc>, i32, Option<chrono::DateTime<Utc>>)>(
-        "SELECT us.user_id, us.session_version, us.expires_at,
+    let row = sqlx::query_as::<_, (Uuid, bool, i32, chrono::DateTime<Utc>, i32, Option<chrono::DateTime<Utc>>)>(
+        "SELECT us.user_id, us.auth_via_oidc, us.session_version, us.expires_at,
                 u.session_version AS user_session_version, u.suspended_at
          FROM user_sessions us
          JOIN users u ON u.id = us.user_id
@@ -562,8 +565,9 @@ pub async fn get_user_from_session(
     .bind(token_hash.as_slice())
     .fetch_optional(pool)
     .await?
-    .map(|(user_id, session_version, expires_at, user_session_version, suspended_at)| UserSessionRow {
+    .map(|(user_id, auth_via_oidc, session_version, expires_at, user_session_version, suspended_at)| UserSessionRow {
         user_id,
+        auth_via_oidc,
         session_version,
         expires_at,
         user_session_version,
@@ -582,7 +586,7 @@ pub async fn get_user_from_session(
             if r.suspended_at.is_some() {
                 return Ok(None);
             }
-            Ok(Some(r.user_id))
+            Ok(Some((r.user_id, r.auth_via_oidc)))
         }
     }
 }
@@ -657,14 +661,15 @@ pub async fn dev_seed_session(
     let expires_at = Utc::now() + chrono::Duration::days(30);
 
     sqlx::query(
-        "INSERT INTO user_sessions (session_token_hash, user_id, session_version, expires_at)
-         VALUES ($1, $2, $3, $4)
+        "INSERT INTO user_sessions (session_token_hash, user_id, session_version, expires_at, auth_via_oidc)
+         VALUES ($1, $2, $3, $4, $5)
          ON CONFLICT DO NOTHING",
     )
     .bind(token_hash.as_slice())
     .bind(user_id)
     .bind(session_version)
     .bind(expires_at)
+    .bind(false)
     .execute(&state.pool)
     .await?;
 

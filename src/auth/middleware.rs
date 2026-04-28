@@ -66,6 +66,9 @@ pub struct AdminClaims(pub Claims);
 #[derive(Debug, Clone)]
 pub struct AuthenticatedUser {
     pub user_id: Uuid,
+    /// True when the session was created via the OIDC callback (SSO).
+    /// False for password-auth sessions and bearer-token (API) requests.
+    pub auth_via_oidc: bool,
 }
 
 #[cfg(feature = "standalone")]
@@ -142,7 +145,7 @@ where
             .user_id
             .parse()
             .map_err(|_| AppError::SessionExpired)?;
-        Ok(AuthenticatedUser { user_id })
+        Ok(AuthenticatedUser { user_id, auth_via_oidc: false })
     }
 }
 
@@ -226,7 +229,7 @@ where
         let jar = CookieJar::from_headers(&parts.headers);
         if let Some(cookie) = jar.get("rl_session") {
             match crate::auth::oidc_rp::get_user_from_session(&pool, cookie.value()).await {
-                Ok(Some(user_id)) => return Ok(AuthenticatedUser { user_id }),
+                Ok(Some((user_id, auth_via_oidc))) => return Ok(AuthenticatedUser { user_id, auth_via_oidc }),
                 Ok(None) => {
                     tracing::info!(ip = %ip, path = %path, "Session cookie invalid or expired");
                     return Err(AppError::SessionExpired);
@@ -277,7 +280,7 @@ where
                     return Err(AppError::Forbidden("Account suspended".into()));
                 }
 
-                return Ok(AuthenticatedUser { user_id: user_id_found });
+                return Ok(AuthenticatedUser { user_id: user_id_found, auth_via_oidc: false });
             }
         }
 

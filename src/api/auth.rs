@@ -373,6 +373,7 @@ pub async fn me_handler(
         name: user.name,
         is_admin: user.is_admin,
         maintenance_mode: false,
+        auth_via_oidc: false,
     }))
 }
 
@@ -401,5 +402,6 @@ pub async fn me_handler(
         name: user.name,
         is_admin: user.is_admin,
         maintenance_mode,
+        auth_via_oidc: auth_user.auth_via_oidc,
     }))
 }
