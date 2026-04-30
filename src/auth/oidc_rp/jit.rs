@@ -64,7 +64,7 @@ pub async fn load_or_provision(
         });
     }
 
-    // First-time login → JIT provision.
+    // First-time login → check for an existing standalone account to link before provisioning.
     if !id_claims.email_verified.unwrap_or(false) {
         return Err(AppError::Forbidden(
             "Please verify your email on a8n.tools before logging in.".into(),
@@ -83,6 +83,28 @@ pub async fn load_or_provision(
         .email
         .as_deref()
         .ok_or_else(|| AppError::Internal("ID token missing email claim".into()))?;
+
+    // A standalone account with this email may already exist. Link it to the SaaS identity
+    // rather than creating a duplicate, then treat it as an existing user.
+    let linked = sqlx::query_as::<_, (Uuid, i32)>(
+        "UPDATE users SET saas_user_id = $1, is_admin = $2
+         WHERE email = $3 AND saas_user_id IS NULL
+         RETURNING id, session_version",
+    )
+    .bind(saas_uuid)
+    .bind(is_admin)
+    .bind(email)
+    .fetch_optional(pool)
+    .await?;
+
+    if let Some((id, session_version)) = linked {
+        tracing::info!(
+            user_id = %id,
+            saas_user_id = %saas_uuid,
+            "Linked existing standalone account to SSO identity"
+        );
+        return Ok(ProvisionedUser { id, is_admin, session_version });
+    }
 
     let name = id_claims
         .name
