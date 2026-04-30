@@ -159,6 +159,27 @@ fn ProtectedLayout() -> Element {
         }
     }
 
+    // For saas (SSO) sessions: poll /api/auth/me every 60 seconds so an idle
+    // tab is redirected to /login promptly after the user signs out of the IdP.
+    // The back-channel logout increments session_version server-side; the next
+    // poll returns 401 and we redirect here without waiting for a user action.
+    //
+    // Gated to wasm32 only — the effect body spawns a browser timer that is
+    // meaningless on the server and unavailable outside a WASM context.
+    #[cfg(all(feature = "saas", target_arch = "wasm32"))]
+    use_effect(move || {
+        spawn(async move {
+            loop {
+                gloo_timers::future::sleep(std::time::Duration::from_secs(60)).await;
+
+                if let Ok(None) = http::get_current_user().await {
+                    navigator().replace(Route::LoginPage {});
+                    break;
+                }
+            }
+        });
+    });
+
     rsx! { Outlet::<Route> {} }
 }
 

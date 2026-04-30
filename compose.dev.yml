@@ -22,6 +22,8 @@ services:
   app:
     build:
       context: .
+      args:
+        FEATURES: ${FEATURES:-standalone}
     container_name: rusty-links-app-${USER}
     restart: unless-stopped
     volumes:
@@ -33,7 +35,9 @@ services:
       - ./Dioxus.toml:/app/Dioxus.toml
       - ./static:/app/static
       - cargo_home:/root/.cargo
-      - cargo_target:/app/target
+      - dx_out:/app/target/dx
+      - cargo_target_server:/app/target/server-dev
+      - cargo_target_wasm:/app/target/wasm-dev
     env_file: .env
     environment:
       RUST_LOG: debug
@@ -42,6 +46,11 @@ services:
       SETUP_DEFAULT_ADMIN_EMAIL: ${SETUP_DEFAULT_ADMIN_EMAIL:-admin@a8n.run}
       SETUP_DEFAULT_ADMIN_PASSWORD: ${SETUP_DEFAULT_ADMIN_PASSWORD:-admin1234}
       SETUP_DEFAULT_ADMIN_NAME: ${SETUP_DEFAULT_ADMIN_NAME:-Admin}
+      HOST_URL: https://${USER}-links.a8n.run
+      OIDC_ISSUER: https://${USER}-api.a8n.run
+      OIDC_AUDIENCE: https://links.a8n.run/api
+      OIDC_REDIRECT_URI: https://${USER}-links.a8n.run/oauth2/callback
+      OIDC_POST_LOGOUT_REDIRECT_URI: https://${USER}-links.a8n.run/
     expose:
       - "4002"
     networks:
@@ -62,8 +71,12 @@ services:
 volumes:
   cargo_home:
     name: rusty-links-cargo-${USER}
-  cargo_target:
-    name: rusty-links-target-${USER}
+  dx_out:
+    name: rusty-links-dx-${USER}
+  cargo_target_server:
+    name: rusty-links-target-server-${USER}
+  cargo_target_wasm:
+    name: rusty-links-target-wasm-${USER}
   postgres_data:
     name: rusty-links-postgres-${USER}
 

@@ -1,5 +1,40 @@
 use crate::error::AppError;
 
+/// OIDC Relying Party + Resource Server configuration (saas mode).
+#[cfg(feature = "saas")]
+#[derive(Debug, Clone)]
+pub struct OidcConfig {
+    /// Issuer URL (`iss` value in tokens).  Empty string means OIDC disabled.
+    pub issuer: String,
+    /// `aud` expected in `at+jwt` access tokens.
+    pub audience: String,
+    /// JWKS endpoint (derived from issuer when empty).
+    pub jwks_url: String,
+    /// JWKS in-memory cache TTL in seconds.
+    pub jwks_cache_ttl: u64,
+    /// OAuth2 client_id.
+    pub client_id: String,
+    /// OAuth2 client_secret (confidential client).
+    pub client_secret: String,
+    /// Absolute redirect URI registered with the OP.
+    pub redirect_uri: String,
+    /// Post-logout redirect URI registered with the OP.
+    pub post_logout_redirect_uri: String,
+    /// Clock-skew leeway in seconds applied during token validation.
+    pub leeway_seconds: u64,
+    /// TTL in seconds for the JTI idempotency cache (lifecycle + logout events).
+    pub lifecycle_jti_cache_ttl: u64,
+    /// Lifetime in seconds for BFF `rl_session` cookies.
+    pub session_ttl_seconds: u64,
+}
+
+#[cfg(feature = "saas")]
+impl OidcConfig {
+    pub fn enabled(&self) -> bool {
+        !self.issuer.is_empty()
+    }
+}
+
 /// Application configuration
 #[derive(Debug, Clone)]
 pub struct Config {
@@ -13,17 +48,11 @@ pub struct Config {
     pub jitter_percent: u8,
     // SaaS mode configuration
     #[cfg(feature = "saas")]
-    pub saas_login_url: String,
-    #[cfg(feature = "saas")]
     pub host_url: String,
     #[cfg(feature = "saas")]
-    pub saas_jwt_secret: String,
+    pub webhook_secret: String,
     #[cfg(feature = "saas")]
-    pub saas_logout_url: String,
-    #[cfg(feature = "saas")]
-    pub saas_membership_url: String,
-    #[cfg(feature = "saas")]
-    pub saas_refresh_url: String,
+    pub oidc: OidcConfig,
     // JWT configuration (standalone mode)
     #[cfg(feature = "standalone")]
     pub jwt_secret: String,
@@ -40,16 +69,7 @@ pub struct Config {
 }
 
 impl Config {
-    /// Load configuration from environment variables
-    ///
-    /// # Errors
-    ///
-    /// Returns `AppError::Configuration` if:
-    /// - Required environment variables are missing (DATABASE_URL, APP_PORT)
-    /// - Values cannot be parsed (e.g., APP_PORT is not a valid number)
-    /// - Values fail validation (e.g., UPDATE_INTERVAL_DAYS < 1)
     pub fn from_env() -> Result<Self, AppError> {
-        // Load feature-specific .env file, falling back to .env
         #[cfg(feature = "saas")]
         let _ = dotenvy::from_filename(".env.saas").or_else(|_| dotenvy::dotenv());
         #[cfg(feature = "standalone")]
@@ -57,7 +77,6 @@ impl Config {
         #[cfg(not(any(feature = "saas", feature = "standalone")))]
         let _ = dotenvy::dotenv();
 
-        // Load required variables
         let database_url = std::env::var("DATABASE_URL").map_err(|_| {
             AppError::Configuration(
                 "Missing required environment variable: DATABASE_URL".to_string(),
@@ -73,7 +92,6 @@ impl Config {
             .parse::<u16>()
             .map_err(|e| AppError::Configuration(format!("Failed to parse APP_PORT: {}", e)))?;
 
-        // Load optional variables with defaults
         let update_interval_days = std::env::var("UPDATE_INTERVAL_DAYS")
             .ok()
             .map(|v| {
@@ -84,7 +102,6 @@ impl Config {
             .transpose()?
             .unwrap_or(30);
 
-        // Validate update_interval_days
         if update_interval_days < 1 {
             return Err(AppError::Configuration(
                 "Invalid value for UPDATE_INTERVAL_DAYS: must be at least 1".to_string(),
@@ -93,7 +110,6 @@ impl Config {
 
         let log_level = std::env::var("RUST_LOG").unwrap_or_else(|_| "info".to_string());
 
-        // Load scheduler configuration
         let update_interval_hours = std::env::var("UPDATE_INTERVAL_HOURS")
             .ok()
             .map(|v| {
@@ -124,7 +140,6 @@ impl Config {
             .transpose()?
             .unwrap_or(20);
 
-        // Validate scheduler configuration
         if update_interval_hours < 1 {
             return Err(AppError::Configuration(
                 "Invalid value for UPDATE_INTERVAL_HOURS: must be at least 1".to_string(),
@@ -145,29 +160,94 @@ impl Config {
 
         // SaaS mode configuration
         #[cfg(feature = "saas")]
-        let saas_login_url = std::env::var("SAAS_LOGIN_URL")
-            .unwrap_or_else(|_| "http://localhost:5173/login".to_string());
-        #[cfg(feature = "saas")]
         let host_url = std::env::var("HOST_URL")
             .unwrap_or_else(|_| format!("http://localhost:{app_port}"));
+
         #[cfg(feature = "saas")]
-        let saas_jwt_secret = std::env::var("SAAS_JWT_SECRET")
-            .unwrap_or_else(|_| {
-                tracing::warn!("SAAS_JWT_SECRET not set — JWT signatures will not be validated");
-                String::new()
+        let webhook_secret = std::env::var("WEBHOOK_SECRET").unwrap_or_else(|_| {
+            tracing::warn!("WEBHOOK_SECRET not set — webhook signatures will not be validated");
+            String::new()
+        });
+
+        #[cfg(feature = "saas")]
+        let oidc = {
+            let issuer = std::env::var("OIDC_ISSUER").unwrap_or_default();
+
+            let audience = std::env::var("OIDC_AUDIENCE")
+                .unwrap_or_else(|_| "https://links.a8n.run/api".to_string());
+
+            let jwks_url = std::env::var("OIDC_JWKS_URL").unwrap_or_else(|_| {
+                if issuer.is_empty() {
+                    String::new()
+                } else {
+                    format!("{}/.well-known/jwks.json", issuer.trim_end_matches('/'))
+                }
             });
 
-        #[cfg(feature = "saas")]
-        let saas_logout_url = std::env::var("SAAS_LOGOUT_URL")
-            .unwrap_or_else(|_| "http://localhost:18080/v1/auth/logout".to_string());
+            let jwks_cache_ttl = std::env::var("OIDC_JWKS_CACHE_TTL")
+                .ok()
+                .and_then(|v| v.parse::<u64>().ok())
+                .unwrap_or(300);
 
-        #[cfg(feature = "saas")]
-        let saas_membership_url = std::env::var("SAAS_MEMBERSHIP_URL")
-            .unwrap_or_else(|_| "http://localhost:5173/membership".to_string());
+            let client_id = std::env::var("OIDC_CLIENT_ID").unwrap_or_default();
 
-        #[cfg(feature = "saas")]
-        let saas_refresh_url = std::env::var("SAAS_REFRESH_URL")
-            .unwrap_or_else(|_| saas_logout_url.replace("/auth/logout", "/auth/refresh"));
+            let client_secret = std::env::var("OIDC_CLIENT_SECRET")
+                .or_else(|_| {
+                    std::fs::read_to_string("/run/secrets/oidc_client_secret")
+                        .map(|s| s.trim().to_string())
+                })
+                .unwrap_or_default();
+
+            let redirect_uri = std::env::var("OIDC_REDIRECT_URI")
+                .unwrap_or_else(|_| format!("{}/oauth2/callback", host_url.trim_end_matches('/')));
+
+            let post_logout_redirect_uri = std::env::var("OIDC_POST_LOGOUT_REDIRECT_URI")
+                .unwrap_or_else(|_| format!("{}/", host_url.trim_end_matches('/')));
+
+            let leeway_seconds = std::env::var("OIDC_LEEWAY_SECONDS")
+                .ok()
+                .and_then(|v| v.parse::<u64>().ok())
+                .unwrap_or(30);
+
+            let lifecycle_jti_cache_ttl = std::env::var("OIDC_LIFECYCLE_JTI_CACHE_TTL")
+                .ok()
+                .and_then(|v| v.parse::<u64>().ok())
+                .unwrap_or(300);
+
+            let session_ttl_seconds = std::env::var("OIDC_SESSION_TTL_SECONDS")
+                .ok()
+                .and_then(|v| v.parse::<u64>().ok())
+                .unwrap_or(1_209_600); // 14 days
+
+            // Fail fast: issuer set but credentials missing.
+            if !issuer.is_empty() && (client_id.is_empty() || client_secret.is_empty()) {
+                return Err(AppError::Configuration(
+                    "OIDC_ISSUER is set but OIDC_CLIENT_ID or OIDC_CLIENT_SECRET is missing"
+                        .to_string(),
+                ));
+            }
+
+            // JWKS URL must be HTTPS in production.
+            if !jwks_url.is_empty() && !jwks_url.starts_with("https://") && !jwks_url.starts_with("http://localhost") {
+                return Err(AppError::Configuration(
+                    "OIDC_JWKS_URL must use HTTPS".to_string(),
+                ));
+            }
+
+            OidcConfig {
+                issuer,
+                audience,
+                jwks_url,
+                jwks_cache_ttl,
+                client_id,
+                client_secret,
+                redirect_uri,
+                post_logout_redirect_uri,
+                leeway_seconds,
+                lifecycle_jti_cache_ttl,
+                session_ttl_seconds,
+            }
+        };
 
         // JWT configuration (standalone mode only)
         #[cfg(feature = "standalone")]
@@ -245,17 +325,11 @@ impl Config {
             batch_size,
             jitter_percent,
             #[cfg(feature = "saas")]
-            saas_login_url,
-            #[cfg(feature = "saas")]
             host_url,
             #[cfg(feature = "saas")]
-            saas_jwt_secret,
+            webhook_secret,
             #[cfg(feature = "saas")]
-            saas_logout_url,
-            #[cfg(feature = "saas")]
-            saas_membership_url,
-            #[cfg(feature = "saas")]
-            saas_refresh_url,
+            oidc,
             #[cfg(feature = "standalone")]
             jwt_secret,
             #[cfg(feature = "standalone")]
@@ -271,9 +345,7 @@ impl Config {
         })
     }
 
-    /// Get a masked version of the database URL for logging
     pub fn masked_database_url(&self) -> String {
-        // Mask the password in the database URL
         if let Some(at_pos) = self.database_url.find('@') {
             if let Some(colon_pos) = self.database_url[..at_pos].rfind(':') {
                 let mut masked = self.database_url.clone();
@@ -281,7 +353,6 @@ impl Config {
                 return masked;
             }
         }
-        // If we can't parse it, just mask the whole thing
         "postgresql://****:****@****/****".to_string()
     }
 }
@@ -290,7 +361,6 @@ impl Config {
 mod tests {
     use super::*;
 
-    /// Helper to create a test Config with sensible defaults
     fn test_config() -> Config {
         Config {
             database_url: "postgresql://user:password@localhost/rusty_links".to_string(),
@@ -301,17 +371,23 @@ mod tests {
             batch_size: 50,
             jitter_percent: 20,
             #[cfg(feature = "saas")]
-            saas_login_url: "http://localhost:5173/login".to_string(),
-            #[cfg(feature = "saas")]
             host_url: "http://localhost:4002".to_string(),
             #[cfg(feature = "saas")]
-            saas_jwt_secret: "test-secret".to_string(),
+            webhook_secret: "test-webhook-secret".to_string(),
             #[cfg(feature = "saas")]
-            saas_logout_url: "http://localhost:18080/v1/auth/logout".to_string(),
-            #[cfg(feature = "saas")]
-            saas_membership_url: "http://localhost:5173/membership".to_string(),
-            #[cfg(feature = "saas")]
-            saas_refresh_url: "http://localhost:18080/v1/auth/refresh".to_string(),
+            oidc: OidcConfig {
+                issuer: "http://localhost:18080".to_string(),
+                audience: "http://localhost:4002/api".to_string(),
+                jwks_url: "http://localhost:18080/.well-known/jwks.json".to_string(),
+                jwks_cache_ttl: 300,
+                client_id: "a8000000-0000-0000-0000-000000000005".to_string(),
+                client_secret: "test-secret".to_string(),
+                redirect_uri: "http://localhost:4002/oauth2/callback".to_string(),
+                post_logout_redirect_uri: "http://localhost:4002/".to_string(),
+                leeway_seconds: 30,
+                lifecycle_jti_cache_ttl: 300,
+                session_ttl_seconds: 1_209_600,
+            },
             #[cfg(feature = "standalone")]
             jwt_secret: "test_secret".to_string(),
             #[cfg(feature = "standalone")]
@@ -349,7 +425,6 @@ mod tests {
         let mut config = test_config();
         config.database_url = "postgresql://localhost/rusty_links".to_string();
         let masked = config.masked_database_url();
-        // Should return the fully masked fallback
         assert_eq!(masked, "postgresql://****:****@****/****");
     }
 
@@ -365,7 +440,6 @@ mod tests {
 
     #[test]
     fn test_config_validation_update_interval_days_minimum() {
-        // Verify that update_interval_days < 1 would be caught by validation
         let min_valid = 1u32;
         assert!(min_valid >= 1);
         let invalid = 0u32;
@@ -374,12 +448,10 @@ mod tests {
 
     #[test]
     fn test_config_validation_jitter_percent_range() {
-        // Valid jitter: 0-100
         let valid_zero: u8 = 0;
         let valid_max: u8 = 100;
         assert!(valid_zero <= 100);
         assert!(valid_max <= 100);
-        // 101 would exceed the max
         let invalid: u8 = 101;
         assert!(invalid > 100);
     }

@@ -1,15 +1,14 @@
-//! Authentication module for Rusty Links
+//! Authentication module for Rusty Links.
 //!
-//! This module provides authentication functionality using JWT tokens.
-//!
-//! # Modules
-//!
-//! - `jwt` - JWT token creation and validation (standalone mode)
-//! - `middleware` - Axum extractors for authentication
-//! - `saas_auth` - SaaS mode authentication via parent app cookies
+//! - `jwt`      — HS256 JWT creation/validation (standalone mode)
+//! - `middleware` — Axum extractors for authentication
+//! - `oidc_rs`  — OIDC Resource Server token verifier (saas mode)
+//! - `oidc_rp`  — OIDC Relying Party BFF handlers (saas mode)
 
 #[cfg(feature = "standalone")]
 pub mod jwt;
 pub mod middleware;
 #[cfg(feature = "saas")]
-pub mod saas_auth;
+pub mod oidc_rp;
+#[cfg(feature = "saas")]
+pub mod oidc_rs;
