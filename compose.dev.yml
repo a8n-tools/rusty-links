@@ -3,7 +3,7 @@ name: rusty-links-${USER}
 services:
   postgres:
     image: postgres:17-alpine
-    container_name: rusty-links-postgres-${USER}
+    container_name: dev-rusty-links-postgres-${USER}
     restart: unless-stopped
     environment:
       POSTGRES_USER: ${DB_USERNAME:-rustylinks}
@@ -24,7 +24,7 @@ services:
       context: .
       args:
         FEATURES: ${FEATURES:-standalone}
-    container_name: rusty-links-app-${USER}
+    container_name: dev-rusty-links-app-${USER}
     restart: unless-stopped
     volumes:
       - ./src:/app/src
