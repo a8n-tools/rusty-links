@@ -74,6 +74,8 @@ pub async fn database_health(
 pub struct HealthResponse {
     pub status: String,
     pub version: String,
+    pub git_hash: String,
+    pub build_date: String,
 }
 
 /// General health check endpoint
@@ -84,6 +86,8 @@ pub struct HealthResponse {
 pub async fn health() -> Json<HealthResponse> {
     Json(HealthResponse {
         status: "healthy".to_string(),
-        version: env!("CARGO_PKG_VERSION").to_string(),
+        version: crate::build_info::VERSION.to_string(),
+        git_hash: crate::build_info::GIT_HASH.to_string(),
+        build_date: crate::build_info::BUILD_DATE.to_string(),
     })
 }

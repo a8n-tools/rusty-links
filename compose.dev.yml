@@ -33,6 +33,8 @@ services:
       - ./Cargo.toml:/app/Cargo.toml
       - ./Cargo.lock:/app/Cargo.lock
       - ./Dioxus.toml:/app/Dioxus.toml
+      - ./build.rs:/app/build.rs
+      - ./.git:/app/.git:ro
       - ./static:/app/static
       - cargo_home:/root/.cargo
       - dx_out:/app/target/dx

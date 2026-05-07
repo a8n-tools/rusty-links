@@ -2,7 +2,7 @@
 FROM rust:1-slim-trixie
 
 RUN apt-get update && apt-get install --yes --no-install-recommends \
-    pkg-config libssl-dev curl nodejs npm \
+    pkg-config libssl-dev curl nodejs npm git \
     && rm -rf /var/lib/apt/lists/*
 
 # Install WASM target

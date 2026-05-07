@@ -43,7 +43,12 @@ async fn main() {
         .with(tracing_subscriber::fmt::layer())
         .init();
 
-    tracing::info!("Rusty Links (Fullstack) starting...");
+    tracing::info!(
+        version = rusty_links::build_info::VERSION,
+        git_hash = rusty_links::build_info::GIT_HASH,
+        build_date = rusty_links::build_info::BUILD_DATE,
+        "Rusty Links (Fullstack) starting..."
+    );
 
     let config = config::Config::from_env().expect("Failed to load configuration");
 
