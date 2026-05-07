@@ -4,6 +4,7 @@ use uuid::Uuid;
 
 #[cfg(feature = "standalone")]
 use crate::server_functions::auth::check_setup;
+use crate::ui::components::footer::Footer;
 use crate::ui::http;
 use crate::ui::pages::add_link::AddLinkPage;
 use crate::ui::pages::categories::CategoriesPage;
@@ -39,6 +40,7 @@ pub fn App() -> Element {
         Router::<Route> {
             config: || RouterConfig::default().on_update(|_| None)
         }
+        Footer {}
     }
 }
 

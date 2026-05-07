@@ -6,6 +6,16 @@ FROM rust:1.93-slim-trixie AS builder
 
 ARG BUILD_MODE
 
+# Build metadata — populated by CI (see .forgejo/workflows/build-oci-image.yml).
+# Read by build.rs and embedded into the binary so /api/health and the UI footer
+# can report the exact build. Defaults keep local docker builds working.
+ARG BUILD_VERSION=unknown
+ARG BUILD_GIT_HASH=unknown
+ARG BUILD_DATE=unknown
+ENV BUILD_VERSION=${BUILD_VERSION}
+ENV BUILD_GIT_HASH=${BUILD_GIT_HASH}
+ENV BUILD_DATE=${BUILD_DATE}
+
 WORKDIR /build
 
 # Install build dependencies
