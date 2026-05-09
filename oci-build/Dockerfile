@@ -21,6 +21,14 @@ RUN cargo binstall dioxus-cli --no-confirm
 # Install WASM target for client build
 RUN rustup target add wasm32-unknown-unknown
 
+# Cap concurrent rustc / build-script processes. The OCI workflow
+# builds the standalone and saas images in parallel on the same
+# runner, so each container should use nproc/2. Overridable via
+# `--build-arg CARGO_BUILD_JOBS=N` for ad-hoc local builds.
+ARG CARGO_BUILD_JOBS=2
+ENV CARGO_BUILD_JOBS=${CARGO_BUILD_JOBS}
+RUN echo "build parallelism: CARGO_BUILD_JOBS=${CARGO_BUILD_JOBS} (host nproc=$(nproc))"
+
 # Resolve build flags from BUILD_MODE
 RUN if [ "$BUILD_MODE" = "saas" ]; then \
       echo "--no-default-features --features saas,server" > /tmp/cargo-features; \

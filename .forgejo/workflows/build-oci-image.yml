@@ -79,8 +79,24 @@ jobs:
           let registry = $env.IMAGE_REGISTRY
           let tag_args = ($tags | each {|tag| [-t $"($registry)/($image):($tag)"]} | flatten)
           let cache_from = $"type=registry,ref=($registry)/($image):latest"
+          # CARGO_BUILD_JOBS caps cargo's parallel rustc + build-script
+          # workers. The matrix runs the standalone and saas images in
+          # parallel on the same runner, so each takes nproc/2 to leave
+          # the host fully used without oversubscription.
+          let jobs = ((sys cpu | length) / 2 | into int)
+          print $"CARGO_BUILD_JOBS=($jobs)"
           print $"Building and pushing ($image) with tags: ($tags_str)"
-          ^docker buildx build --push --build-arg $"BUILD_MODE=${{ matrix.build_mode }}" --cache-from $cache_from --cache-to type=inline ...$tag_args -f oci-build/Dockerfile .
+          (
+            ^docker buildx build
+              --push
+              --build-arg $"BUILD_MODE=${{ matrix.build_mode }}"
+              --build-arg $"CARGO_BUILD_JOBS=($jobs)"
+              --cache-from $cache_from
+              --cache-to type=inline
+              ...$tag_args
+              -f oci-build/Dockerfile
+              .
+          )
 
       - name: Print image URLs
         shell: nu {0}
