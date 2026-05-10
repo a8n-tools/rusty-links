@@ -1,25 +1,31 @@
 # Build mode: "standalone" (default) or "saas"
 ARG BUILD_MODE=standalone
 
-# Build stage (trixie for glibc 2.41, required by pre-built dioxus-cli binary)
-FROM rust:1.93-slim-trixie AS builder
+# Build stage. The base image bundles Rust 1.93 + WASM target + cargo-binstall
+# + dioxus-cli (pinned). See niceguyit/oci-images/rust-builder for details.
+FROM ghcr.io/niceguyit/rust-builder-dioxus:v1.0.0-dioxus0.7.7-rust1.93-trixie AS builder
 
 ARG BUILD_MODE
 
+# Build metadata — populated by CI (see .forgejo/workflows/build-oci-image.yml).
+# Read by build.rs and embedded into the binary so /api/health and the UI footer
+# can report the exact build. Defaults keep local docker builds working.
+ARG BUILD_VERSION=unknown
+ARG BUILD_GIT_HASH=unknown
+ARG BUILD_DATE=unknown
+ENV BUILD_VERSION=${BUILD_VERSION}
+ENV BUILD_GIT_HASH=${BUILD_GIT_HASH}
+ENV BUILD_DATE=${BUILD_DATE}
+
 WORKDIR /build
 
-# Install build dependencies
-RUN apt-get update && apt-get install --yes --no-install-recommends \
-    curl pkg-config libssl-dev \
-    && rm -rf /var/lib/apt/lists/*
-
-# Install cargo-binstall, then use it to fetch pre-built dioxus-cli (seconds instead of minutes)
-RUN curl --location --silent --show-error https://github.com/cargo-bins/cargo-binstall/releases/latest/download/cargo-binstall-x86_64-unknown-linux-gnu.tgz \
-    | tar --extract --gzip --directory /usr/local/cargo/bin
-RUN cargo binstall dioxus-cli --no-confirm
-
-# Install WASM target for client build
-RUN rustup target add wasm32-unknown-unknown
+# Cap concurrent rustc / build-script processes. The OCI workflow
+# builds the standalone and saas images in parallel on the same
+# runner, so each container should use nproc/2. Overridable via
+# `--build-arg CARGO_BUILD_JOBS=N` for ad-hoc local builds.
+ARG CARGO_BUILD_JOBS=2
+ENV CARGO_BUILD_JOBS=${CARGO_BUILD_JOBS}
+RUN echo "build parallelism: CARGO_BUILD_JOBS=${CARGO_BUILD_JOBS} (host nproc=$(nproc))"
 
 # Resolve build flags from BUILD_MODE
 RUN if [ "$BUILD_MODE" = "saas" ]; then \
@@ -33,7 +39,9 @@ RUN if [ "$BUILD_MODE" = "saas" ]; then \
 # --- Dependency caching (server-side only) ---
 COPY Cargo.toml Cargo.lock ./
 RUN mkdir src && echo "fn main() {}" > src/main.rs
-RUN cargo build --release $(cat /tmp/cargo-features) \
+RUN --mount=type=cache,target=/usr/local/cargo/registry \
+    --mount=type=cache,target=/usr/local/cargo/git \
+    cargo build --release $(cat /tmp/cargo-features) \
     && rm -rf src target/release/deps/rusty_links*
 
 # --- Full build with dioxus ---
@@ -41,7 +49,9 @@ RUN cargo build --release $(cat /tmp/cargo-features) \
 COPY . .
 
 # Build fullstack app (server binary + WASM client bundle)
-RUN dx build --release $(cat /tmp/dx-flags)
+RUN --mount=type=cache,target=/usr/local/cargo/registry \
+    --mount=type=cache,target=/usr/local/cargo/git \
+    dx build --release $(cat /tmp/dx-flags)
 
 # Create consistent output path regardless of build mode
 RUN if [ "$BUILD_MODE" = "saas" ]; then \

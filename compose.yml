@@ -3,7 +3,7 @@
 services:
   postgres:
     image: postgres:17-alpine
-    container_name: rusty-links-postgres-${USER}
+    container_name: dev-rusty-links-postgres-${USER}
     environment:
       POSTGRES_USER: ${DB_USERNAME:-rustylinks}
       POSTGRES_PASSWORD: ${DB_PASSWORD:-changeme_secure_password_here}
@@ -22,7 +22,7 @@ services:
     # Override build for development
     build:
       context: .
-    container_name: rusty-links-app-${USER}
+    container_name: dev-rusty-links-app-${USER}
     # Mount source code for hot reloading
     volumes:
       - ./src:/app/src
