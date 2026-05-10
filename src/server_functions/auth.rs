@@ -38,6 +38,10 @@ pub struct UserInfo {
     pub is_admin: bool,
     #[serde(default)]
     pub maintenance_mode: bool,
+    /// True when the current session was created via OIDC (SSO login).
+    /// False for password-auth sessions and API bearer-token access.
+    #[serde(default)]
+    pub auth_via_oidc: bool,
 }
 
 /// Authentication response with JWT tokens (standalone mode)

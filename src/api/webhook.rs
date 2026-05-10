@@ -46,7 +46,7 @@ pub async fn handle_maintenance_webhook(
     };
 
     // Compute HMAC-SHA256 of raw body
-    let Ok(mut mac) = HmacSha256::new_from_slice(state.config.saas_jwt_secret.as_bytes()) else {
+    let Ok(mut mac) = HmacSha256::new_from_slice(state.config.webhook_secret.as_bytes()) else {
         return (
             StatusCode::INTERNAL_SERVER_ERROR,
             Json(serde_json::json!({"error": "HMAC key error"})),

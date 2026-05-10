@@ -14,7 +14,13 @@
       "Bash(git:*)",
       "Bash(curl --silent --request POST http://localhost:8080/api/auth/register --header \"Content-Type: application/json\" --data '{\"\"\"\"username\"\"\"\":\"\"\"\"longle\"\"\"\",\"\"\"\"password\"\"\"\":\"\"\"\"Khonghople1@\"\"\"\"}')",
       "Bash(curl --silent --request POST http://localhost:8080/api/auth/register --header \"Content-Type: application/json\" --data '{\"\"\"\"username\"\"\"\":\"\"\"\"longle\"\"\"\",\"\"\"\"email\"\"\"\":\"\"\"\"longle@localhost\"\"\"\",\"\"\"\"password\"\"\"\":\"\"\"\"Khonghople1@\"\"\"\"}')",
-      "Bash(curl --silent --request POST http://localhost:8080/api/auth/register --header \"Content-Type: application/json\" --data '{\"\"\"\"username\"\"\"\":\"\"\"\"longle\"\"\"\",\"\"\"\"email\"\"\"\":\"\"\"\"longle@local.dev\"\"\"\",\"\"\"\"password\"\"\"\":\"\"\"\"Khonghople1@\"\"\"\"}')"
+      "Bash(curl --silent --request POST http://localhost:8080/api/auth/register --header \"Content-Type: application/json\" --data '{\"\"\"\"username\"\"\"\":\"\"\"\"longle\"\"\"\",\"\"\"\"email\"\"\"\":\"\"\"\"longle@local.dev\"\"\"\",\"\"\"\"password\"\"\"\":\"\"\"\"Khonghople1@\"\"\"\"}')",
+      "Read(//home/yousif/projects/saas/**)",
+      "Bash(docker compose *)",
+      "Read(//srv/d1/docker-daemon/volumes/**)",
+      "Bash(docker exec *)",
+      "Bash(awk 'NR>1 {print $2}')",
+      "Bash(read hex *)"
     ],
     "deny": [],
     "ask": []

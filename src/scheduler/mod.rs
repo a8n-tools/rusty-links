@@ -168,6 +168,36 @@ impl Scheduler {
                 tracing::warn!(error = %e, "Failed to clean up expired refresh tokens");
             }
         }
+
+        // OIDC session cleanup (saas mode only)
+        #[cfg(feature = "saas")]
+        {
+            match sqlx::query("DELETE FROM rp_sessions WHERE expires_at < NOW()")
+                .execute(&self.pool)
+                .await
+            {
+                Ok(r) if r.rows_affected() > 0 => {
+                    tracing::info!(count = r.rows_affected(), "Cleaned up expired rp_sessions");
+                }
+                Err(e) => {
+                    tracing::warn!(error = %e, "Failed to clean up rp_sessions");
+                }
+                _ => {}
+            }
+
+            match sqlx::query("DELETE FROM user_sessions WHERE expires_at < NOW()")
+                .execute(&self.pool)
+                .await
+            {
+                Ok(r) if r.rows_affected() > 0 => {
+                    tracing::info!(count = r.rows_affected(), "Cleaned up expired user_sessions");
+                }
+                Err(e) => {
+                    tracing::warn!(error = %e, "Failed to clean up user_sessions");
+                }
+                _ => {}
+            }
+        }
     }
 
     /// Refresh metadata for stale links

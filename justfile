@@ -29,6 +29,12 @@ css-watch: ensure-npm
 dev mode="standalone": (ensure-env mode) css-build
     {{ compose }}up --build --remove-orphans app
 
+# Start development server in Docker with SSO (saas mode, detached, Traefik-routed)
+dev-sso: (ensure-env "saas") css-build
+    FEATURES=saas {{ compose }}up --build --detach --remove-orphans app
+    @echo ""
+    @echo "  App: https://{{env('USER')}}-links.a8n.run"
+
 # Start local development server in Docker — no Traefik, localhost ports (mode: standalone or saas)
 dev-local mode="standalone": (ensure-env mode) css-build
     docker compose up --build --remove-orphans app
@@ -37,13 +43,23 @@ dev-local mode="standalone": (ensure-env mode) css-build
 db-up:
     {{ compose }}up --detach postgres
 
+# Tail app logs
+logs:
+    {{ compose }}logs --follow app
+
 # Stop PostgreSQL container
 db-down:
     {{ compose }}down postgres
 
-# Stop all containers
+# Stop all containers (also removes the dx_out volume to prevent stale-binary crash loops on next start)
 down:
-    {{ compose }}down
+    #!/usr/bin/env nu
+    docker compose -f compose.dev.yml down --remove-orphans
+    let vol = $"rusty-links-dx-($env.USER)"
+    let existing = (docker volume ls --quiet | lines)
+    if $vol in $existing {
+        docker volume rm $vol
+    }
 
 # Remove all containers, volumes, and networks
 clean:
@@ -53,7 +69,9 @@ clean:
     let suffix = $env.USER
     let vols = [
         $"rusty-links-cargo-($suffix)"
-        $"rusty-links-target-($suffix)"
+        $"rusty-links-dx-($suffix)"
+        $"rusty-links-target-server-($suffix)"
+        $"rusty-links-target-wasm-($suffix)"
         $"rusty-links-postgres-($suffix)"
     ]
     let existing = docker volume ls --quiet | lines
@@ -67,6 +85,16 @@ clean:
             docker volume rm $vol
         }
     }
+
+# Open a dev session via the /dev/seed-session endpoint (saas mode, debug builds only)
+seed-session:
+    @echo "Opening: https://{{env('USER')}}-links.a8n.run/dev/seed-session"
+    xdg-open "https://{{env('USER')}}-links.a8n.run/dev/seed-session"
+
+# Clear the dev session via the /dev/logout endpoint (saas mode, debug builds only)
+logout:
+    @echo "Opening: https://{{env('USER')}}-links.a8n.run/dev/logout"
+    xdg-open "https://{{env('USER')}}-links.a8n.run/dev/logout"
 
 # Run pending database migrations
 migrate-run:
@@ -151,7 +179,7 @@ create-release bump:
     # Pull latest changes
     git pull --rebase origin main
 
-	# Calculate next version
+    # Calculate next version
     let current = (open Cargo.toml | get package.version | split row "." | each { into int })
     let next = match $bump {
         "major" => [$"($current.0 + 1)" "0" "0"],

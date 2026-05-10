@@ -3,6 +3,8 @@
 //! This library provides the core functionality for the Rusty Links application.
 //! It's primarily used for integration testing.
 
+pub mod build_info;
+
 #[cfg(feature = "server")]
 pub mod api;
 #[cfg(feature = "server")]

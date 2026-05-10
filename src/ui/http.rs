@@ -619,6 +619,49 @@ pub async fn delete(url: &str) -> Result<(), String> {
     }
 }
 
+/// Poll `/api/auth/me` and return the current user when authenticated,
+/// `Ok(None)` when the server returns 401, or `Err(..)` on network
+/// or parse failures.  Does NOT invoke `redirect_if_unauthorized` so
+/// it is safe to call from background polling loops without triggering
+/// a spurious redirect on transient errors.
+#[cfg(target_arch = "wasm32")]
+pub async fn get_current_user(
+) -> Result<Option<crate::server_functions::auth::UserInfo>, String> {
+    use gloo_net::http::Request;
+
+    let mut request = Request::get("/api/auth/me");
+
+    #[cfg(feature = "standalone")]
+    if let Some(token) = crate::ui::auth_state::get_token() {
+        request = request.header("Authorization", &format!("Bearer {}", token));
+    }
+
+    #[cfg(not(feature = "standalone"))]
+    {
+        use web_sys::RequestCredentials;
+        request = request.credentials(RequestCredentials::Include);
+    }
+
+    let response = request
+        .send()
+        .await
+        .map_err(|e| format!("Network error: {e}"))?;
+
+    let status = response.status();
+    if status == 401 {
+        return Ok(None);
+    }
+    if !response.ok() {
+        return Err(format!("Status {status}"));
+    }
+
+    response
+        .json::<crate::server_functions::auth::UserInfo>()
+        .await
+        .map(Some)
+        .map_err(|e| format!("Parse error: {e}"))
+}
+
 /// HTTP response with status and body
 pub struct HttpResponse {
     pub status: u16,
