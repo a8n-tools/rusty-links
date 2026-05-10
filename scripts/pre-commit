@@ -1,27 +1,28 @@
 #!/usr/bin/env nu
 #
-# Pre-commit hook. Mirrors the checks run by .forgejo/workflows/check.yml so
-# CI failures get caught before push instead of after. Install with
+# Pre-commit hook. Runs the same checks as .forgejo/workflows/check.yml inside
+# the dev compose `app` service so the toolchain matches CI exactly and the
+# persistent cargo cache + target volumes are reused across runs. Install with
 # `just install-hooks`. Bypass for a single commit with `git commit --no-verify`.
 
 cd (^git rev-parse --show-toplevel | str trim)
 
 print "\n[pre-commit] cargo fmt --check"
-^cargo fmt --check
+^docker compose --file compose.dev.yml run --rm --no-deps app cargo fmt --check
 
 print "\n[pre-commit] cargo clippy --all-targets -- --deny warnings"
-^cargo clippy --all-targets -- --deny warnings
+^docker compose --file compose.dev.yml run --rm --no-deps app cargo clippy --all-targets -- --deny warnings
 
 print "\n[pre-commit] cargo check --features standalone,web --target wasm32-unknown-unknown"
-^cargo check --features standalone,web --target wasm32-unknown-unknown
+^docker compose --file compose.dev.yml run --rm --no-deps app cargo check --features standalone,web --target wasm32-unknown-unknown
 
 print "\n[pre-commit] cargo check --no-default-features --features saas,web --target wasm32-unknown-unknown"
-^cargo check --no-default-features --features saas,web --target wasm32-unknown-unknown
+^docker compose --file compose.dev.yml run --rm --no-deps app cargo check --no-default-features --features saas,web --target wasm32-unknown-unknown
 
 print "\n[pre-commit] cargo build --all-targets"
-^cargo build --all-targets
+^docker compose --file compose.dev.yml run --rm --no-deps app cargo build --all-targets
 
 print "\n[pre-commit] cargo test --lib"
-^cargo test --lib
+^docker compose --file compose.dev.yml run --rm app cargo test --lib
 
 print "\n[pre-commit] all checks passed"

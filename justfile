@@ -4,9 +4,9 @@
 default:
     @just --list
 
-# Symlink scripts/pre-commit into .git/hooks. Run once per fresh clone so
-# `git commit` runs the same checks as .forgejo/workflows/check.yml. Bypass
-# the hook for a single commit with `git commit --no-verify`.
+# Run once per fresh clone so `git commit` runs the same checks as .forgejo/workflows/check.yml.
+# Bypass the hook for a single commit with `git commit --no-verify`.
+# Symlink scripts/pre-commit into .git/hooks.
 install-hooks:
     #!/usr/bin/env nu
     let hook = ".git/hooks/pre-commit"
