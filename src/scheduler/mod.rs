@@ -190,7 +190,10 @@ impl Scheduler {
                 .await
             {
                 Ok(r) if r.rows_affected() > 0 => {
-                    tracing::info!(count = r.rows_affected(), "Cleaned up expired user_sessions");
+                    tracing::info!(
+                        count = r.rows_affected(),
+                        "Cleaned up expired user_sessions"
+                    );
                 }
                 Err(e) => {
                     tracing::warn!(error = %e, "Failed to clean up user_sessions");

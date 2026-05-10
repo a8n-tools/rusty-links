@@ -279,20 +279,13 @@ mod tests {
     #[test]
     fn test_parse_repo_strips_git_suffix() {
         let result = parse_repo_from_url("https://github.com/owner/my-repo.git");
-        assert_eq!(
-            result,
-            Some(("owner".to_string(), "my-repo".to_string()))
-        );
+        assert_eq!(result, Some(("owner".to_string(), "my-repo".to_string())));
     }
 
     #[test]
     fn test_parse_repo_with_deep_path() {
-        let result =
-            parse_repo_from_url("https://github.com/owner/repo/blob/main/src/lib.rs");
-        assert_eq!(
-            result,
-            Some(("owner".to_string(), "repo".to_string()))
-        );
+        let result = parse_repo_from_url("https://github.com/owner/repo/blob/main/src/lib.rs");
+        assert_eq!(result, Some(("owner".to_string(), "repo".to_string())));
     }
 
     #[test]

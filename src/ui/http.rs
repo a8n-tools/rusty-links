@@ -625,8 +625,7 @@ pub async fn delete(url: &str) -> Result<(), String> {
 /// it is safe to call from background polling loops without triggering
 /// a spurious redirect on transient errors.
 #[cfg(target_arch = "wasm32")]
-pub async fn get_current_user(
-) -> Result<Option<crate::server_functions::auth::UserInfo>, String> {
+pub async fn get_current_user() -> Result<Option<crate::server_functions::auth::UserInfo>, String> {
     use gloo_net::http::Request;
 
     let mut request = Request::get("/api/auth/me");
