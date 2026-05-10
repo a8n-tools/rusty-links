@@ -44,10 +44,8 @@ pub fn HighContrastToggle(#[props(default = false)] mobile: bool) -> Element {
 
                 // Persist to localStorage
                 if let Ok(Some(storage)) = window.local_storage() {
-                    let _ = storage.set_item(
-                        "high-contrast",
-                        if new_state { "true" } else { "false" },
-                    );
+                    let _ =
+                        storage.set_item("high-contrast", if new_state { "true" } else { "false" });
                 }
             }
         }

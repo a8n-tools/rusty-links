@@ -34,7 +34,10 @@ pub async fn handle_maintenance_webhook(
     body: Bytes,
 ) -> impl IntoResponse {
     // Read signature header
-    let signature = match headers.get("X-Webhook-Signature").and_then(|v| v.to_str().ok()) {
+    let signature = match headers
+        .get("X-Webhook-Signature")
+        .and_then(|v| v.to_str().ok())
+    {
         Some(sig) => sig,
         None => {
             return (

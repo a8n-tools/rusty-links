@@ -20,11 +20,7 @@ fn client_ip(parts: &Parts) -> String {
         }
     }
 
-    if let Some(real_ip) = parts
-        .headers
-        .get("X-Real-Ip")
-        .and_then(|v| v.to_str().ok())
-    {
+    if let Some(real_ip) = parts.headers.get("X-Real-Ip").and_then(|v| v.to_str().ok()) {
         let trimmed = real_ip.trim();
         if !trimmed.is_empty() {
             return trimmed.to_string();
@@ -145,7 +141,10 @@ where
             .user_id
             .parse()
             .map_err(|_| AppError::SessionExpired)?;
-        Ok(AuthenticatedUser { user_id, auth_via_oidc: false })
+        Ok(AuthenticatedUser {
+            user_id,
+            auth_via_oidc: false,
+        })
     }
 }
 
@@ -191,7 +190,10 @@ mod tests {
     #[test]
     fn test_authenticated_user_uuid() {
         let user_id = Uuid::new_v4();
-        let auth = AuthenticatedUser { user_id, auth_via_oidc: false };
+        let auth = AuthenticatedUser {
+            user_id,
+            auth_via_oidc: false,
+        };
         assert_eq!(auth.user_id, user_id);
         assert!(!auth.auth_via_oidc);
     }
@@ -230,7 +232,12 @@ where
         let jar = CookieJar::from_headers(&parts.headers);
         if let Some(cookie) = jar.get("rl_session") {
             match crate::auth::oidc_rp::get_user_from_session(&pool, cookie.value()).await {
-                Ok(Some((user_id, auth_via_oidc))) => return Ok(AuthenticatedUser { user_id, auth_via_oidc }),
+                Ok(Some((user_id, auth_via_oidc))) => {
+                    return Ok(AuthenticatedUser {
+                        user_id,
+                        auth_via_oidc,
+                    })
+                }
                 Ok(None) => {
                     tracing::info!(ip = %ip, path = %path, "Session cookie invalid or expired");
                     return Err(AppError::SessionExpired);
@@ -265,7 +272,10 @@ where
                     AppError::SessionExpired
                 })?;
 
-                let saas_uuid: Uuid = at_claims.sub.parse().map_err(|_| AppError::SessionExpired)?;
+                let saas_uuid: Uuid = at_claims
+                    .sub
+                    .parse()
+                    .map_err(|_| AppError::SessionExpired)?;
 
                 let row = sqlx::query_as::<_, (Uuid, Option<chrono::DateTime<chrono::Utc>>)>(
                     "SELECT id, suspended_at FROM users WHERE saas_user_id = $1",
@@ -281,7 +291,10 @@ where
                     return Err(AppError::Forbidden("Account suspended".into()));
                 }
 
-                return Ok(AuthenticatedUser { user_id: user_id_found, auth_via_oidc: false });
+                return Ok(AuthenticatedUser {
+                    user_id: user_id_found,
+                    auth_via_oidc: false,
+                });
             }
         }
 

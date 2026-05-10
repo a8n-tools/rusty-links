@@ -160,8 +160,8 @@ impl Config {
 
         // SaaS mode configuration
         #[cfg(feature = "saas")]
-        let host_url = std::env::var("HOST_URL")
-            .unwrap_or_else(|_| format!("http://localhost:{app_port}"));
+        let host_url =
+            std::env::var("HOST_URL").unwrap_or_else(|_| format!("http://localhost:{app_port}"));
 
         #[cfg(feature = "saas")]
         let webhook_secret = std::env::var("WEBHOOK_SECRET").unwrap_or_else(|_| {
@@ -228,7 +228,10 @@ impl Config {
             }
 
             // JWKS URL must be HTTPS in production.
-            if !jwks_url.is_empty() && !jwks_url.starts_with("https://") && !jwks_url.starts_with("http://localhost") {
+            if !jwks_url.is_empty()
+                && !jwks_url.starts_with("https://")
+                && !jwks_url.starts_with("http://localhost")
+            {
                 return Err(AppError::Configuration(
                     "OIDC_JWKS_URL must use HTTPS".to_string(),
                 ));
@@ -431,8 +434,7 @@ mod tests {
     #[test]
     fn test_masked_database_url_complex_password() {
         let mut config = test_config();
-        config.database_url =
-            "postgresql://admin:p@ss:w0rd!#@db.example.com:5432/mydb".to_string();
+        config.database_url = "postgresql://admin:p@ss:w0rd!#@db.example.com:5432/mydb".to_string();
         let masked = config.masked_database_url();
         assert!(!masked.contains("p@ss:w0rd!#"));
         assert!(masked.contains("****"));

@@ -1447,7 +1447,11 @@ mod tests {
     fn test_domain_extraction() {
         let cases = vec![
             ("https://example.com/page", "example.com", Some("/page")),
-            ("https://docs.rs/tokio/latest", "docs.rs", Some("/tokio/latest")),
+            (
+                "https://docs.rs/tokio/latest",
+                "docs.rs",
+                Some("/tokio/latest"),
+            ),
             ("https://example.com/", "example.com", None),
             ("https://example.com", "example.com", None),
         ];

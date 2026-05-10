@@ -236,21 +236,24 @@ pub async fn callback(
         .ok_or_else(|| AppError::Internal("Missing 'state' parameter in callback".into()))?;
 
     // Look up and validate the PKCE session.
-    let rp_session = sqlx::query_as::<_, (Uuid, String, String, Option<String>, chrono::DateTime<Utc>)>(
-        "SELECT id, nonce, code_verifier, return_to, expires_at
+    let rp_session =
+        sqlx::query_as::<_, (Uuid, String, String, Option<String>, chrono::DateTime<Utc>)>(
+            "SELECT id, nonce, code_verifier, return_to, expires_at
          FROM rp_sessions WHERE state = $1",
-    )
-    .bind(state_param)
-    .fetch_optional(&state.pool)
-    .await?
-    .map(|(id, nonce, code_verifier, return_to, expires_at)| RpSessionRow {
-        id,
-        nonce,
-        code_verifier,
-        return_to,
-        expires_at,
-    })
-    .ok_or_else(|| AppError::Internal("Unknown or expired state parameter".into()))?;
+        )
+        .bind(state_param)
+        .fetch_optional(&state.pool)
+        .await?
+        .map(
+            |(id, nonce, code_verifier, return_to, expires_at)| RpSessionRow {
+                id,
+                nonce,
+                code_verifier,
+                return_to,
+                expires_at,
+            },
+        )
+        .ok_or_else(|| AppError::Internal("Unknown or expired state parameter".into()))?;
 
     if rp_session.expires_at < Utc::now() {
         sqlx::query("DELETE FROM rp_sessions WHERE id = $1")
@@ -268,10 +271,7 @@ pub async fn callback(
     let code_verifier = rp_session.code_verifier.clone();
 
     // Exchange the authorization code for tokens.
-    let token_url = format!(
-        "{}/oauth2/token",
-        state.config.issuer.trim_end_matches('/')
-    );
+    let token_url = format!("{}/oauth2/token", state.config.issuer.trim_end_matches('/'));
     let resp = state
         .verifier
         .http
@@ -465,7 +465,11 @@ pub async fn lifecycle_event(
         return Ok(StatusCode::NOT_FOUND.into_response());
     }
 
-    let claims = match state.verifier.verify_lifecycle_token(&form.lifecycle_event).await {
+    let claims = match state
+        .verifier
+        .verify_lifecycle_token(&form.lifecycle_event)
+        .await
+    {
         Ok(c) => c,
         Err(e) => {
             tracing::warn!(error = %e, "Lifecycle event token rejected");
@@ -557,7 +561,17 @@ pub async fn get_user_from_session(
 ) -> Result<Option<(Uuid, bool)>, AppError> {
     let token_hash = hash_session_token(session_token);
 
-    let row = sqlx::query_as::<_, (Uuid, bool, i32, chrono::DateTime<Utc>, i32, Option<chrono::DateTime<Utc>>)>(
+    let row = sqlx::query_as::<
+        _,
+        (
+            Uuid,
+            bool,
+            i32,
+            chrono::DateTime<Utc>,
+            i32,
+            Option<chrono::DateTime<Utc>>,
+        ),
+    >(
         "SELECT us.user_id, us.auth_via_oidc, us.session_version, us.expires_at,
                 u.session_version AS user_session_version, u.suspended_at
          FROM user_sessions us
@@ -567,14 +581,23 @@ pub async fn get_user_from_session(
     .bind(token_hash.as_slice())
     .fetch_optional(pool)
     .await?
-    .map(|(user_id, auth_via_oidc, session_version, expires_at, user_session_version, suspended_at)| UserSessionRow {
-        user_id,
-        auth_via_oidc,
-        session_version,
-        expires_at,
-        user_session_version,
-        suspended_at,
-    });
+    .map(
+        |(
+            user_id,
+            auth_via_oidc,
+            session_version,
+            expires_at,
+            user_session_version,
+            suspended_at,
+        )| UserSessionRow {
+            user_id,
+            auth_via_oidc,
+            session_version,
+            expires_at,
+            user_session_version,
+            suspended_at,
+        },
+    );
 
     match row {
         None => Ok(None),
@@ -646,11 +669,10 @@ pub async fn dev_seed_session(
     .execute(&state.pool)
     .await?;
 
-    let user_id: Uuid =
-        sqlx::query_scalar("SELECT id FROM users WHERE email = $1")
-            .bind(DEV_EMAIL)
-            .fetch_one(&state.pool)
-            .await?;
+    let user_id: Uuid = sqlx::query_scalar("SELECT id FROM users WHERE email = $1")
+        .bind(DEV_EMAIL)
+        .fetch_one(&state.pool)
+        .await?;
 
     let session_version: i32 =
         sqlx::query_scalar("SELECT session_version FROM users WHERE id = $1")
@@ -684,11 +706,7 @@ pub async fn dev_seed_session(
 
 // ── Router ────────────────────────────────────────────────────────────────────
 
-pub fn create_router(
-    pool: PgPool,
-    config: OidcConfig,
-    verifier: Arc<OidcVerifier>,
-) -> Router {
+pub fn create_router(pool: PgPool, config: OidcConfig, verifier: Arc<OidcVerifier>) -> Router {
     let jti_cache = Arc::new(
         moka::future::Cache::builder()
             .time_to_live(Duration::from_secs(config.lifecycle_jti_cache_ttl))

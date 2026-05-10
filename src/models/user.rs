@@ -430,22 +430,14 @@ mod tests {
 
     #[test]
     fn test_is_legacy_hash_bcrypt() {
-        assert!(is_legacy_hash(
-            "$2b$12$LJ3m4ys4PxPT6m3n5p6lqOJ"
-        ));
-        assert!(is_legacy_hash(
-            "$2a$12$LJ3m4ys4PxPT6m3n5p6lqOJ"
-        ));
-        assert!(is_legacy_hash(
-            "$2y$12$LJ3m4ys4PxPT6m3n5p6lqOJ"
-        ));
+        assert!(is_legacy_hash("$2b$12$LJ3m4ys4PxPT6m3n5p6lqOJ"));
+        assert!(is_legacy_hash("$2a$12$LJ3m4ys4PxPT6m3n5p6lqOJ"));
+        assert!(is_legacy_hash("$2y$12$LJ3m4ys4PxPT6m3n5p6lqOJ"));
     }
 
     #[test]
     fn test_is_legacy_hash_not_bcrypt() {
-        assert!(!is_legacy_hash(
-            "$argon2id$v=19$m=65536,t=3,p=4$salt$hash"
-        ));
+        assert!(!is_legacy_hash("$argon2id$v=19$m=65536,t=3,p=4$salt$hash"));
         assert!(!is_legacy_hash("not_a_hash"));
         assert!(!is_legacy_hash(""));
     }

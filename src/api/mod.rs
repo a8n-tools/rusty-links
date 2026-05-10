@@ -89,9 +89,7 @@ pub fn create_router(
     };
 
     #[cfg(all(feature = "saas", not(feature = "standalone")))]
-    let auth_router = {
-        Router::new().route("/me", get(auth::me_handler))
-    };
+    let auth_router = { Router::new().route("/me", get(auth::me_handler)) };
 
     #[cfg(not(any(feature = "standalone", feature = "saas")))]
     let auth_router = Router::new();
@@ -120,7 +118,10 @@ pub fn create_router(
     #[cfg(feature = "saas")]
     {
         router = router
-            .route("/webhooks/maintenance", post(webhook::handle_maintenance_webhook))
+            .route(
+                "/webhooks/maintenance",
+                post(webhook::handle_maintenance_webhook),
+            )
             .layer(axum::Extension(oidc_verifier));
     }
 

@@ -114,8 +114,7 @@ pub fn Setup() -> Element {
 
         if !password_val.chars().any(|c| !c.is_alphanumeric()) {
             error.set(Some(
-                "Password must contain at least one special character (e.g., !@#$%^&*)"
-                    .to_string(),
+                "Password must contain at least one special character (e.g., !@#$%^&*)".to_string(),
             ));
             return;
         }

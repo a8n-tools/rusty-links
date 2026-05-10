@@ -139,14 +139,15 @@ impl OidcVerifier {
 
     /// Validate an `at+jwt` Bearer token.  Returns claims on success.
     pub async fn verify(&self, token: &str) -> Result<AtClaims, AppError> {
-        let header = jsonwebtoken::decode_header(token)
-            .map_err(|e| AppError::SessionExpired)?;
+        let header = jsonwebtoken::decode_header(token).map_err(|e| AppError::SessionExpired)?;
 
         if header.typ.as_deref() != Some("at+jwt") {
             return Err(AppError::SessionExpired);
         }
 
-        let kid = header.kid.as_deref()
+        let kid = header
+            .kid
+            .as_deref()
             .ok_or(AppError::SessionExpired)?
             .to_string();
 
@@ -164,49 +165,60 @@ impl OidcVerifier {
         token: &str,
         expected_nonce: &str,
     ) -> Result<IdTokenClaims, AppError> {
-        let header = jsonwebtoken::decode_header(token)
-            .map_err(|_| AppError::SessionExpired)?;
+        let header = jsonwebtoken::decode_header(token).map_err(|_| AppError::SessionExpired)?;
 
         if header.typ.as_deref() != Some("JWT") {
             return Err(AppError::Internal("ID token typ must be JWT".into()));
         }
 
-        let kid = header.kid.as_deref()
+        let kid = header
+            .kid
+            .as_deref()
             .ok_or_else(|| AppError::Internal("ID token missing kid".into()))?
             .to_string();
 
-        let claims = self.try_validate_id_token(token, &kid, expected_nonce).await;
+        let claims = self
+            .try_validate_id_token(token, &kid, expected_nonce)
+            .await;
         if let Err(AppError::SessionExpired) = &claims {
             self.refresh_jwks().await?;
-            return self.try_validate_id_token(token, &kid, expected_nonce).await;
+            return self
+                .try_validate_id_token(token, &kid, expected_nonce)
+                .await;
         }
         claims
     }
 
     /// Validate an OIDC Back-Channel Logout token (`typ: logout+jwt`).
     pub async fn verify_logout_token(&self, token: &str) -> Result<LogoutTokenClaims, AppError> {
-        let header = jsonwebtoken::decode_header(token)
-            .map_err(|_| AppError::SessionExpired)?;
+        let header = jsonwebtoken::decode_header(token).map_err(|_| AppError::SessionExpired)?;
 
         if header.typ.as_deref() != Some("logout+jwt") {
-            return Err(AppError::Internal("logout token typ must be logout+jwt".into()));
+            return Err(AppError::Internal(
+                "logout token typ must be logout+jwt".into(),
+            ));
         }
 
-        let kid = header.kid.as_deref()
+        let kid = header
+            .kid
+            .as_deref()
             .ok_or_else(|| AppError::Internal("logout token missing kid".into()))?
             .to_string();
 
-        let claims = self.try_validate_event_token::<LogoutTokenClaims>(token, &kid).await;
+        let claims = self
+            .try_validate_event_token::<LogoutTokenClaims>(token, &kid)
+            .await;
         if let Err(AppError::SessionExpired) = &claims {
             self.refresh_jwks().await?;
-            return self.try_validate_event_token::<LogoutTokenClaims>(token, &kid).await;
+            return self
+                .try_validate_event_token::<LogoutTokenClaims>(token, &kid)
+                .await;
         }
         let claims = claims?;
 
         self.validate_event_iat(claims.iat)?;
 
-        const BACKCHANNEL_LOGOUT_EVENT: &str =
-            "http://schemas.openid.net/event/backchannel-logout";
+        const BACKCHANNEL_LOGOUT_EVENT: &str = "http://schemas.openid.net/event/backchannel-logout";
         if claims.events.get(BACKCHANNEL_LOGOUT_EVENT).is_none() {
             return Err(AppError::Internal(
                 "logout token missing backchannel-logout event".into(),
@@ -221,8 +233,7 @@ impl OidcVerifier {
         &self,
         token: &str,
     ) -> Result<LifecycleTokenClaims, AppError> {
-        let header = jsonwebtoken::decode_header(token)
-            .map_err(|_| AppError::SessionExpired)?;
+        let header = jsonwebtoken::decode_header(token).map_err(|_| AppError::SessionExpired)?;
 
         if header.typ.as_deref() != Some("lifecycle-event+jwt") {
             return Err(AppError::Internal(
@@ -230,14 +241,20 @@ impl OidcVerifier {
             ));
         }
 
-        let kid = header.kid.as_deref()
+        let kid = header
+            .kid
+            .as_deref()
             .ok_or_else(|| AppError::Internal("lifecycle token missing kid".into()))?
             .to_string();
 
-        let claims = self.try_validate_event_token::<LifecycleTokenClaims>(token, &kid).await;
+        let claims = self
+            .try_validate_event_token::<LifecycleTokenClaims>(token, &kid)
+            .await;
         if let Err(AppError::SessionExpired) = &claims {
             self.refresh_jwks().await?;
-            return self.try_validate_event_token::<LifecycleTokenClaims>(token, &kid).await;
+            return self
+                .try_validate_event_token::<LifecycleTokenClaims>(token, &kid)
+                .await;
         }
         let claims = claims?;
 
@@ -252,11 +269,11 @@ impl OidcVerifier {
         self.ensure_cache().await?;
 
         let guard = self.cache.read().await;
-        let cache = guard.as_ref()
+        let cache = guard
+            .as_ref()
             .ok_or_else(|| AppError::Internal("JWKS cache empty after refresh".into()))?;
 
-        let decoding_key = cache.keys.get(kid)
-            .ok_or(AppError::SessionExpired)?;
+        let decoding_key = cache.keys.get(kid).ok_or(AppError::SessionExpired)?;
 
         let issuer = &self.config.issuer;
         let mut validation = Validation::new(Algorithm::EdDSA);
@@ -279,11 +296,11 @@ impl OidcVerifier {
         self.ensure_cache().await?;
 
         let guard = self.cache.read().await;
-        let cache = guard.as_ref()
+        let cache = guard
+            .as_ref()
             .ok_or_else(|| AppError::Internal("JWKS cache empty after refresh".into()))?;
 
-        let decoding_key = cache.keys.get(kid)
-            .ok_or(AppError::SessionExpired)?;
+        let decoding_key = cache.keys.get(kid).ok_or(AppError::SessionExpired)?;
 
         let issuer = &self.config.issuer;
         let mut validation = Validation::new(Algorithm::EdDSA);
@@ -312,11 +329,11 @@ impl OidcVerifier {
         self.ensure_cache().await?;
 
         let guard = self.cache.read().await;
-        let cache = guard.as_ref()
+        let cache = guard
+            .as_ref()
             .ok_or_else(|| AppError::Internal("JWKS cache empty after refresh".into()))?;
 
-        let decoding_key = cache.keys.get(kid)
-            .ok_or(AppError::SessionExpired)?;
+        let decoding_key = cache.keys.get(kid).ok_or(AppError::SessionExpired)?;
 
         let issuer = &self.config.issuer;
         let mut validation = Validation::new(Algorithm::EdDSA);
@@ -335,7 +352,9 @@ impl OidcVerifier {
         const EVENT_TOKEN_WINDOW_SECS: i64 = 120;
         let age = Utc::now().timestamp() - iat;
         if age < -30 {
-            return Err(AppError::Internal("event token issued in the future".into()));
+            return Err(AppError::Internal(
+                "event token issued in the future".into(),
+            ));
         }
         if age > EVENT_TOKEN_WINDOW_SECS {
             return Err(AppError::Internal("event token too old".into()));
@@ -349,8 +368,7 @@ impl OidcVerifier {
             match guard.as_ref() {
                 None => true,
                 Some(c) => {
-                    (Utc::now() - c.refreshed_at).num_seconds()
-                        > self.config.jwks_cache_ttl as i64
+                    (Utc::now() - c.refreshed_at).num_seconds() > self.config.jwks_cache_ttl as i64
                 }
             }
         };
@@ -363,7 +381,9 @@ impl OidcVerifier {
     async fn refresh_jwks(&self) -> Result<(), AppError> {
         let jwks_url = &self.config.jwks_url;
         if jwks_url.is_empty() {
-            return Err(AppError::Configuration("OIDC_JWKS_URL not configured".into()));
+            return Err(AppError::Configuration(
+                "OIDC_JWKS_URL not configured".into(),
+            ));
         }
 
         let resp: JwksResponse = self

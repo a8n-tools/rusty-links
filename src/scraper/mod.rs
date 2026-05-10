@@ -457,10 +457,7 @@ mod tests {
             </html>
         "#;
         let document = Html::parse_document(html);
-        assert_eq!(
-            extract_description(&document),
-            Some("OG desc".to_string())
-        );
+        assert_eq!(extract_description(&document), Some("OG desc".to_string()));
     }
 
     #[test]
@@ -529,7 +526,8 @@ mod tests {
     #[test]
     fn test_extract_favicon_apple_touch_icon() {
         let base = Url::parse("https://example.com/").unwrap();
-        let html = r#"<html><head><link rel="apple-touch-icon" href="/apple-icon.png" /></head></html>"#;
+        let html =
+            r#"<html><head><link rel="apple-touch-icon" href="/apple-icon.png" /></head></html>"#;
         let document = Html::parse_document(html);
         let candidates = extract_favicon(&document, &base);
         assert!(candidates.contains(&"https://example.com/apple-icon.png".to_string()));

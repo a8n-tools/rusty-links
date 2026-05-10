@@ -1,11 +1,11 @@
 use rusty_links::ui::app::App;
 
 #[cfg(feature = "server")]
+use axum::response::IntoResponse;
+#[cfg(feature = "server")]
 use dioxus::prelude::*;
 #[cfg(feature = "server")]
 use dioxus::server::{DioxusRouterExt, ServeConfig};
-#[cfg(feature = "server")]
-use axum::response::IntoResponse;
 #[cfg(feature = "server")]
 use rusty_links::{api, config, error::AppError, scheduler};
 #[cfg(feature = "server")]
@@ -88,8 +88,8 @@ async fn main() {
             std::env::var("SETUP_DEFAULT_ADMIN_EMAIL"),
             std::env::var("SETUP_DEFAULT_ADMIN_PASSWORD"),
         ) {
-            let name = std::env::var("SETUP_DEFAULT_ADMIN_NAME")
-                .unwrap_or_else(|_| "Admin".to_string());
+            let name =
+                std::env::var("SETUP_DEFAULT_ADMIN_NAME").unwrap_or_else(|_| "Admin".to_string());
 
             match rusty_links::models::check_user_exists(&pool).await {
                 Ok(false) => {
@@ -142,9 +142,9 @@ async fn main() {
 
     // Build OIDC verifier (saas mode only)
     #[cfg(feature = "saas")]
-    let oidc_verifier = std::sync::Arc::new(
-        rusty_links::auth::oidc_rs::OidcVerifier::new(config.oidc.clone())
-    );
+    let oidc_verifier = std::sync::Arc::new(rusty_links::auth::oidc_rs::OidcVerifier::new(
+        config.oidc.clone(),
+    ));
 
     let api_router = api::create_router(
         pool.clone(),
@@ -159,11 +159,7 @@ async fn main() {
     );
 
     let ip = dioxus::cli_config::server_ip()
-        .or_else(|| {
-            std::env::var("HOST_IP")
-                .ok()
-                .and_then(|v| v.parse().ok())
-        })
+        .or_else(|| std::env::var("HOST_IP").ok().and_then(|v| v.parse().ok()))
         .unwrap_or(std::net::IpAddr::V4(std::net::Ipv4Addr::UNSPECIFIED));
     let port = dioxus::cli_config::server_port().unwrap_or(config.app_port);
     let address = std::net::SocketAddr::new(ip, port);
@@ -181,8 +177,7 @@ async fn main() {
     let dioxus_router = {
         let pool = pool.clone();
         dioxus_router.layer(axum::middleware::from_fn(
-            move |req: axum::http::Request<axum::body::Body>,
-                  next: axum::middleware::Next| {
+            move |req: axum::http::Request<axum::body::Body>, next: axum::middleware::Next| {
                 let pool = pool.clone();
                 async move {
                     let path = req.uri().path();
@@ -194,7 +189,12 @@ async fn main() {
 
                     let is_protected = matches!(
                         path,
-                        "/" | "/links" | "/categories" | "/tags" | "/languages" | "/licenses" | "/login"
+                        "/" | "/links"
+                            | "/categories"
+                            | "/tags"
+                            | "/languages"
+                            | "/licenses"
+                            | "/login"
                     ) || path.starts_with("/links/");
 
                     if !is_protected {
@@ -221,10 +221,8 @@ async fn main() {
 
                     // Unauthenticated — redirect to the BFF login handler.
                     let return_to = if path == "/login" { "/links" } else { path };
-                    let redirect_url = format!(
-                        "/oauth2/login?return_to={}",
-                        urlencoding::encode(return_to)
-                    );
+                    let redirect_url =
+                        format!("/oauth2/login?return_to={}", urlencoding::encode(return_to));
                     axum::response::Redirect::to(&redirect_url).into_response()
                 }
             },
@@ -247,19 +245,18 @@ async fn main() {
         router = router.merge(oidc_router);
     }
 
-    let mut router = router
-        .route_service(
-            "/tailwind.css",
-            tower::util::service_fn(|_req: axum::http::Request<axum::body::Body>| async {
-                let css = include_str!("../assets/tailwind.css");
-                Ok::<_, std::convert::Infallible>(
-                    axum::response::Response::builder()
-                        .header("Content-Type", "text/css")
-                        .body(axum::body::Body::from(css.to_string()))
-                        .unwrap(),
-                )
-            }),
-        );
+    let mut router = router.route_service(
+        "/tailwind.css",
+        tower::util::service_fn(|_req: axum::http::Request<axum::body::Body>| async {
+            let css = include_str!("../assets/tailwind.css");
+            Ok::<_, std::convert::Infallible>(
+                axum::response::Response::builder()
+                    .header("Content-Type", "text/css")
+                    .body(axum::body::Body::from(css.to_string()))
+                    .unwrap(),
+            )
+        }),
+    );
 
     // Landing page — served before the Dioxus router so it takes precedence at "/"
     #[cfg(feature = "standalone")]
@@ -285,8 +282,7 @@ async fn main() {
         let mm_msg = maintenance_message.clone();
         let pool_mm = pool.clone();
         router = router.layer(axum::middleware::from_fn(
-            move |req: axum::http::Request<axum::body::Body>,
-                  next: axum::middleware::Next| {
+            move |req: axum::http::Request<axum::body::Body>, next: axum::middleware::Next| {
                 let mm = mm.clone();
                 let mm_msg = mm_msg.clone();
                 let pool_mm = pool_mm.clone();
@@ -308,11 +304,12 @@ async fn main() {
                     // Check if the session belongs to an admin — admins bypass maintenance.
                     let jar = axum_extra::extract::CookieJar::from_headers(req.headers());
                     if let Some(cookie) = jar.get("rl_session") {
-                        if let Ok(Some((user_id, _))) = rusty_links::auth::oidc_rp::get_user_from_session(
-                            &pool_mm,
-                            cookie.value(),
-                        )
-                        .await
+                        if let Ok(Some((user_id, _))) =
+                            rusty_links::auth::oidc_rp::get_user_from_session(
+                                &pool_mm,
+                                cookie.value(),
+                            )
+                            .await
                         {
                             let is_admin = sqlx::query_as::<_, (bool,)>(
                                 "SELECT is_admin FROM users WHERE id = $1",
@@ -330,11 +327,7 @@ async fn main() {
                         }
                     }
 
-                    let message = mm_msg
-                        .read()
-                        .unwrap()
-                        .clone()
-                        .unwrap_or_default();
+                    let message = mm_msg.read().unwrap().clone().unwrap_or_default();
 
                     if path.starts_with("/api/") {
                         return (

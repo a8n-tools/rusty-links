@@ -78,8 +78,7 @@ mod tests {
 
     #[test]
     fn test_decode_jwt_wrong_secret() {
-        let token =
-            create_jwt("test@test.com", Uuid::new_v4(), false, TEST_SECRET, 1).unwrap();
+        let token = create_jwt("test@test.com", Uuid::new_v4(), false, TEST_SECRET, 1).unwrap();
         let result = decode_jwt(&token, "wrong-secret");
         assert!(result.is_err());
     }
@@ -94,8 +93,7 @@ mod tests {
     fn test_jwt_expiration() {
         // Create token that expires in the past (0 hours = already expired, but
         // chrono Duration::hours(0) means now, so use the token normally)
-        let token =
-            create_jwt("test@test.com", Uuid::new_v4(), false, TEST_SECRET, 1).unwrap();
+        let token = create_jwt("test@test.com", Uuid::new_v4(), false, TEST_SECRET, 1).unwrap();
         // Token with 1 hour expiry should be valid
         assert!(decode_jwt(&token, TEST_SECRET).is_ok());
     }
@@ -119,7 +117,9 @@ mod tests {
         let token = generate_refresh_token();
         // base64url chars: A-Z, a-z, 0-9, -, _
         assert!(
-            token.chars().all(|c| c.is_ascii_alphanumeric() || c == '-' || c == '_'),
+            token
+                .chars()
+                .all(|c| c.is_ascii_alphanumeric() || c == '-' || c == '_'),
             "Token should be valid base64url: {}",
             token
         );

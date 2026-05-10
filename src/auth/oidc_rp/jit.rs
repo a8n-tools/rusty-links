@@ -103,7 +103,11 @@ pub async fn load_or_provision(
             saas_user_id = %saas_uuid,
             "Linked existing standalone account to SSO identity"
         );
-        return Ok(ProvisionedUser { id, is_admin, session_version });
+        return Ok(ProvisionedUser {
+            id,
+            is_admin,
+            session_version,
+        });
     }
 
     let name = id_claims
@@ -126,9 +130,7 @@ pub async fn load_or_provision(
     .map_err(|e: sqlx::Error| {
         let msg = e.to_string();
         if msg.contains("unique") || msg.contains("duplicate") {
-            AppError::Internal(
-                "User provisioning conflict; please try logging in again.".into(),
-            )
+            AppError::Internal("User provisioning conflict; please try logging in again.".into())
         } else {
             AppError::Database(e)
         }
