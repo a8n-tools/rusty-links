@@ -357,8 +357,10 @@ pub async fn callback(
     let cookie = build_session_cookie(&session_token, state.config.session_ttl_seconds, secure);
     let jar = jar.add(cookie);
 
+    // Same-origin only. `s.starts_with('/')` alone would accept protocol-relative
+    // paths like `//evil.com/x`, which browsers resolve as `https://evil.com/x`.
     let destination = return_to
-        .filter(|s: &String| s.starts_with('/'))
+        .filter(|s: &String| s.starts_with('/') && !s.starts_with("//"))
         .unwrap_or_else(|| "/links".to_string());
 
     Ok((jar, Redirect::to(&destination)).into_response())
