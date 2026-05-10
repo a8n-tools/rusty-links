@@ -4,6 +4,19 @@
 default:
     @just --list
 
+# Symlink scripts/pre-commit into .git/hooks. Run once per fresh clone so
+# `git commit` runs the same checks as .forgejo/workflows/check.yml. Bypass
+# the hook for a single commit with `git commit --no-verify`.
+install-hooks:
+    #!/usr/bin/env nu
+    let hook = ".git/hooks/pre-commit"
+    let target = "../../scripts/pre-commit"
+    if ($hook | path exists) {
+        rm $hook
+    }
+    ^ln --symbolic $target $hook
+    print $"Linked ($hook) -> ($target)"
+
 # Use the per-user dev compose file
 compose := "docker compose -f compose.dev.yml "
 
