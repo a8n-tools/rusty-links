@@ -1,18 +1,16 @@
 # Development Dockerfile - mirrors oci-build/Dockerfile approach with debug builds
-FROM rust:1-slim-trixie
+FROM ghcr.io/niceguyit/rust-builder-glibc:v1.0.0-rust1.94-trixie
 
 RUN apt-get update && apt-get install --yes --no-install-recommends \
     pkg-config libssl-dev curl nodejs npm git \
     && rm -rf /var/lib/apt/lists/*
 
 # Install WASM target
-RUN rustup target add wasm32-unknown-unknown
 
 # Install dioxus-cli via pre-built binary (seconds, not minutes)
 RUN curl --location --silent --show-error \
     https://github.com/cargo-bins/cargo-binstall/releases/latest/download/cargo-binstall-x86_64-unknown-linux-gnu.tgz \
     | tar --extract --gzip --directory /usr/local/cargo/bin
-RUN cargo binstall dioxus-cli --no-confirm
 
 RUN mkdir -p /app /app/dist /data /config
 
