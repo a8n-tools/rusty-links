@@ -41,7 +41,9 @@ RUN if [ "$BUILD_MODE" = "saas" ]; then \
 # --- Dependency caching (server-side only) ---
 COPY Cargo.toml Cargo.lock ./
 RUN mkdir src && echo "fn main() {}" > src/main.rs
-RUN cargo build --release $(cat /tmp/cargo-features) \
+RUN --mount=type=cache,target=/usr/local/cargo/registry \
+    --mount=type=cache,target=/usr/local/cargo/git \
+    cargo build --release $(cat /tmp/cargo-features) \
     && rm -rf src target/release/deps/rusty_links*
 
 # --- Full build with dioxus ---
@@ -49,7 +51,9 @@ RUN cargo build --release $(cat /tmp/cargo-features) \
 COPY . .
 
 # Build fullstack app (server binary + WASM client bundle)
-RUN dx build --release $(cat /tmp/dx-flags)
+RUN --mount=type=cache,target=/usr/local/cargo/registry \
+    --mount=type=cache,target=/usr/local/cargo/git \
+    dx build --release $(cat /tmp/dx-flags)
 
 # Create consistent output path regardless of build mode
 RUN if [ "$BUILD_MODE" = "saas" ]; then \
