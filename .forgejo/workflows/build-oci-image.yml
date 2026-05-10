@@ -51,6 +51,10 @@ jobs:
           docker version
           docker buildx version
 
+      - name: Set up buildx builder
+        run: |
+          docker buildx create --name container-builder --driver docker-container --use
+
       - name: Set environment variables
         shell: nu {0}
         run: |
@@ -78,7 +82,9 @@ jobs:
           let image = "${{ matrix.image }}"
           let registry = $env.IMAGE_REGISTRY
           let tag_args = ($tags | each {|tag| [-t $"($registry)/($image):($tag)"]} | flatten)
-          let cache_from = $"type=registry,ref=($registry)/($image):latest"
+          let cache_ref = $"($registry)/($image):buildcache"
+          let cache_from = $"type=registry,ref=($cache_ref)"
+          let cache_to = $"type=registry,ref=($cache_ref),mode=max,ignore-error=true"
           # CARGO_BUILD_JOBS caps cargo's parallel rustc + build-script
           # workers. The matrix runs the standalone and saas images in
           # parallel on the same runner, so each takes nproc/2 to leave
@@ -92,7 +98,7 @@ jobs:
               --build-arg $"BUILD_MODE=${{ matrix.build_mode }}"
               --build-arg $"CARGO_BUILD_JOBS=($jobs)"
               --cache-from $cache_from
-              --cache-to type=inline
+              --cache-to $cache_to
               ...$tag_args
               -f oci-build/Dockerfile
               .
