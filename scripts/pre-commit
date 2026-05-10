@@ -1,24 +1,27 @@
-#!/usr/bin/env bash
+#!/usr/bin/env nu
 #
 # Pre-commit hook. Mirrors the checks run by .forgejo/workflows/check.yml so
 # CI failures get caught before push instead of after. Install with
 # `just install-hooks`. Bypass for a single commit with `git commit --no-verify`.
 
-set -euo pipefail
+cd (^git rev-parse --show-toplevel | str trim)
 
-repo_root="$(git rev-parse --show-toplevel)"
-cd "$repo_root"
+print "\n[pre-commit] cargo fmt --check"
+^cargo fmt --check
 
-run() {
-    printf '\n[pre-commit] %s\n' "$*"
-    "$@"
-}
+print "\n[pre-commit] cargo clippy --all-targets -- --deny warnings"
+^cargo clippy --all-targets -- --deny warnings
 
-run cargo fmt --check
-run cargo clippy --all-targets -- -D warnings
-run cargo check --features standalone,web --target wasm32-unknown-unknown
-run cargo check --no-default-features --features saas,web --target wasm32-unknown-unknown
-run cargo build --all-targets
-run cargo test --lib
+print "\n[pre-commit] cargo check --features standalone,web --target wasm32-unknown-unknown"
+^cargo check --features standalone,web --target wasm32-unknown-unknown
 
-printf '\n[pre-commit] all checks passed\n'
+print "\n[pre-commit] cargo check --no-default-features --features saas,web --target wasm32-unknown-unknown"
+^cargo check --no-default-features --features saas,web --target wasm32-unknown-unknown
+
+print "\n[pre-commit] cargo build --all-targets"
+^cargo build --all-targets
+
+print "\n[pre-commit] cargo test --lib"
+^cargo test --lib
+
+print "\n[pre-commit] all checks passed"
