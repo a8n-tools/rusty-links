@@ -4,16 +4,78 @@ use dioxus::prelude::*;
 // email/password form is replaced with a redirect to /oauth2/login.
 // Both cfg variants render the same spinner on SSR so hydration stays
 // consistent; only the WASM build triggers the actual browser redirect.
+//
+// Exception: when the OIDC callback rejects the user (e.g. the email-verified
+// gate fails) it redirects here as `/login?error=...&error_description=...`.
+// Auto-redirecting to /oauth2/login in that case restarts the authorize
+// round-trip against the IdP's still-valid SSO session, which immediately
+// fails again and produces an infinite redirect loop (LINKS-11). So when an
+// `error` query parameter is present we render a terminal page showing the
+// reason and require an explicit user action to retry.
 
 #[cfg(feature = "saas")]
 #[component]
 pub fn Login() -> Element {
+    // `Some(message)` once we detect an `error` query param; rendering the
+    // terminal error page instead of redirecting. Stays `None` (spinner) on
+    // SSR and the initial WASM render so hydration reconciles identically.
+    // `mut` is only exercised by the wasm-only effect below.
+    #[cfg_attr(not(target_arch = "wasm32"), allow(unused_mut))]
+    let mut denied = use_signal(|| Option::<String>::None);
+
     #[cfg(target_arch = "wasm32")]
     use_effect(move || {
-        if let Some(window) = web_sys::window() {
-            let _ = window.location().set_href("/oauth2/login");
+        let search = web_sys::window()
+            .and_then(|w| w.location().search().ok())
+            .unwrap_or_default();
+        let params = web_sys::UrlSearchParams::new_with_str(&search).ok();
+
+        match params.as_ref().and_then(|p| p.get("error")) {
+            // Rejected login: surface the reason, do NOT redirect (breaks the loop).
+            Some(_) => {
+                let message = params
+                    .as_ref()
+                    .and_then(|p| p.get("error_description"))
+                    .filter(|s| !s.is_empty())
+                    .unwrap_or_else(|| {
+                        "Your login was denied. Please contact support if this continues."
+                            .to_string()
+                    });
+                denied.set(Some(message));
+            }
+            // Normal entry to /login: start the OIDC flow.
+            None => {
+                if let Some(window) = web_sys::window() {
+                    let _ = window.location().set_href("/oauth2/login");
+                }
+            }
         }
     });
+
+    if let Some(message) = denied() {
+        return rsx! {
+            div { class: "auth-container",
+                div { class: "auth-card",
+                    h1 { class: "auth-title", "Login failed" }
+                    p { class: "auth-subtitle", "We couldn't sign you in." }
+                    p { class: "message message-error", "{message}" }
+                    div { class: "form",
+                        a {
+                            class: "btn btn-primary btn-full",
+                            href: "/oauth2/login",
+                            "Try again"
+                        }
+                        a {
+                            class: "btn btn-secondary btn-full",
+                            href: "/oauth2/logout",
+                            "Sign in with a different account"
+                        }
+                    }
+                }
+            }
+        };
+    }
+
     rsx! {
         div { class: "auth-container",
             div { class: "loading-container",
