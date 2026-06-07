@@ -2,7 +2,6 @@ use dioxus::prelude::*;
 use dioxus_router::RouterConfig;
 use uuid::Uuid;
 
-#[cfg(feature = "standalone")]
 use crate::server_functions::auth::check_setup;
 use crate::ui::components::footer::Footer;
 use crate::ui::http;
@@ -13,12 +12,52 @@ use crate::ui::pages::languages::LanguagesPage;
 use crate::ui::pages::licenses::LicensesPage;
 use crate::ui::pages::links_list::LinksListPage;
 use crate::ui::pages::login::Login;
-#[cfg(feature = "standalone")]
 use crate::ui::pages::setup::Setup;
 use crate::ui::pages::tags::TagsPage;
 
+/// Deployment mode resolved at runtime from `/api/health`.
+///
+/// A single binary serves both modes; the WASM client fetches the mode once
+/// and provides it via context so login/setup/logout render correctly.
+#[derive(Clone, Copy, PartialEq, Debug)]
+pub enum AuthMode {
+    /// Local JWT auth (email/password). `OIDC_ISSUER` unset on the server.
+    Standalone,
+    /// OIDC login against a8n Tools. `OIDC_ISSUER` set on the server.
+    Hosted,
+}
+
+/// Shape of `/api/health` that the client cares about.
+#[derive(serde::Deserialize)]
+struct ModeProbe {
+    auth_mode: String,
+}
+
+/// Fetch the deployment mode from the public `/api/health` endpoint.
+///
+/// Returns `None` while unresolved (e.g. on SSR, where the relative URL has no
+/// host) so callers render a spinner until the client resolves it.
+pub async fn fetch_auth_mode() -> Option<AuthMode> {
+    match http::get::<ModeProbe>("/api/health").await {
+        Ok(probe) if probe.auth_mode == "hosted" => Some(AuthMode::Hosted),
+        Ok(_) => Some(AuthMode::Standalone),
+        Err(_) => None,
+    }
+}
+
+/// Context type holding the auth-mode resource. `read().flatten()` yields
+/// `None` while pending and `Some(mode)` once resolved.
+pub type AuthModeResource = Resource<Option<AuthMode>>;
+
 #[component]
 pub fn App() -> Element {
+    // Resolve the deployment mode once and share it with all routes via
+    // context. The resource is `None` until it resolves on the client; child
+    // components render a spinner while pending (hydration-safe: SSR and the
+    // initial WASM render both see `None`).
+    let auth_mode = use_resource(fetch_auth_mode);
+    use_context_provider(|| auth_mode);
+
     rsx! {
         // The Stylesheet component inserts a style link into the head of the document
         Stylesheet {
@@ -32,10 +71,10 @@ pub fn App() -> Element {
         document::Script {
             src: "/high-contrast-init.js",
         }
-        if cfg!(feature = "saas") {
-            document::Script {
-                src: "/saas-refresh.js",
-            }
+        // Always included; saas-refresh.js fetches /api/health and no-ops in
+        // standalone mode, so it is safe in both deployment modes.
+        document::Script {
+            src: "/saas-refresh.js",
         }
         Router::<Route> {
             config: || RouterConfig::default().on_update(|_| None)
@@ -48,7 +87,6 @@ pub fn App() -> Element {
 pub enum Route {
     #[route("/")]
     Home {},
-    #[cfg(feature = "standalone")]
     #[route("/setup")]
     SetupPage {},
     #[route("/login")]
@@ -78,7 +116,6 @@ pub enum Route {
 /// Distinguishes "token is bad" from "couldn't verify" so transient backend
 /// failures (DB not ready, proxy 502, network blip) don't masquerade as
 /// authentication failures and boot the user back to /login.
-#[cfg(feature = "standalone")]
 #[derive(Clone, Copy, PartialEq)]
 enum AuthVerdict {
     /// Server confirmed the token is valid (2xx).
@@ -90,7 +127,6 @@ enum AuthVerdict {
     Unknown,
 }
 
-#[cfg(feature = "standalone")]
 async fn verify_auth() -> AuthVerdict {
     match http::get_response("/api/auth/me").await {
         Ok(resp) if resp.is_success() => AuthVerdict::Valid,
@@ -101,75 +137,38 @@ async fn verify_auth() -> AuthVerdict {
 
 #[component]
 fn ProtectedLayout() -> Element {
-    // The auth guard must only run on the WASM target where localStorage exists.
-    //
-    // On the server (SSR), is_authenticated() always returns false (non-WASM stub),
-    // so the original #[cfg(feature = "standalone")] gate caused the server to emit
-    // a redirect to /login on every protected-route render. The browser would briefly
-    // show the login page before WASM hydrated and corrected the auth state.
-    //
-    // Returning a *different* element on the server (e.g. a spinner) instead also
-    // fails: Dioxus hydrates by reconciling the server-rendered DOM with the WASM
-    // virtual DOM. A spinner vs full Outlet content is a structural mismatch that
-    // causes "wasm-bindgen: imported JS function ... threw an error" during DOM
-    // reconciliation.
-    //
-    // Correct fix: gate the guard to wasm32 only. The server always renders Outlet
-    // (consistent with what WASM will render for an authenticated user), so hydration
-    // is a no-op reconciliation. The guard then runs synchronously on the client
-    // where localStorage is available, redirecting unauthenticated users without
-    // any DOM mismatch.
-    #[cfg(all(feature = "standalone", target_arch = "wasm32"))]
-    if !crate::ui::auth_state::is_authenticated() {
-        spawn(async move {
-            let path = web_sys::window()
-                .and_then(|w| w.location().pathname().ok())
-                .unwrap_or_default();
-            let _ = crate::server_functions::auth::log_unauthenticated_access(path).await;
-            navigator().push(Route::LoginPage {});
-        });
-        return rsx! {};
-    }
+    // Auth mode from context (`None` while the /api/health probe is pending).
+    // Unused on SSR (the guards below are wasm32-only); the underscore silences
+    // the unused-variable warning there.
+    let _mode_res = use_context::<AuthModeResource>();
 
-    // Defense-in-depth: verify the token with the server on mount. A stale
-    // token (e.g. left over from a previous session with a different
-    // JWT_SECRET) will pass the localStorage presence check above but fail
-    // here, so we clear it and send the user to /login.
+    // Defense-in-depth: verify the session with the server on mount. Works in
+    // both modes — /api/auth/me succeeds for a valid JWT (standalone) or
+    // session cookie / bearer token (hosted), and returns 401/403 otherwise. A
+    // stale token (e.g. left over from a previous session with a different
+    // JWT_SECRET) fails here so we clear it and send the user to /login.
     //
     // IMPORTANT: only redirect on `Invalid` (401/403). Transient backend
     // failures (DB warming, proxy 502, network blip) return `Unknown` — we
-    // keep the token and render Outlet so the child page can show its own
-    // error instead of silently bouncing the user to /login.
+    // keep rendering Outlet so the child page can show its own error instead
+    // of silently bouncing the user to /login.
     //
-    // `use_resource` must be called on both SSR and WASM to keep hook counts
-    // consistent for hydration. On SSR the resource is never consulted (the
-    // check below is wasm32-only) so the server still renders Outlet. The
-    // `_auth_check` underscore prefix silences the unused-variable warning
-    // on the non-wasm32 SSR build.
-    #[cfg(feature = "standalone")]
+    // `use_resource` runs on both SSR and WASM to keep hook counts consistent
+    // for hydration. On SSR the verdict is never consulted (the checks below
+    // are wasm32-only) so the server always renders Outlet — a no-op
+    // reconciliation against the authenticated WASM render.
     let _auth_check = use_resource(verify_auth);
 
-    #[cfg(all(feature = "standalone", target_arch = "wasm32"))]
-    {
-        // Read once into an owned Copy value so the signal guard is dropped
-        // before the early return.
-        let verdict: Option<AuthVerdict> = *_auth_check.read();
-        if verdict == Some(AuthVerdict::Invalid) {
-            crate::ui::auth_state::clear_auth();
-            navigator().push(Route::LoginPage {});
-            return rsx! {};
-        }
-    }
-
-    // For saas (SSO) sessions: poll /api/auth/me every 60 seconds so an idle
-    // tab is redirected to /login promptly after the user signs out of the IdP.
-    // The back-channel logout increments session_version server-side; the next
-    // poll returns 401 and we redirect here without waiting for a user action.
-    //
-    // Gated to wasm32 only — the effect body spawns a browser timer that is
-    // meaningless on the server and unavailable outside a WASM context.
-    #[cfg(all(feature = "saas", target_arch = "wasm32"))]
+    // Hosted mode: poll /api/auth/me every 60 seconds so an idle tab is
+    // redirected to /login promptly after the user signs out of the IdP. The
+    // back-channel logout increments session_version server-side; the next
+    // poll returns 401 and we redirect without waiting for a user action.
+    // No-op in standalone mode. Gated to wasm32 (browser timer only).
+    #[cfg(target_arch = "wasm32")]
     use_effect(move || {
+        if _mode_res().flatten() != Some(AuthMode::Hosted) {
+            return;
+        }
         spawn(async move {
             loop {
                 gloo_timers::future::sleep(std::time::Duration::from_secs(60)).await;
@@ -182,12 +181,40 @@ fn ProtectedLayout() -> Element {
         });
     });
 
+    // Client-side guards. SSR (non-wasm32) always renders Outlet, so hydration
+    // is a no-op reconciliation; the guards run on the client after mount.
+    #[cfg(target_arch = "wasm32")]
+    {
+        let mode = _mode_res().flatten();
+
+        // Standalone: redirect immediately when no token is stored, before the
+        // server round-trip resolves. Hosted sessions are cookie-based and
+        // carry no localStorage token, so this check is standalone-only.
+        if mode == Some(AuthMode::Standalone) && !crate::ui::auth_state::is_authenticated() {
+            spawn(async move {
+                let path = web_sys::window()
+                    .and_then(|w| w.location().pathname().ok())
+                    .unwrap_or_default();
+                let _ = crate::server_functions::auth::log_unauthenticated_access(path).await;
+                navigator().push(Route::LoginPage {});
+            });
+            return rsx! {};
+        }
+
+        // Both modes: the server explicitly rejected the session (401/403).
+        let verdict: Option<AuthVerdict> = *_auth_check.read();
+        if verdict == Some(AuthVerdict::Invalid) {
+            crate::ui::auth_state::clear_auth();
+            navigator().push(Route::LoginPage {});
+            return rsx! {};
+        }
+    }
+
     rsx! { Outlet::<Route> {} }
 }
 
 #[derive(Clone, Debug, PartialEq)]
 enum HomeState {
-    #[cfg(feature = "standalone")]
     NeedsSetup,
     NeedsLogin,
     LoggedIn,
@@ -195,19 +222,18 @@ enum HomeState {
 }
 
 async fn check_home_state() -> HomeState {
-    // First check if setup is needed (standalone only — saas auth is handled externally)
-    #[cfg(feature = "standalone")]
-    {
+    let hosted = matches!(fetch_auth_mode().await, Some(AuthMode::Hosted));
+
+    // Standalone only: check whether first-run setup is needed and short-circuit
+    // to login when no token is stored. In hosted mode auth is handled by the
+    // OIDC provider, so neither check applies.
+    if !hosted {
         match check_setup().await {
             Ok(true) => return HomeState::NeedsSetup,
             Ok(false) => {}
             Err(e) => return HomeState::Error(e.to_string()),
         }
-    }
 
-    // In standalone mode, skip the network call if no token is stored
-    #[cfg(feature = "standalone")]
-    {
         if !crate::ui::auth_state::is_authenticated() {
             return HomeState::NeedsLogin;
         }
@@ -228,7 +254,6 @@ fn Home() -> Element {
     let result = home_state.read().clone();
 
     match result {
-        #[cfg(feature = "standalone")]
         Some(HomeState::NeedsSetup) => {
             nav.push(Route::SetupPage {});
             rsx! {
@@ -285,7 +310,6 @@ fn Home() -> Element {
     }
 }
 
-#[cfg(feature = "standalone")]
 #[component]
 fn SetupPage() -> Element {
     rsx! { Setup {} }

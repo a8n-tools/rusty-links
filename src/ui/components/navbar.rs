@@ -1,3 +1,4 @@
+use crate::ui::app::AuthModeResource;
 use crate::ui::components::high_contrast_toggle::HighContrastToggle;
 use crate::ui::http;
 use dioxus::prelude::*;
@@ -8,6 +9,9 @@ pub fn Navbar() -> Element {
     let mut menu_open = use_signal(|| false);
     let mut show_maintenance = use_signal(|| false);
     let mut auth_via_oidc = use_signal(|| false);
+    // Used only in the wasm logout handler; underscore silences the
+    // unused-variable warning on the server (SSR) build.
+    let _mode_res = use_context::<AuthModeResource>();
     let nav = navigator();
 
     // Fetch user info to check admin status, maintenance mode, and auth method.
@@ -20,16 +24,16 @@ pub fn Navbar() -> Element {
     });
 
     let on_logout = move |_| {
-        // In saas mode all browser sessions are cookie-based OIDC sessions.
-        // Always redirect to the RP-initiated logout endpoint so both the local
+        // In hosted mode all browser sessions are cookie-based OIDC sessions.
+        // Redirect to the RP-initiated logout endpoint so both the local
         // session and the IdP session are terminated, regardless of whether the
         // auth_via_oidc signal has resolved yet.
-        #[cfg(all(feature = "saas", target_arch = "wasm32"))]
-        {
+        #[cfg(target_arch = "wasm32")]
+        if _mode_res().flatten() == Some(crate::ui::app::AuthMode::Hosted) {
             if let Some(window) = web_sys::window() {
                 let _ = window.location().set_href("/oauth2/logout");
-                return;
             }
+            return;
         }
 
         // For password-auth sessions (standalone) or non-WASM builds: call the

@@ -22,18 +22,11 @@ on:
 
 jobs:
   build-and-push:
-    name: Build and push ${{ matrix.image }}
+    name: Build and push rusty-links
     runs-on: ${{ vars.RUNS_ON_OPENSUSE_BASE_LATEST }}
     permissions:
       contents: read
       packages: write
-    strategy:
-      matrix:
-        include:
-          - image: rusty-links
-            build_mode: standalone
-          - image: rusty-links-saas
-            build_mode: saas
     env:
       IMAGE_REGISTRY: ""
       REGISTRY_PROVIDER: ${{ vars.A8N_TOOLS_PRIVATE_PACKAGE_OWNER }}
@@ -91,24 +84,16 @@ jobs:
         run: |
           let tags_str = "${{ steps.get-tags.outputs.tags }}"
           let tags = ($tags_str | split row ",")
-          let image = "${{ matrix.image }}"
+          let image = "rusty-links"
           let registry = $env.IMAGE_REGISTRY
           let tag_args = ($tags | each {|tag| [-t $"($registry)/($image):($tag)"]} | flatten)
           let cache_ref = $"($registry)/($image):buildcache"
           let cache_from = $"type=registry,ref=($cache_ref)"
           let cache_to = $"type=registry,ref=($cache_ref),mode=max,ignore-error=true"
-          # CARGO_BUILD_JOBS caps cargo's parallel rustc + build-script
-          # workers. The matrix runs the standalone and saas images in
-          # parallel on the same runner, so each takes nproc/2 to leave
-          # the host fully used without oversubscription.
-          let jobs = ((sys cpu | length) / 2 | into int)
-          print $"CARGO_BUILD_JOBS=($jobs)"
           print $"Building and pushing ($image) with tags: ($tags_str)"
           (
             ^docker buildx build
               --push
-              --build-arg $"BUILD_MODE=${{ matrix.build_mode }}"
-              --build-arg $"CARGO_BUILD_JOBS=($jobs)"
               --cache-from $cache_from
               --cache-to $cache_to
               ...$tag_args
@@ -121,7 +106,7 @@ jobs:
         run: |
           let tags_str = "${{ steps.get-tags.outputs.tags }}"
           let tags = ($tags_str | split row ",")
-          let image = "${{ matrix.image }}"
+          let image = "rusty-links"
           let registry = $env.IMAGE_REGISTRY
           for tag in $tags {
             print $"Image pushed to ($registry)/($image):($tag)"

@@ -1,11 +1,6 @@
-# Build mode: "standalone" (default) or "saas"
-ARG BUILD_MODE=standalone
-
 # Build stage. The base image bundles Rust 1.93 + WASM target + cargo-binstall
 # + dioxus-cli (pinned). See niceguyit/oci-images/rust-builder for details.
 FROM ghcr.io/niceguyit/rust-builder-glibc:v1.0.1-rust1.94-trixie AS builder
-
-ARG BUILD_MODE
 
 # Build metadata — populated by CI (see .forgejo/workflows/build-oci-image.yml).
 # Read by build.rs and embedded into the binary so /api/health and the UI footer
@@ -19,51 +14,30 @@ ENV BUILD_DATE=${BUILD_DATE}
 
 WORKDIR /build
 
-# Cap concurrent rustc / build-script processes. The OCI workflow
-# builds the standalone and saas images in parallel on the same
-# runner, so each container should use nproc/2. Overridable via
-# `--build-arg CARGO_BUILD_JOBS=N` for ad-hoc local builds.
-ARG CARGO_BUILD_JOBS=2
-ENV CARGO_BUILD_JOBS=${CARGO_BUILD_JOBS}
-RUN echo "build parallelism: CARGO_BUILD_JOBS=${CARGO_BUILD_JOBS} (host nproc=$(nproc))"
-
-# Resolve build flags from BUILD_MODE
-RUN if [ "$BUILD_MODE" = "saas" ]; then \
-      echo "--no-default-features --features saas,server" > /tmp/cargo-features; \
-      echo "--no-default-features --features saas --bin rusty-links-saas" > /tmp/dx-flags; \
-    else \
-      echo "--features standalone,server" > /tmp/cargo-features; \
-      echo "--features standalone" > /tmp/dx-flags; \
-    fi
+# A single binary serves both deployment modes; the mode is resolved at runtime
+# from OIDC_ISSUER (set = hosted, unset = standalone). There is no longer a
+# parallel sibling build, so cargo uses the full CPU count by default.
 
 # --- Dependency caching (server-side only) ---
 COPY Cargo.toml Cargo.lock ./
 RUN mkdir src && echo "fn main() {}" > src/main.rs
 RUN --mount=type=cache,target=/usr/local/cargo/registry \
     --mount=type=cache,target=/usr/local/cargo/git \
-    cargo build --release $(cat /tmp/cargo-features) \
+    cargo build --release --features server \
     && rm -rf src target/release/deps/rusty_links*
 
 # --- Full build with dioxus ---
 # Copy source code (respects .dockerignore)
 COPY . .
 
-# Build fullstack app (server binary + WASM client bundle)
+# Build fullstack app (server binary + WASM client bundle). dioxus enables the
+# `server` and `web` features automatically for the fullstack platform.
 RUN --mount=type=cache,target=/usr/local/cargo/registry \
     --mount=type=cache,target=/usr/local/cargo/git \
-    dx build --release $(cat /tmp/dx-flags)
-
-# Create consistent output path regardless of build mode
-RUN if [ "$BUILD_MODE" = "saas" ]; then \
-      ln -s /build/target/dx/rusty-links-saas/release/web /build/dx-output; \
-    else \
-      ln -s /build/target/dx/rusty-links/release/web /build/dx-output; \
-    fi
+    dx build --release
 
 # Runtime stage (must match builder glibc version)
 FROM debian:trixie-slim
-
-ARG BUILD_MODE
 
 # Install runtime dependencies
 RUN apt-get update && apt-get install --yes --no-install-recommends \
@@ -83,7 +57,7 @@ WORKDIR /app
 
 # Copy dx build output (server binary + public/ with index.html and WASM/JS)
 # Note: migrations/ are embedded at compile time by sqlx::migrate!() and not needed at runtime
-COPY --from=builder /build/dx-output/ /app/
+COPY --from=builder /build/target/dx/rusty-links/release/web/ /app/
 
 # Copy WASM/JS assets to /app/assets/ for the ServeDir("/assets") route in main.rs
 RUN cp /app/public/assets/* /app/assets/ 2>/dev/null || true
@@ -91,16 +65,13 @@ RUN cp /app/public/assets/* /app/assets/ 2>/dev/null || true
 # Copy favicon (not processed by dx asset pipeline since it's not referenced via asset!())
 COPY --from=builder /build/assets/favicon.ico /app/assets/
 
-# Normalize binary name for consistent ENTRYPOINT
-RUN if [ "$BUILD_MODE" = "saas" ]; then mv /app/rusty-links-saas /app/rusty-links; fi
-
 # Set ownership of all standard directories
 RUN chown -R appuser:appuser /app /data /config
 
 USER appuser
 
 LABEL org.opencontainers.image.source=https://dev.a8n.run/a8n-tools/rusty-links
-LABEL org.opencontainers.image.description="rusty-links (${BUILD_MODE})"
+LABEL org.opencontainers.image.description="rusty-links"
 
 EXPOSE 8080
 

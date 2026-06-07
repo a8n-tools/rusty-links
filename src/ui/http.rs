@@ -49,7 +49,7 @@ fn clean_error(status: u16, body: &str) -> String {
 #[cfg(target_arch = "wasm32")]
 fn redirect_if_unauthorized(status: u16, url: &str) {
     if status == 401 && !url.starts_with("/api/auth/") {
-        #[cfg(feature = "standalone")]
+        // Clear any stored standalone JWT; a no-op in hosted mode (no token).
         crate::ui::auth_state::clear_auth();
 
         if let Some(window) = web_sys::window() {
@@ -82,17 +82,17 @@ pub async fn get<T: DeserializeOwned>(url: &str) -> Result<T, String> {
 
         let mut request = Request::get(url);
 
-        #[cfg(feature = "standalone")]
-        {
-            if let Some(token) = crate::ui::auth_state::get_token() {
-                request = request.header("Authorization", &format!("Bearer {}", token));
-            }
-        }
-
-        #[cfg(not(feature = "standalone"))]
+        // Mode-agnostic auth: always send cookies (used by hosted OIDC
+        // sessions) and attach a bearer token when one is stored in
+        // localStorage (standalone JWT). In hosted mode no token is stored, so
+        // only the cookie is sent; in standalone mode no cookie is set, so only
+        // the bearer is sent.
         {
             use web_sys::RequestCredentials;
             request = request.credentials(RequestCredentials::Include);
+            if let Some(token) = crate::ui::auth_state::get_token() {
+                request = request.header("Authorization", &format!("Bearer {}", token));
+            }
         }
 
         let response = request
@@ -145,17 +145,17 @@ pub async fn get_response(url: &str) -> Result<HttpResponse, String> {
 
         let mut request = Request::get(url);
 
-        #[cfg(feature = "standalone")]
-        {
-            if let Some(token) = crate::ui::auth_state::get_token() {
-                request = request.header("Authorization", &format!("Bearer {}", token));
-            }
-        }
-
-        #[cfg(not(feature = "standalone"))]
+        // Mode-agnostic auth: always send cookies (used by hosted OIDC
+        // sessions) and attach a bearer token when one is stored in
+        // localStorage (standalone JWT). In hosted mode no token is stored, so
+        // only the cookie is sent; in standalone mode no cookie is set, so only
+        // the bearer is sent.
         {
             use web_sys::RequestCredentials;
             request = request.credentials(RequestCredentials::Include);
+            if let Some(token) = crate::ui::auth_state::get_token() {
+                request = request.header("Authorization", &format!("Bearer {}", token));
+            }
         }
 
         let response = request
@@ -202,17 +202,17 @@ pub async fn post<T: DeserializeOwned, B: Serialize>(url: &str, body: &B) -> Res
 
         let mut request = Request::post(url);
 
-        #[cfg(feature = "standalone")]
-        {
-            if let Some(token) = crate::ui::auth_state::get_token() {
-                request = request.header("Authorization", &format!("Bearer {}", token));
-            }
-        }
-
-        #[cfg(not(feature = "standalone"))]
+        // Mode-agnostic auth: always send cookies (used by hosted OIDC
+        // sessions) and attach a bearer token when one is stored in
+        // localStorage (standalone JWT). In hosted mode no token is stored, so
+        // only the cookie is sent; in standalone mode no cookie is set, so only
+        // the bearer is sent.
         {
             use web_sys::RequestCredentials;
             request = request.credentials(RequestCredentials::Include);
+            if let Some(token) = crate::ui::auth_state::get_token() {
+                request = request.header("Authorization", &format!("Bearer {}", token));
+            }
         }
 
         let response = request
@@ -268,17 +268,17 @@ pub async fn post_response<B: Serialize>(url: &str, body: &B) -> Result<HttpResp
 
         let mut request = Request::post(url);
 
-        #[cfg(feature = "standalone")]
-        {
-            if let Some(token) = crate::ui::auth_state::get_token() {
-                request = request.header("Authorization", &format!("Bearer {}", token));
-            }
-        }
-
-        #[cfg(not(feature = "standalone"))]
+        // Mode-agnostic auth: always send cookies (used by hosted OIDC
+        // sessions) and attach a bearer token when one is stored in
+        // localStorage (standalone JWT). In hosted mode no token is stored, so
+        // only the cookie is sent; in standalone mode no cookie is set, so only
+        // the bearer is sent.
         {
             use web_sys::RequestCredentials;
             request = request.credentials(RequestCredentials::Include);
+            if let Some(token) = crate::ui::auth_state::get_token() {
+                request = request.header("Authorization", &format!("Bearer {}", token));
+            }
         }
 
         let response = request
@@ -328,17 +328,17 @@ pub async fn post_empty(url: &str) -> Result<HttpResponse, String> {
 
         let mut request = Request::post(url);
 
-        #[cfg(feature = "standalone")]
-        {
-            if let Some(token) = crate::ui::auth_state::get_token() {
-                request = request.header("Authorization", &format!("Bearer {}", token));
-            }
-        }
-
-        #[cfg(not(feature = "standalone"))]
+        // Mode-agnostic auth: always send cookies (used by hosted OIDC
+        // sessions) and attach a bearer token when one is stored in
+        // localStorage (standalone JWT). In hosted mode no token is stored, so
+        // only the cookie is sent; in standalone mode no cookie is set, so only
+        // the bearer is sent.
         {
             use web_sys::RequestCredentials;
             request = request.credentials(RequestCredentials::Include);
+            if let Some(token) = crate::ui::auth_state::get_token() {
+                request = request.header("Authorization", &format!("Bearer {}", token));
+            }
         }
 
         let response = request
@@ -385,17 +385,17 @@ pub async fn put<T: DeserializeOwned, B: Serialize>(url: &str, body: &B) -> Resu
 
         let mut request = Request::put(url);
 
-        #[cfg(feature = "standalone")]
-        {
-            if let Some(token) = crate::ui::auth_state::get_token() {
-                request = request.header("Authorization", &format!("Bearer {}", token));
-            }
-        }
-
-        #[cfg(not(feature = "standalone"))]
+        // Mode-agnostic auth: always send cookies (used by hosted OIDC
+        // sessions) and attach a bearer token when one is stored in
+        // localStorage (standalone JWT). In hosted mode no token is stored, so
+        // only the cookie is sent; in standalone mode no cookie is set, so only
+        // the bearer is sent.
         {
             use web_sys::RequestCredentials;
             request = request.credentials(RequestCredentials::Include);
+            if let Some(token) = crate::ui::auth_state::get_token() {
+                request = request.header("Authorization", &format!("Bearer {}", token));
+            }
         }
 
         let response = request
@@ -451,17 +451,17 @@ pub async fn patch<T: DeserializeOwned, B: Serialize>(url: &str, body: &B) -> Re
 
         let mut request = Request::patch(url);
 
-        #[cfg(feature = "standalone")]
-        {
-            if let Some(token) = crate::ui::auth_state::get_token() {
-                request = request.header("Authorization", &format!("Bearer {}", token));
-            }
-        }
-
-        #[cfg(not(feature = "standalone"))]
+        // Mode-agnostic auth: always send cookies (used by hosted OIDC
+        // sessions) and attach a bearer token when one is stored in
+        // localStorage (standalone JWT). In hosted mode no token is stored, so
+        // only the cookie is sent; in standalone mode no cookie is set, so only
+        // the bearer is sent.
         {
             use web_sys::RequestCredentials;
             request = request.credentials(RequestCredentials::Include);
+            if let Some(token) = crate::ui::auth_state::get_token() {
+                request = request.header("Authorization", &format!("Bearer {}", token));
+            }
         }
 
         let response = request
@@ -517,17 +517,17 @@ pub async fn delete(url: &str) -> Result<(), String> {
 
         let mut request = Request::delete(url);
 
-        #[cfg(feature = "standalone")]
-        {
-            if let Some(token) = crate::ui::auth_state::get_token() {
-                request = request.header("Authorization", &format!("Bearer {}", token));
-            }
-        }
-
-        #[cfg(not(feature = "standalone"))]
+        // Mode-agnostic auth: always send cookies (used by hosted OIDC
+        // sessions) and attach a bearer token when one is stored in
+        // localStorage (standalone JWT). In hosted mode no token is stored, so
+        // only the cookie is sent; in standalone mode no cookie is set, so only
+        // the bearer is sent.
         {
             use web_sys::RequestCredentials;
             request = request.credentials(RequestCredentials::Include);
+            if let Some(token) = crate::ui::auth_state::get_token() {
+                request = request.header("Authorization", &format!("Bearer {}", token));
+            }
         }
 
         let response = request
@@ -577,15 +577,14 @@ pub async fn get_current_user() -> Result<Option<crate::server_functions::auth::
 
     let mut request = Request::get("/api/auth/me");
 
-    #[cfg(feature = "standalone")]
-    if let Some(token) = crate::ui::auth_state::get_token() {
-        request = request.header("Authorization", &format!("Bearer {}", token));
-    }
-
-    #[cfg(not(feature = "standalone"))]
+    // Mode-agnostic auth: always send cookies and attach a bearer token when
+    // one is stored (see the note in `get`).
     {
         use web_sys::RequestCredentials;
         request = request.credentials(RequestCredentials::Include);
+        if let Some(token) = crate::ui::auth_state::get_token() {
+            request = request.header("Authorization", &format!("Bearer {}", token));
+        }
     }
 
     let response = request

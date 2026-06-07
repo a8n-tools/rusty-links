@@ -31,11 +31,8 @@ jobs:
       - name: Clippy
         run: cargo clippy --all-targets -- -D warnings
 
-      - name: Check standalone web/WASM
-        run: cargo check --features standalone,web --target wasm32-unknown-unknown
-
-      - name: Check saas web/WASM
-        run: cargo check --no-default-features --features saas,web --target wasm32-unknown-unknown
+      - name: Check web/WASM
+        run: cargo check --features web --target wasm32-unknown-unknown
 
       - name: Build
         run: cargo build --all-targets

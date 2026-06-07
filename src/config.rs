@@ -1,7 +1,6 @@
 use crate::error::AppError;
 
-/// OIDC Relying Party + Resource Server configuration (saas mode).
-#[cfg(feature = "saas")]
+/// OIDC Relying Party + Resource Server configuration (hosted mode).
 #[derive(Debug, Clone)]
 pub struct OidcConfig {
     /// Issuer URL (`iss` value in tokens).  Empty string means OIDC disabled.
@@ -28,7 +27,6 @@ pub struct OidcConfig {
     pub session_ttl_seconds: u64,
 }
 
-#[cfg(feature = "saas")]
 impl OidcConfig {
     pub fn enabled(&self) -> bool {
         !self.issuer.is_empty()
@@ -46,35 +44,28 @@ pub struct Config {
     pub update_interval_hours: u32,
     pub batch_size: usize,
     pub jitter_percent: u8,
-    // SaaS mode configuration
-    #[cfg(feature = "saas")]
+    // Hosted (OIDC) mode configuration. Inert when `oidc.issuer` is empty.
     pub host_url: String,
-    #[cfg(feature = "saas")]
     pub webhook_secret: String,
-    #[cfg(feature = "saas")]
     pub oidc: OidcConfig,
-    // JWT configuration (standalone mode)
-    #[cfg(feature = "standalone")]
+    // JWT configuration (standalone mode). Inert in hosted mode.
     pub jwt_secret: String,
-    #[cfg(feature = "standalone")]
     pub jwt_expiry_hours: i64,
-    #[cfg(feature = "standalone")]
     pub refresh_token_expiry_days: i64,
-    #[cfg(feature = "standalone")]
     pub account_lockout_attempts: i32,
-    #[cfg(feature = "standalone")]
     pub account_lockout_duration_minutes: i64,
-    #[cfg(feature = "standalone")]
     pub allow_registration: bool,
 }
 
 impl Config {
+    /// True when the instance runs in hosted mode (OIDC login against a8n
+    /// Tools). Resolved at runtime from `OIDC_ISSUER`: set means hosted,
+    /// unset means standalone (local JWT auth). Mirrors `OidcConfig::enabled`.
+    pub fn hosted(&self) -> bool {
+        !self.oidc.issuer.is_empty()
+    }
+
     pub fn from_env() -> Result<Self, AppError> {
-        #[cfg(feature = "saas")]
-        let _ = dotenvy::from_filename(".env.saas").or_else(|_| dotenvy::dotenv());
-        #[cfg(feature = "standalone")]
-        let _ = dotenvy::from_filename(".env.standalone").or_else(|_| dotenvy::dotenv());
-        #[cfg(not(any(feature = "saas", feature = "standalone")))]
         let _ = dotenvy::dotenv();
 
         let database_url = std::env::var("DATABASE_URL").map_err(|_| {
@@ -158,18 +149,15 @@ impl Config {
             ));
         }
 
-        // SaaS mode configuration
-        #[cfg(feature = "saas")]
+        // Hosted (OIDC) mode configuration
         let host_url =
             std::env::var("HOST_URL").unwrap_or_else(|_| format!("http://localhost:{app_port}"));
 
-        #[cfg(feature = "saas")]
         let webhook_secret = std::env::var("WEBHOOK_SECRET").unwrap_or_else(|_| {
-            tracing::warn!("WEBHOOK_SECRET not set — webhook signatures will not be validated");
+            tracing::warn!("WEBHOOK_SECRET not set - webhook signatures will not be validated");
             String::new()
         });
 
-        #[cfg(feature = "saas")]
         let oidc = {
             let issuer = std::env::var("OIDC_ISSUER").unwrap_or_default();
 
@@ -252,8 +240,7 @@ impl Config {
             }
         };
 
-        // JWT configuration (standalone mode only)
-        #[cfg(feature = "standalone")]
+        // JWT configuration (standalone mode)
         let jwt_secret = std::env::var("JWT_SECRET").unwrap_or_else(|_| {
             tracing::warn!(
                 "JWT_SECRET not set - using random secret (tokens will not survive restarts)"
@@ -263,7 +250,6 @@ impl Config {
             base64::Engine::encode(&base64::engine::general_purpose::URL_SAFE_NO_PAD, bytes)
         });
 
-        #[cfg(feature = "standalone")]
         let jwt_expiry_hours = std::env::var("JWT_EXPIRY")
             .ok()
             .map(|v| {
@@ -274,7 +260,6 @@ impl Config {
             .transpose()?
             .unwrap_or(1);
 
-        #[cfg(feature = "standalone")]
         let refresh_token_expiry_days = std::env::var("REFRESH_TOKEN_EXPIRY")
             .ok()
             .map(|v| {
@@ -285,7 +270,6 @@ impl Config {
             .transpose()?
             .unwrap_or(7);
 
-        #[cfg(feature = "standalone")]
         let account_lockout_attempts = std::env::var("ACCOUNT_LOCKOUT_ATTEMPTS")
             .ok()
             .map(|v| {
@@ -299,7 +283,6 @@ impl Config {
             .transpose()?
             .unwrap_or(5);
 
-        #[cfg(feature = "standalone")]
         let account_lockout_duration_minutes = std::env::var("ACCOUNT_LOCKOUT_DURATION")
             .ok()
             .map(|v| {
@@ -313,7 +296,6 @@ impl Config {
             .transpose()?
             .unwrap_or(30);
 
-        #[cfg(feature = "standalone")]
         let allow_registration = std::env::var("ALLOW_REGISTRATION")
             .ok()
             .map(|v| v == "true" || v == "1")
@@ -327,23 +309,14 @@ impl Config {
             update_interval_hours,
             batch_size,
             jitter_percent,
-            #[cfg(feature = "saas")]
             host_url,
-            #[cfg(feature = "saas")]
             webhook_secret,
-            #[cfg(feature = "saas")]
             oidc,
-            #[cfg(feature = "standalone")]
             jwt_secret,
-            #[cfg(feature = "standalone")]
             jwt_expiry_hours,
-            #[cfg(feature = "standalone")]
             refresh_token_expiry_days,
-            #[cfg(feature = "standalone")]
             account_lockout_attempts,
-            #[cfg(feature = "standalone")]
             account_lockout_duration_minutes,
-            #[cfg(feature = "standalone")]
             allow_registration,
         })
     }
@@ -373,11 +346,8 @@ mod tests {
             update_interval_hours: 24,
             batch_size: 50,
             jitter_percent: 20,
-            #[cfg(feature = "saas")]
             host_url: "http://localhost:4002".to_string(),
-            #[cfg(feature = "saas")]
             webhook_secret: "test-webhook-secret".to_string(),
-            #[cfg(feature = "saas")]
             oidc: OidcConfig {
                 issuer: "http://localhost:18080".to_string(),
                 audience: "http://localhost:4002/api".to_string(),
@@ -391,17 +361,11 @@ mod tests {
                 lifecycle_jti_cache_ttl: 300,
                 session_ttl_seconds: 1_209_600,
             },
-            #[cfg(feature = "standalone")]
             jwt_secret: "test_secret".to_string(),
-            #[cfg(feature = "standalone")]
             jwt_expiry_hours: 1,
-            #[cfg(feature = "standalone")]
             refresh_token_expiry_days: 7,
-            #[cfg(feature = "standalone")]
             account_lockout_attempts: 5,
-            #[cfg(feature = "standalone")]
             account_lockout_duration_minutes: 30,
-            #[cfg(feature = "standalone")]
             allow_registration: true,
         }
     }
@@ -464,6 +428,20 @@ mod tests {
         assert!(valid >= 1);
         let invalid: usize = 0;
         assert!(invalid < 1);
+    }
+
+    #[test]
+    fn test_hosted_true_when_issuer_set() {
+        let config = test_config();
+        assert!(!config.oidc.issuer.is_empty());
+        assert!(config.hosted());
+    }
+
+    #[test]
+    fn test_hosted_false_when_issuer_empty() {
+        let mut config = test_config();
+        config.oidc.issuer = String::new();
+        assert!(!config.hosted());
     }
 
     #[test]

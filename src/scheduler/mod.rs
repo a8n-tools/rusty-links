@@ -169,9 +169,8 @@ impl Scheduler {
             }
         }
 
-        // OIDC session cleanup (saas mode only)
-        #[cfg(feature = "saas")]
-        {
+        // OIDC session cleanup (hosted mode only)
+        if self.config.hosted() {
             match sqlx::query("DELETE FROM rp_sessions WHERE expires_at < NOW()")
                 .execute(&self.pool)
                 .await

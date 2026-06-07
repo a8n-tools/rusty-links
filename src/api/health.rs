@@ -76,18 +76,27 @@ pub struct HealthResponse {
     pub version: String,
     pub git_hash: String,
     pub build_date: String,
+    /// Deployment mode resolved at runtime: `"hosted"` (OIDC) or
+    /// `"standalone"` (local JWT). The WASM client reads this to render the
+    /// correct login experience.
+    pub auth_mode: String,
 }
 
 /// General health check endpoint
 ///
-/// Returns basic application health status.
+/// Returns basic application health status, including the runtime auth mode.
 ///
 /// GET /api/health
-pub async fn health() -> Json<HealthResponse> {
+pub async fn health(State(state): State<AppState>) -> Json<HealthResponse> {
     Json(HealthResponse {
         status: "healthy".to_string(),
         version: crate::build_info::VERSION.to_string(),
         git_hash: crate::build_info::GIT_HASH.to_string(),
         build_date: crate::build_info::BUILD_DATE.to_string(),
+        auth_mode: if state.config.hosted() {
+            "hosted".to_string()
+        } else {
+            "standalone".to_string()
+        },
     })
 }

@@ -199,43 +199,32 @@ pub fn is_legacy_hash(hash: &str) -> bool {
 pub fn verify_password(password: &str, hash: &str) -> Result<bool, AppError> {
     tracing::debug!("Verifying password");
 
-    #[cfg(feature = "standalone")]
-    {
-        let result = if is_legacy_hash(hash) {
-            tracing::debug!("Verifying against legacy bcrypt hash");
-            bcrypt::verify(password, hash).map_err(|e| {
-                tracing::error!(error = %e, "Failed to verify bcrypt password");
-                AppError::Internal(format!("Failed to verify password: {}", e))
-            })?
-        } else {
-            use argon2::{Argon2, PasswordHash, PasswordVerifier};
+    let result = if is_legacy_hash(hash) {
+        tracing::debug!("Verifying against legacy bcrypt hash");
+        bcrypt::verify(password, hash).map_err(|e| {
+            tracing::error!(error = %e, "Failed to verify bcrypt password");
+            AppError::Internal(format!("Failed to verify password: {}", e))
+        })?
+    } else {
+        use argon2::{Argon2, PasswordHash, PasswordVerifier};
 
-            let parsed_hash = PasswordHash::new(hash).map_err(|e| {
-                tracing::error!(error = %e, "Failed to parse password hash");
-                AppError::Internal(format!("Failed to parse password hash: {}", e))
-            })?;
+        let parsed_hash = PasswordHash::new(hash).map_err(|e| {
+            tracing::error!(error = %e, "Failed to parse password hash");
+            AppError::Internal(format!("Failed to parse password hash: {}", e))
+        })?;
 
-            Argon2::default()
-                .verify_password(password.as_bytes(), &parsed_hash)
-                .is_ok()
-        };
+        Argon2::default()
+            .verify_password(password.as_bytes(), &parsed_hash)
+            .is_ok()
+    };
 
-        if result {
-            tracing::debug!("Password verification successful");
-        } else {
-            tracing::debug!("Password verification failed");
-        }
-
-        Ok(result)
+    if result {
+        tracing::debug!("Password verification successful");
+    } else {
+        tracing::debug!("Password verification failed");
     }
 
-    #[cfg(not(feature = "standalone"))]
-    {
-        let _ = (password, hash);
-        Err(AppError::Internal(
-            "Password verification not available in saas mode".to_string(),
-        ))
-    }
+    Ok(result)
 }
 
 /// Upgrade a user's password hash from bcrypt to Argon2id
@@ -317,33 +306,22 @@ fn validate_email(email: &str) -> Result<(), AppError> {
 fn hash_password(password: &str) -> Result<String, AppError> {
     tracing::debug!("Hashing password");
 
-    #[cfg(feature = "standalone")]
-    {
-        use argon2::{
-            password_hash::{rand_core::OsRng, SaltString},
-            Argon2, PasswordHasher,
-        };
+    use argon2::{
+        password_hash::{rand_core::OsRng, SaltString},
+        Argon2, PasswordHasher,
+    };
 
-        let salt = SaltString::generate(&mut OsRng);
-        let hash = Argon2::default()
-            .hash_password(password.as_bytes(), &salt)
-            .map_err(|e| {
-                tracing::error!(error = %e, "Failed to hash password");
-                AppError::Internal(format!("Failed to hash password: {}", e))
-            })?
-            .to_string();
+    let salt = SaltString::generate(&mut OsRng);
+    let hash = Argon2::default()
+        .hash_password(password.as_bytes(), &salt)
+        .map_err(|e| {
+            tracing::error!(error = %e, "Failed to hash password");
+            AppError::Internal(format!("Failed to hash password: {}", e))
+        })?
+        .to_string();
 
-        tracing::debug!("Password hashed successfully");
-        Ok(hash)
-    }
-
-    #[cfg(not(feature = "standalone"))]
-    {
-        let _ = password;
-        Err(AppError::Internal(
-            "Password hashing not available in saas mode".to_string(),
-        ))
-    }
+    tracing::debug!("Password hashed successfully");
+    Ok(hash)
 }
 
 #[cfg(test)]
@@ -386,7 +364,6 @@ mod tests {
         assert!(validate_email("user@my-domain.com").is_ok());
     }
 
-    #[cfg(feature = "standalone")]
     #[test]
     fn test_password_hashing_and_verification() {
         let password = "my_secure_password_123";
@@ -404,7 +381,6 @@ mod tests {
         );
     }
 
-    #[cfg(feature = "standalone")]
     #[test]
     fn test_password_hash_uniqueness() {
         let password = "same_password";
@@ -418,7 +394,6 @@ mod tests {
         assert!(verify_password(password, &hash2).expect("Verification should succeed"));
     }
 
-    #[cfg(feature = "standalone")]
     #[test]
     fn test_password_hash_is_argon2id() {
         let hash = hash_password("TestPass123!").expect("Hashing should succeed");
