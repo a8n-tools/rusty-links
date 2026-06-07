@@ -29,7 +29,8 @@ jobs:
       packages: write
     env:
       IMAGE_REGISTRY: ""
-      REGISTRY_PROVIDER: ${{ vars.A8N_TOOLS_PRIVATE_PACKAGE_OWNER }}
+      REGISTRY_PROVIDER: dev.a8n.run
+      REGISTRY_OWNER: ${{ vars.A8N_TOOLS_PRIVATE_PACKAGE_OWNER }}
       REGISTRY_USER: ""
       REGISTRY_PASSWORD: ${{ secrets.A8N_TOOLS_PRIVATE_PACKAGE_PAT }}
 
