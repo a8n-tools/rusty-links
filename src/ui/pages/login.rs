@@ -1,9 +1,12 @@
 use dioxus::prelude::*;
 
-// In saas mode authentication is handled by the OIDC provider, so the
+use crate::ui::app::{AuthMode, AuthModeResource};
+
+// A single Login component serves both deployment modes, branching at runtime
+// on the auth mode resolved from /api/health (provided via context by App).
+//
+// Hosted mode: authentication is handled by the OIDC provider, so the
 // email/password form is replaced with a redirect to /oauth2/login.
-// Both cfg variants render the same spinner on SSR so hydration stays
-// consistent; only the WASM build triggers the actual browser redirect.
 //
 // Exception: when the OIDC callback rejects the user (e.g. the email-verified
 // gate fails) it redirects here as `/login?error=...&error_description=...`.
@@ -12,19 +15,54 @@ use dioxus::prelude::*;
 // fails again and produces an infinite redirect loop (LINKS-11). So when an
 // `error` query parameter is present we render a terminal page showing the
 // reason and require an explicit user action to retry.
+//
+// Standalone mode: the local email/password form.
+//
+// All hooks are declared unconditionally and the render branches on the mode
+// afterwards, so the hook sequence stays identical across renders and the
+// initial render (mode pending) is a plain spinner on both SSR and WASM,
+// keeping hydration consistent.
 
-#[cfg(feature = "saas")]
 #[component]
 pub fn Login() -> Element {
-    // `Some(message)` once we detect an `error` query param; rendering the
-    // terminal error page instead of redirecting. Stays `None` (spinner) on
-    // SSR and the initial WASM render so hydration reconciles identically.
+    use crate::server_functions::auth::LoginRequest;
+    use crate::ui::app::Route;
+    use crate::ui::http;
+
+    let mode_res = use_context::<AuthModeResource>();
+
+    // Hosted: `Some(message)` once we detect an `error` query param, rendering
+    // the terminal error page instead of redirecting.
     // `mut` is only exercised by the wasm-only effect below.
     #[cfg_attr(not(target_arch = "wasm32"), allow(unused_mut))]
     let mut denied = use_signal(|| Option::<String>::None);
 
+    // Standalone form state.
+    let mut email = use_signal(String::new);
+    let mut password = use_signal(String::new);
+    let mut loading = use_signal(|| false);
+    let mut error = use_signal(|| Option::<String>::None);
+    // `hydrated` stays false during SSR and on the initial WASM render (so
+    // hydration reconciles identically), then flips to true in `use_effect`,
+    // which only runs on the client after mount. We use this to keep the
+    // submit button disabled until the onsubmit handler is actually attached,
+    // preventing a native HTML form submission (GET to current URL) if the
+    // user clicks "Log In" before WASM has hydrated.
+    let mut hydrated = use_signal(|| false);
+    use_effect(move || {
+        hydrated.set(true);
+    });
+    let nav = navigator();
+
+    // Hosted-only browser side effect: surface a rejected-login error or start
+    // the OIDC flow. Gated to wasm32 (browser APIs) and to hosted mode at
+    // runtime so it is inert in standalone mode.
     #[cfg(target_arch = "wasm32")]
     use_effect(move || {
+        if mode_res().flatten() != Some(AuthMode::Hosted) {
+            return;
+        }
+
         let search = web_sys::window()
             .and_then(|w| w.location().search().ok())
             .unwrap_or_default();
@@ -52,63 +90,6 @@ pub fn Login() -> Element {
         }
     });
 
-    if let Some(message) = denied() {
-        return rsx! {
-            div { class: "auth-container",
-                div { class: "auth-card",
-                    h1 { class: "auth-title", "Login failed" }
-                    p { class: "auth-subtitle", "We couldn't sign you in." }
-                    p { class: "message message-error", "{message}" }
-                    div { class: "form",
-                        a {
-                            class: "btn btn-primary btn-full",
-                            href: "/oauth2/login",
-                            "Try again"
-                        }
-                        a {
-                            class: "btn btn-secondary btn-full",
-                            href: "/oauth2/logout",
-                            "Sign in with a different account"
-                        }
-                    }
-                }
-            }
-        };
-    }
-
-    rsx! {
-        div { class: "auth-container",
-            div { class: "loading-container",
-                div { class: "spinner spinner-medium" }
-                p { class: "loading-message", "Redirecting to login..." }
-            }
-        }
-    }
-}
-
-#[cfg(not(feature = "saas"))]
-#[component]
-pub fn Login() -> Element {
-    use crate::server_functions::auth::LoginRequest;
-    use crate::ui::app::Route;
-    use crate::ui::http;
-
-    let mut email = use_signal(String::new);
-    let mut password = use_signal(String::new);
-    let mut loading = use_signal(|| false);
-    let mut error = use_signal(|| Option::<String>::None);
-    // `hydrated` stays false during SSR and on the initial WASM render (so
-    // hydration reconciles identically), then flips to true in `use_effect`,
-    // which only runs on the client after mount. We use this to keep the
-    // submit button disabled until the onsubmit handler is actually attached,
-    // preventing a native HTML form submission (GET to current URL) if the
-    // user clicks "Log In" before WASM has hydrated.
-    let mut hydrated = use_signal(|| false);
-    use_effect(move || {
-        hydrated.set(true);
-    });
-    let nav = navigator();
-
     let on_submit = move |evt: FormEvent| {
         evt.prevent_default();
 
@@ -134,17 +115,14 @@ pub fn Login() -> Element {
             match response {
                 Ok(resp) => {
                     if resp.is_success() {
-                        #[cfg(feature = "standalone")]
+                        if let Ok(auth_resp) =
+                            resp.json::<crate::server_functions::auth::AuthResponse>()
                         {
-                            if let Ok(auth_resp) =
-                                resp.json::<crate::server_functions::auth::AuthResponse>()
-                            {
-                                crate::ui::auth_state::save_auth(
-                                    &auth_resp.token,
-                                    &auth_resp.refresh_token,
-                                    &auth_resp.email,
-                                );
-                            }
+                            crate::ui::auth_state::save_auth(
+                                &auth_resp.token,
+                                &auth_resp.refresh_token,
+                                &auth_resp.email,
+                            );
                         }
                         nav.push(Route::LinksPage {});
                     } else {
@@ -164,67 +142,113 @@ pub fn Login() -> Element {
         });
     };
 
-    rsx! {
-        div { class: "auth-container",
-            div { class: "auth-card",
-                h1 { class: "auth-title", "Rusty Links - Login" }
-                p { class: "auth-subtitle", "Sign in to your account" }
-
-                if let Some(err) = error() {
-                    div { class: "message message-error", "{err}" }
+    // Branch the render on the resolved mode. While the mode is pending, show a
+    // neutral spinner identical on SSR and the initial WASM render.
+    match mode_res().flatten() {
+        None => rsx! {
+            div { class: "auth-container",
+                div { class: "loading-container",
+                    div { class: "spinner spinner-medium" }
+                    p { class: "loading-message", "Loading..." }
                 }
-
-                form {
-                    class: "form",
-                    // Defense against pre-hydration clicks: if the browser
-                    // falls back to native form submission (because WASM
-                    // hasn't attached onsubmit yet), `javascript:void(0)`
-                    // makes the submission a no-op instead of a GET to the
-                    // current URL that would wipe the user's typed input.
-                    action: "javascript:void(0)",
-                    onsubmit: on_submit,
-                    div { class: "form-group",
-                        label { class: "form-label", r#for: "email", "Email Address" }
-                        input {
-                            class: "form-input",
-                            r#type: "email",
-                            id: "email",
-                            placeholder: "your@email.com",
-                            value: "{email}",
-                            disabled: loading(),
-                            oninput: move |evt| email.set(evt.value()),
+            }
+        },
+        Some(AuthMode::Hosted) => {
+            if let Some(message) = denied() {
+                return rsx! {
+                    div { class: "auth-container",
+                        div { class: "auth-card",
+                            h1 { class: "auth-title", "Login failed" }
+                            p { class: "auth-subtitle", "We couldn't sign you in." }
+                            p { class: "message message-error", "{message}" }
+                            div { class: "form",
+                                a {
+                                    class: "btn btn-primary btn-full",
+                                    href: "/oauth2/login",
+                                    "Try again"
+                                }
+                                a {
+                                    class: "btn btn-secondary btn-full",
+                                    href: "/oauth2/logout",
+                                    "Sign in with a different account"
+                                }
+                            }
                         }
                     }
+                };
+            }
 
-                    div { class: "form-group",
-                        label { class: "form-label", r#for: "password", "Password" }
-                        input {
-                            class: "form-input",
-                            r#type: "password",
-                            id: "password",
-                            placeholder: "Enter your password",
-                            value: "{password}",
-                            disabled: loading(),
-                            oninput: move |evt| password.set(evt.value()),
-                        }
-                    }
-
-                    button {
-                        class: "btn btn-primary btn-full",
-                        r#type: "submit",
-                        disabled: loading() || !hydrated(),
-                        if loading() {
-                            span { class: "loading" }
-                            "Logging In..."
-                        } else if !hydrated() {
-                            span { class: "loading" }
-                            "Initializing..."
-                        } else {
-                            "Log In"
-                        }
+            rsx! {
+                div { class: "auth-container",
+                    div { class: "loading-container",
+                        div { class: "spinner spinner-medium" }
+                        p { class: "loading-message", "Redirecting to login..." }
                     }
                 }
             }
         }
+        Some(AuthMode::Standalone) => rsx! {
+            div { class: "auth-container",
+                div { class: "auth-card",
+                    h1 { class: "auth-title", "Rusty Links - Login" }
+                    p { class: "auth-subtitle", "Sign in to your account" }
+
+                    if let Some(err) = error() {
+                        div { class: "message message-error", "{err}" }
+                    }
+
+                    form {
+                        class: "form",
+                        // Defense against pre-hydration clicks: if the browser
+                        // falls back to native form submission (because WASM
+                        // hasn't attached onsubmit yet), `javascript:void(0)`
+                        // makes the submission a no-op instead of a GET to the
+                        // current URL that would wipe the user's typed input.
+                        action: "javascript:void(0)",
+                        onsubmit: on_submit,
+                        div { class: "form-group",
+                            label { class: "form-label", r#for: "email", "Email Address" }
+                            input {
+                                class: "form-input",
+                                r#type: "email",
+                                id: "email",
+                                placeholder: "your@email.com",
+                                value: "{email}",
+                                disabled: loading(),
+                                oninput: move |evt| email.set(evt.value()),
+                            }
+                        }
+
+                        div { class: "form-group",
+                            label { class: "form-label", r#for: "password", "Password" }
+                            input {
+                                class: "form-input",
+                                r#type: "password",
+                                id: "password",
+                                placeholder: "Enter your password",
+                                value: "{password}",
+                                disabled: loading(),
+                                oninput: move |evt| password.set(evt.value()),
+                            }
+                        }
+
+                        button {
+                            class: "btn btn-primary btn-full",
+                            r#type: "submit",
+                            disabled: loading() || !hydrated(),
+                            if loading() {
+                                span { class: "loading" }
+                                "Logging In..."
+                            } else if !hydrated() {
+                                span { class: "loading" }
+                                "Initializing..."
+                            } else {
+                                "Log In"
+                            }
+                        }
+                    }
+                }
+            }
+        },
     }
 }

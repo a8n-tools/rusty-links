@@ -6,6 +6,5 @@ pub mod licenses;
 pub mod links;
 pub mod links_list;
 pub mod login;
-#[cfg(feature = "standalone")]
 pub mod setup;
 pub mod tags;

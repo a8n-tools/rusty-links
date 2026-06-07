@@ -67,7 +67,6 @@ pub struct AuthenticatedUser {
     pub auth_via_oidc: bool,
 }
 
-#[cfg(feature = "standalone")]
 impl<S> FromRequestParts<S> for Claims
 where
     S: Send + Sync,
@@ -108,7 +107,6 @@ where
     }
 }
 
-#[cfg(feature = "standalone")]
 impl<S> FromRequestParts<S> for AdminClaims
 where
     S: Send + Sync,
@@ -127,101 +125,39 @@ where
     }
 }
 
-#[cfg(feature = "standalone")]
+/// Runtime-dispatching authentication extractor.
+///
+/// The deployment mode is resolved per request from the configuration:
+/// - Standalone (`OIDC_ISSUER` unset): JWT bearer token via [`Claims`].
+/// - Hosted (`OIDC_ISSUER` set): the `rl_session` cookie or a bearer `at+jwt`
+///   access token validated by the [`OidcVerifier`](crate::auth::oidc_rs::OidcVerifier).
 impl<S> FromRequestParts<S> for AuthenticatedUser
 where
     S: Send + Sync,
     crate::config::Config: axum::extract::FromRef<S>,
-{
-    type Rejection = AppError;
-
-    async fn from_request_parts(parts: &mut Parts, state: &S) -> Result<Self, Self::Rejection> {
-        let claims = Claims::from_request_parts(parts, state).await?;
-        let user_id: Uuid = claims
-            .user_id
-            .parse()
-            .map_err(|_| AppError::SessionExpired)?;
-        Ok(AuthenticatedUser {
-            user_id,
-            auth_via_oidc: false,
-        })
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn test_claims_fields() {
-        let claims = Claims {
-            sub: "user@example.com".to_string(),
-            user_id: Uuid::new_v4().to_string(),
-            is_admin: true,
-            exp: 9999999999,
-        };
-        assert_eq!(claims.sub, "user@example.com");
-        assert!(claims.is_admin);
-    }
-
-    #[test]
-    fn test_claims_serialization() {
-        let user_id = Uuid::new_v4();
-        let claims = Claims {
-            sub: "test@test.com".to_string(),
-            user_id: user_id.to_string(),
-            is_admin: false,
-            exp: 12345,
-        };
-        let json = serde_json::to_string(&claims).unwrap();
-        assert!(json.contains("test@test.com"));
-        assert!(json.contains(&user_id.to_string()));
-    }
-
-    #[test]
-    fn test_claims_deserialization() {
-        let json = r#"{"sub":"u@t.com","user_id":"550e8400-e29b-41d4-a716-446655440000","is_admin":true,"exp":999}"#;
-        let claims: Claims = serde_json::from_str(json).unwrap();
-        assert_eq!(claims.sub, "u@t.com");
-        assert!(claims.is_admin);
-        assert_eq!(claims.exp, 999);
-    }
-
-    #[test]
-    fn test_authenticated_user_uuid() {
-        let user_id = Uuid::new_v4();
-        let auth = AuthenticatedUser {
-            user_id,
-            auth_via_oidc: false,
-        };
-        assert_eq!(auth.user_id, user_id);
-        assert!(!auth.auth_via_oidc);
-    }
-
-    #[test]
-    fn test_admin_claims_wraps_claims() {
-        let claims = Claims {
-            sub: "admin@test.com".to_string(),
-            user_id: Uuid::new_v4().to_string(),
-            is_admin: true,
-            exp: 9999999999,
-        };
-        let admin = AdminClaims(claims.clone());
-        assert_eq!(admin.0.sub, "admin@test.com");
-        assert!(admin.0.is_admin);
-    }
-}
-
-#[cfg(all(feature = "saas", not(feature = "standalone")))]
-impl<S> FromRequestParts<S> for AuthenticatedUser
-where
-    S: Send + Sync,
     sqlx::PgPool: axum::extract::FromRef<S>,
 {
     type Rejection = AppError;
 
     async fn from_request_parts(parts: &mut Parts, state: &S) -> Result<Self, Self::Rejection> {
         use axum::extract::FromRef;
+
+        let config = crate::config::Config::from_ref(state);
+
+        if !config.hosted() {
+            // --- Standalone: JWT bearer token ---
+            let claims = Claims::from_request_parts(parts, state).await?;
+            let user_id: Uuid = claims
+                .user_id
+                .parse()
+                .map_err(|_| AppError::SessionExpired)?;
+            return Ok(AuthenticatedUser {
+                user_id,
+                auth_via_oidc: false,
+            });
+        }
+
+        // --- Hosted: rl_session cookie or bearer at+jwt ---
         use axum_extra::extract::CookieJar;
 
         let pool = sqlx::PgPool::from_ref(state);
@@ -300,5 +236,69 @@ where
 
         tracing::info!(ip = %ip, path = %path, "Unauthenticated access attempt (no session or bearer)");
         Err(AppError::SessionExpired)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_claims_fields() {
+        let claims = Claims {
+            sub: "user@example.com".to_string(),
+            user_id: Uuid::new_v4().to_string(),
+            is_admin: true,
+            exp: 9999999999,
+        };
+        assert_eq!(claims.sub, "user@example.com");
+        assert!(claims.is_admin);
+    }
+
+    #[test]
+    fn test_claims_serialization() {
+        let user_id = Uuid::new_v4();
+        let claims = Claims {
+            sub: "test@test.com".to_string(),
+            user_id: user_id.to_string(),
+            is_admin: false,
+            exp: 12345,
+        };
+        let json = serde_json::to_string(&claims).unwrap();
+        assert!(json.contains("test@test.com"));
+        assert!(json.contains(&user_id.to_string()));
+    }
+
+    #[test]
+    fn test_claims_deserialization() {
+        let json = r#"{"sub":"u@t.com","user_id":"550e8400-e29b-41d4-a716-446655440000","is_admin":true,"exp":999}"#;
+        let claims: Claims = serde_json::from_str(json).unwrap();
+        assert_eq!(claims.sub, "u@t.com");
+        assert!(claims.is_admin);
+        assert_eq!(claims.exp, 999);
+    }
+
+    #[test]
+    fn test_authenticated_user_uuid() {
+        let user_id = Uuid::new_v4();
+        let auth = AuthenticatedUser {
+            user_id,
+            auth_via_oidc: false,
+        };
+        assert_eq!(auth.user_id, user_id);
+        assert!(!auth.auth_via_oidc);
+    }
+
+    #[test]
+    fn test_admin_claims_wraps_claims() {
+        let claims = Claims {
+            sub: "admin@test.com".to_string(),
+            user_id: Uuid::new_v4().to_string(),
+            is_admin: true,
+            exp: 9999999999,
+        };
+        let admin = AdminClaims(claims.clone());
+        assert_eq!(admin.0.sub, "admin@test.com");
+        assert!(admin.0.is_admin);
     }
 }

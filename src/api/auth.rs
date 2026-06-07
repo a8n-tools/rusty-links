@@ -1,13 +1,26 @@
 //! Authentication API endpoints
 //!
-//! Standalone mode: JWT-based auth with register, login, refresh, me, check-setup
-//! SaaS mode: Minimal auth (parent app handles authentication)
+//! Standalone mode: JWT-based auth with register, login, refresh, me, check-setup.
+//! Hosted mode: OIDC owns the login flow; only `/me` is served here.
+//!
+//! The router (see [`crate::api::create_router`]) only mounts the standalone
+//! handlers when running in standalone mode, so they return 404 in hosted mode.
 
 use crate::error::AppError;
 use crate::models::{check_user_exists, User};
 use axum::{extract::State, response::IntoResponse, Json};
 use serde::Serialize;
 use sqlx::PgPool;
+
+use crate::auth::jwt::{create_jwt, generate_refresh_token};
+use crate::auth::middleware::{AuthenticatedUser, Claims};
+use crate::config::Config;
+use crate::models::{
+    create_user, find_user_by_email, is_legacy_hash, upgrade_password_hash, verify_password,
+    CreateUser,
+};
+use crate::security;
+use crate::server_functions::auth::{AuthResponse, LoginRequest, RefreshRequest, SetupRequest};
 
 /// Response for check-setup endpoint
 #[derive(Debug, Serialize)]
@@ -30,27 +43,10 @@ pub async fn check_setup_handler(
 
 // ── Standalone mode handlers ──────────────────────────────────────────
 
-#[cfg(feature = "standalone")]
-use crate::auth::jwt::{create_jwt, generate_refresh_token};
-#[cfg(feature = "standalone")]
-use crate::auth::middleware::Claims;
-#[cfg(feature = "standalone")]
-use crate::config::Config;
-#[cfg(feature = "standalone")]
-use crate::models::{
-    create_user, find_user_by_email, is_legacy_hash, upgrade_password_hash, verify_password,
-    CreateUser,
-};
-#[cfg(feature = "standalone")]
-use crate::security;
-#[cfg(feature = "standalone")]
-use crate::server_functions::auth::{AuthResponse, LoginRequest, RefreshRequest, SetupRequest};
-
 /// POST /api/auth/setup (standalone)
 ///
 /// Creates the first user account during initial application setup.
 /// The first user is automatically an admin.
-#[cfg(feature = "standalone")]
 pub async fn setup_handler(
     State(pool): State<PgPool>,
     State(config): State<Config>,
@@ -108,7 +104,6 @@ pub async fn setup_handler(
 /// POST /api/auth/register (standalone)
 ///
 /// Register a new user account.
-#[cfg(feature = "standalone")]
 pub async fn register_handler(
     State(pool): State<PgPool>,
     State(config): State<Config>,
@@ -170,7 +165,6 @@ pub async fn register_handler(
 /// POST /api/auth/login (standalone)
 ///
 /// Authenticate user with email and password.
-#[cfg(feature = "standalone")]
 pub async fn login_handler(
     State(pool): State<PgPool>,
     State(config): State<Config>,
@@ -258,7 +252,6 @@ pub async fn login_handler(
 /// POST /api/auth/refresh (standalone)
 ///
 /// Rotate refresh token and issue a new JWT.
-#[cfg(feature = "standalone")]
 pub async fn refresh_handler(
     State(pool): State<PgPool>,
     State(config): State<Config>,
@@ -328,7 +321,6 @@ pub async fn refresh_handler(
 /// POST /api/auth/logout (standalone)
 ///
 /// Invalidates all refresh tokens for the current user.
-#[cfg(feature = "standalone")]
 pub async fn logout_handler(
     State(pool): State<PgPool>,
     claims: Claims,
@@ -348,45 +340,16 @@ pub async fn logout_handler(
     Ok(axum::http::StatusCode::NO_CONTENT)
 }
 
-/// GET /api/auth/me (standalone)
+/// GET /api/auth/me
 ///
-/// Returns information about the currently authenticated user.
-#[cfg(feature = "standalone")]
-pub async fn me_handler(
-    State(pool): State<PgPool>,
-    claims: Claims,
-) -> Result<Json<crate::server_functions::auth::UserInfo>, AppError> {
-    let user_id: uuid::Uuid = claims
-        .user_id
-        .parse()
-        .map_err(|_| AppError::SessionExpired)?;
-
-    let user = User::find_by_id(&pool, user_id)
-        .await?
-        .ok_or(AppError::SessionExpired)?;
-
-    tracing::debug!(user_id = %user.id, "User info requested");
-
-    Ok(Json(crate::server_functions::auth::UserInfo {
-        id: user.id.to_string(),
-        email: user.email,
-        name: user.name,
-        is_admin: user.is_admin,
-        maintenance_mode: false,
-        auth_via_oidc: false,
-    }))
-}
-
-// ── SaaS mode handlers ───────────────────────────────────────────────
-
-/// GET /api/auth/me (saas)
-///
-/// Returns user info from the OIDC session.
-/// Includes maintenance_mode status so admin UIs can show a banner.
-#[cfg(all(feature = "saas", not(feature = "standalone")))]
+/// Returns information about the currently authenticated user. The
+/// [`AuthenticatedUser`] extractor resolves the session per mode at runtime
+/// (JWT bearer in standalone, `rl_session` cookie or `at+jwt` bearer in
+/// hosted). `maintenance_mode` is always reported (it only ever flips in
+/// hosted mode) so admin UIs can show a banner.
 pub async fn me_handler(
     State(state): State<crate::api::AppState>,
-    auth_user: crate::auth::middleware::AuthenticatedUser,
+    auth_user: AuthenticatedUser,
 ) -> Result<Json<crate::server_functions::auth::UserInfo>, AppError> {
     let user = User::find_by_id(&state.pool, auth_user.user_id)
         .await?
@@ -395,6 +358,8 @@ pub async fn me_handler(
     let maintenance_mode = state
         .maintenance_mode
         .load(std::sync::atomic::Ordering::Relaxed);
+
+    tracing::debug!(user_id = %user.id, "User info requested");
 
     Ok(Json(crate::server_functions::auth::UserInfo {
         id: user.id.to_string(),

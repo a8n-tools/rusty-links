@@ -82,8 +82,7 @@ async fn main() {
     rusty_links::server_functions::auth::set_db_pool(pool.clone());
 
     // Create default admin from environment variables if no users exist (standalone only)
-    #[cfg(feature = "standalone")]
-    {
+    if !config.hosted() {
         if let (Ok(email), Ok(password)) = (
             std::env::var("SETUP_DEFAULT_ADMIN_EMAIL"),
             std::env::var("SETUP_DEFAULT_ADMIN_PASSWORD"),
@@ -133,15 +132,14 @@ async fn main() {
 
     tracing::info!("Background scheduler started");
 
-    // Create maintenance state (SaaS mode only)
-    #[cfg(feature = "saas")]
+    // Maintenance state and OIDC verifier are cheap to construct and carried in
+    // AppState in both modes. They are only exercised in hosted mode (the
+    // maintenance webhook flips the flag; the verifier validates at+jwt bearer
+    // tokens), and stay inert in standalone mode.
     let maintenance_mode = std::sync::Arc::new(std::sync::atomic::AtomicBool::new(false));
-    #[cfg(feature = "saas")]
     let maintenance_message: std::sync::Arc<std::sync::RwLock<Option<String>>> =
         std::sync::Arc::new(std::sync::RwLock::new(None));
 
-    // Build OIDC verifier (saas mode only)
-    #[cfg(feature = "saas")]
     let oidc_verifier = std::sync::Arc::new(rusty_links::auth::oidc_rs::OidcVerifier::new(
         config.oidc.clone(),
     ));
@@ -150,11 +148,8 @@ async fn main() {
         pool.clone(),
         config.clone(),
         scheduler_shutdown,
-        #[cfg(feature = "saas")]
         maintenance_mode.clone(),
-        #[cfg(feature = "saas")]
         maintenance_message.clone(),
-        #[cfg(feature = "saas")]
         oidc_verifier.clone(),
     );
 
@@ -169,14 +164,13 @@ async fn main() {
         address
     );
 
-    let dioxus_router = axum::Router::new().serve_dioxus_application(ServeConfig::new(), App);
+    let mut dioxus_router = axum::Router::new().serve_dioxus_application(ServeConfig::new(), App);
 
-    // In SaaS mode, protect page routes: check `rl_session` cookie and redirect
+    // In hosted mode, protect page routes: check `rl_session` cookie and redirect
     // unauthenticated users to the OIDC login handler.
-    #[cfg(feature = "saas")]
-    let dioxus_router = {
+    if config.hosted() {
         let pool = pool.clone();
-        dioxus_router.layer(axum::middleware::from_fn(
+        dioxus_router = dioxus_router.layer(axum::middleware::from_fn(
             move |req: axum::http::Request<axum::body::Body>, next: axum::middleware::Next| {
                 let pool = pool.clone();
                 async move {
@@ -226,22 +220,19 @@ async fn main() {
                     axum::response::Redirect::to(&redirect_url).into_response()
                 }
             },
-        ))
-    };
-
-    // OIDC RP router (registered at root, not under /api)
-    #[cfg(feature = "saas")]
-    let oidc_router = rusty_links::auth::oidc_rp::create_router(
-        pool.clone(),
-        config.oidc.clone(),
-        oidc_verifier.clone(),
-    );
+        ));
+    }
 
     let mut router = axum::Router::new().nest("/api", api_router);
 
-    // Merge the OIDC RP routes at root level (before dioxus router)
-    #[cfg(feature = "saas")]
-    {
+    // In hosted mode, merge the OIDC RP routes at root level (before the
+    // dioxus router) so the `/oauth2/*` BFF endpoints are reachable.
+    if config.hosted() {
+        let oidc_router = rusty_links::auth::oidc_rp::create_router(
+            pool.clone(),
+            config.oidc.clone(),
+            oidc_verifier.clone(),
+        );
         router = router.merge(oidc_router);
     }
 
@@ -258,26 +249,28 @@ async fn main() {
         }),
     );
 
-    // Landing page — served before the Dioxus router so it takes precedence at "/"
-    #[cfg(feature = "standalone")]
-    let mut router = router.route_service(
-        "/",
-        tower::util::service_fn(|_req: axum::http::Request<axum::body::Body>| async {
-            let html = include_str!("../static/index.html");
-            Ok::<_, std::convert::Infallible>(
-                axum::response::Response::builder()
-                    .header("Content-Type", "text/html; charset=utf-8")
-                    .body(axum::body::Body::from(html))
-                    .unwrap(),
-            )
-        }),
-    );
+    // Landing page (standalone only) — served before the Dioxus router so it
+    // takes precedence at "/". In hosted mode the page-guard middleware owns
+    // "/" and redirects unauthenticated users to the OIDC login handler.
+    if !config.hosted() {
+        router = router.route_service(
+            "/",
+            tower::util::service_fn(|_req: axum::http::Request<axum::body::Body>| async {
+                let html = include_str!("../static/index.html");
+                Ok::<_, std::convert::Infallible>(
+                    axum::response::Response::builder()
+                        .header("Content-Type", "text/html; charset=utf-8")
+                        .body(axum::body::Body::from(html))
+                        .unwrap(),
+                )
+            }),
+        );
+    }
 
     let mut router = router.merge(dioxus_router);
 
-    // Maintenance mode guard (outermost middleware, saas only).
-    #[cfg(feature = "saas")]
-    {
+    // Maintenance mode guard (outermost middleware, hosted only).
+    if config.hosted() {
         let mm = maintenance_mode.clone();
         let mm_msg = maintenance_message.clone();
         let pool_mm = pool.clone();

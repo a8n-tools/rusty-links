@@ -1,5 +1,5 @@
 use crate::server_functions::auth::{check_setup, SetupRequest};
-use crate::ui::app::Route;
+use crate::ui::app::{AuthMode, AuthModeResource, Route};
 use crate::ui::http;
 use dioxus::prelude::*;
 
@@ -13,6 +13,7 @@ enum SetupCheckState {
 #[component]
 pub fn Setup() -> Element {
     let nav = navigator();
+    let mode_res = use_context::<AuthModeResource>();
     let setup_check = use_resource(check_setup);
     let mut email = use_signal(String::new);
     let mut password = use_signal(String::new);
@@ -29,6 +30,34 @@ pub fn Setup() -> Element {
     use_effect(move || {
         hydrated.set(true);
     });
+
+    // Setup is a standalone-mode concept only. Branch on the resolved auth
+    // mode first: while pending, show the same neutral spinner as the
+    // setup-check loading state (hydration-safe); in hosted mode there is no
+    // local setup flow, so redirect to "/".
+    match mode_res().flatten() {
+        None => {
+            return rsx! {
+                div { class: "auth-container",
+                    div { class: "loading-container",
+                        div { class: "spinner spinner-medium" }
+                    }
+                }
+            };
+        }
+        Some(AuthMode::Hosted) => {
+            nav.push(Route::Home {});
+            return rsx! {
+                div { class: "auth-container",
+                    div { class: "loading-container",
+                        div { class: "spinner spinner-medium" }
+                        p { class: "loading-message", "Redirecting..." }
+                    }
+                }
+            };
+        }
+        Some(AuthMode::Standalone) => {}
+    }
 
     // Extract an owned view of the setup-check state so the read guard does
     // not span the early returns below.
@@ -135,17 +164,14 @@ pub fn Setup() -> Element {
                 Ok(resp) => {
                     if resp.is_success() {
                         // Parse auth response and store tokens
-                        #[cfg(feature = "standalone")]
+                        if let Ok(auth_resp) =
+                            resp.json::<crate::server_functions::auth::AuthResponse>()
                         {
-                            if let Ok(auth_resp) =
-                                resp.json::<crate::server_functions::auth::AuthResponse>()
-                            {
-                                crate::ui::auth_state::save_auth(
-                                    &auth_resp.token,
-                                    &auth_resp.refresh_token,
-                                    &auth_resp.email,
-                                );
-                            }
+                            crate::ui::auth_state::save_auth(
+                                &auth_resp.token,
+                                &auth_resp.refresh_token,
+                                &auth_resp.email,
+                            );
                         }
                         // Setup successful, redirect to links page
                         nav.push(Route::LinksPage {});

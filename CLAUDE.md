@@ -45,6 +45,8 @@ The project uses Cargo features to separate server and client code:
 
 Server-only modules (`#[cfg(feature = "server")]`): api, auth, config, error, github, models, scheduler, scraper
 
+There are no `standalone`/`saas` build features. A single binary and OCI image serves both deployment modes; the mode is resolved at runtime (see Configuration below).
+
 ## Architecture
 
 - **Entry point**: `src/main.rs` - Initializes database pool, starts scheduler, creates Axum router with Dioxus frontend and API routes
@@ -76,13 +78,19 @@ Migrations are embedded at compile time by `sqlx::migrate!()` and are not copied
 
 ## Configuration
 
-Environment variables are defined in feature-specific files:
-- `.env.standalone` - Standalone mode (includes JWT auth variables)
-- `.env.saas` - SaaS mode (auth handled by parent app cookies)
+The deployment mode is selected at runtime, not at compile time. The same binary/image serves both modes; `OIDC_ISSUER` is the switch:
+- `OIDC_ISSUER` unset → standalone mode (local JWT auth, setup flow, user admin).
+- `OIDC_ISSUER` set → hosted mode (OIDC login against a8n Tools, active-membership gate). `Config::hosted()` (`src/config.rs`) returns `!oidc.issuer.is_empty()`.
+
+`/api/health` reports the resolved mode in its `auth_mode` field (`"standalone"` or `"hosted"`); the WASM client reads it once to render the correct login experience.
+
+Two example env files document the variables for each mode (both are deployment templates for the same binary):
+- `.env.standalone.example` - standalone mode (JWT auth variables; leave `OIDC_ISSUER` unset).
+- `.env.saas.example` - hosted mode (the `OIDC_*` variables; set `OIDC_ISSUER`).
 
 Copy the appropriate file to `.env` before running:
 ```bash
-cp .env.standalone .env   # or .env.saas
+cp .env.standalone.example .env   # or .env.saas.example
 ```
 
-IMPORTANT: When updating code, ALWAYS check if `.env.standalone` and `.env.saas` need to be updated. This applies when adding, removing, or renaming environment variables in `src/config.rs`, `compose.dev.yml`, `compose.yml`, or any `std::env::var` call. Both files must stay in sync.
+IMPORTANT: When updating code, ALWAYS check if `.env.standalone.example` and `.env.saas.example` need to be updated. This applies when adding, removing, or renaming environment variables in `src/config.rs`, `compose.dev.yml`, `compose.yml`, or any `std::env::var` call. Both files must stay in sync.

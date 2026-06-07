@@ -4,16 +4,6 @@ version = "0.1.0"
 edition = "2021"
 default-run = "rusty-links"
 
-[[bin]]
-name = "rusty-links"
-path = "src/main.rs"
-required-features = ["standalone"]
-
-[[bin]]
-name = "rusty-links-saas"
-path = "src/main.rs"
-required-features = ["saas"]
-
 [dependencies]
 # Web framework
 dioxus = { version = "0.7.7", features = ["fullstack", "router"] }
@@ -114,10 +104,10 @@ web-sys = { version = "0.3", features = [
     "Storage",
 ] }
 
+# Deployment mode (hosted vs standalone) is resolved at runtime from the
+# `OIDC_ISSUER` env var, not at compile time. A single binary serves both.
 [features]
-default = ["standalone"]
-standalone = []
-saas = []
+default = []
 server = [
     "dioxus/server",
     "dep:axum",
