@@ -1,6 +1,6 @@
 # Build stage. The base image bundles Rust 1.93 + WASM target + cargo-binstall
 # + dioxus-cli (pinned). See niceguyit/oci-images/rust-builder for details.
-FROM ghcr.io/niceguyit/rust-builder-glibc:v1.0.1-rust1.94-trixie AS builder
+FROM ghcr.io/niceguyit/rust-builder-glibc:v1.0.2-rust1.94-trixie AS builder
 
 # Build metadata — populated by CI (see .forgejo/workflows/build-oci-image.yml).
 # Read by build.rs and embedded into the binary so /api/health and the UI footer
@@ -20,6 +20,22 @@ WORKDIR /build
 
 # --- Dependency caching (server-side only) ---
 COPY Cargo.toml Cargo.lock ./
+
+# Guard against a dx/dioxus toolchain mismatch (LINKS-19). The base image's dx
+# CLI must match the dioxus crate version resolved in Cargo.lock; dx otherwise
+# only prints `dx and dioxus versions are incompatible!` and continues, which can
+# silently ship a broken client bundle. Compare the exact patch version: dx 0.7.7
+# vs dioxus 0.7.9 share the 0.7 minor yet dx still reports them incompatible, so a
+# minor-only check would not catch it. Runs before the dep build so a mismatch
+# fails fast instead of after a multi-minute compile.
+RUN dx_ver="$(dx --version | grep -oE '[0-9]+\.[0-9]+\.[0-9]+' | head -n1)"; \
+    dioxus_ver="$(awk '/^name = "dioxus"$/{getline; gsub(/[",]/, ""); print $3; exit}' Cargo.lock)"; \
+    echo "dx=${dx_ver} dioxus=${dioxus_ver}"; \
+    if [ "${dx_ver}" != "${dioxus_ver}" ]; then \
+        echo "ERROR: dx CLI ${dx_ver} does not match dioxus crate ${dioxus_ver}; bump rust-builder-glibc (see LINKS-19)" >&2; \
+        exit 1; \
+    fi
+
 RUN mkdir src && echo "fn main() {}" > src/main.rs
 RUN --mount=type=cache,target=/usr/local/cargo/registry \
     --mount=type=cache,target=/usr/local/cargo/git \
