@@ -111,6 +111,15 @@ jobs:
           # in the registry to the digest buildx just reported pushing. A mismatch
           # (or a missing tag) fails the job instead of reporting a green build that
           # did not actually update the registry.
+          #
+          # The docker-container buildx driver attaches a provenance attestation by
+          # default, so the pushed ref is always an OCI image index (platform image
+          # + an unknown/unknown attestation manifest). For an index, the template
+          # `{{.Manifest.Digest}}` does NOT reduce to the digest: buildx falls back
+          # to its full human-readable dump, so the captured value never equals the
+          # pushed digest and the job fails on every build (LINKS-24). Render the
+          # index descriptor as JSON and pull `.digest` instead, which yields the
+          # bare index digest that matches the --iidfile value.
           let pushed = (open --raw /tmp/image-digest.txt | str trim)
           let tags_str = "${{ steps.get-tags.outputs.tags }}"
           let tags = ($tags_str | split row ",")
@@ -119,7 +128,7 @@ jobs:
           print $"Pushed digest: ($pushed)"
           for tag in $tags {
             let ref = $"($registry)/($image):($tag)"
-            let remote = (^docker buildx imagetools inspect $ref --format "{{.Manifest.Digest}}" | str trim)
+            let remote = (^docker buildx imagetools inspect $ref --format "{{json .Manifest}}" | from json | get digest | str trim)
             if $remote != $pushed {
               print $"DIGEST MISMATCH for ($ref): registry has ($remote), expected ($pushed)"
               exit 1
