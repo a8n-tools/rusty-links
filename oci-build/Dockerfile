@@ -48,9 +48,26 @@ COPY . .
 
 # Build fullstack app (server binary + WASM client bundle). dioxus enables the
 # `server` and `web` features automatically for the fullstack platform.
+#
+# --debug-symbols false: dx defaults to embedding DWARF debug info in the wasm,
+# which Binaryen wasm-opt (every version 127-130) aborts on with SIGABRT
+# ("compile unit size was incorrect (this may be an unsupported version of
+# DWARF)"). dx swallows that failure and silently ships UNOPTIMIZED wasm
+# (LINKS-20). Dropping debug symbols lets wasm-opt complete and halves the
+# client bundle (3.4MB -> 1.8MB). Production does not need DWARF; dev `dx serve`
+# keeps the default and is unaffected.
+#
+# Guard: dx exits 0 even when wasm-opt fails, so grep its output and fail the
+# build rather than silently shipping unoptimized WASM (AC4). pipefail keeps a
+# genuine dx build failure fatal despite the tee.
 RUN --mount=type=cache,target=/usr/local/cargo/registry \
     --mount=type=cache,target=/usr/local/cargo/git \
-    dx build --release
+    bash -euo pipefail -c '\
+      dx build --release --debug-symbols false 2>&1 | tee /tmp/dx-build.log; \
+      if grep -q "wasm-opt failed" /tmp/dx-build.log; then \
+        echo "ERROR: wasm-opt failed; refusing to ship unoptimized WASM (LINKS-20)" >&2; \
+        exit 1; \
+      fi'
 
 # Runtime stage (must match builder glibc version)
 FROM debian:trixie-slim
