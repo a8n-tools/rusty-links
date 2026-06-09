@@ -6,8 +6,8 @@ default-run = "rusty-links"
 
 [dependencies]
 # Web framework
-dioxus = { version = "0.7.7", features = ["fullstack", "router"] }
-dioxus-web = { version = "0.7.7", optional = true }
+dioxus = { version = "=0.7.7", features = ["fullstack", "router"] }
+dioxus-web = { version = "=0.7.7", optional = true }
 axum = { version = "0.8.7", features = ["tokio"], optional = true }
 axum-extra = { version = "0.12.2", features = ["cookie"], optional = true }
 tower = { version = "0.5.2", features = ["util"], optional = true }

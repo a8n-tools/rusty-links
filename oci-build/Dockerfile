@@ -1,6 +1,6 @@
 # Build stage. The base image bundles Rust 1.93 + WASM target + cargo-binstall
 # + dioxus-cli (pinned). See niceguyit/oci-images/rust-builder for details.
-FROM ghcr.io/niceguyit/rust-builder-glibc:v1.0.2-rust1.94-trixie AS builder
+FROM ghcr.io/niceguyit/rust-builder-glibc:v1.0.1-rust1.94-trixie AS builder
 
 # Build metadata — populated by CI (see .forgejo/workflows/build-oci-image.yml).
 # Read by build.rs and embedded into the binary so /api/health and the UI footer
