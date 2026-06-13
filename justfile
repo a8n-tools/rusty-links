@@ -89,31 +89,6 @@ down:
         docker volume rm $vol
     }
 
-# Remove all containers, volumes, and networks
-clean:
-    #!/usr/bin/env nu
-    docker compose -f compose.dev.yml down --volumes --remove-orphans
-    docker compose down --volumes --remove-orphans
-    let suffix = $env.USER
-    let vols = [
-        $"rusty-links-cargo-($suffix)"
-        $"rusty-links-dx-($suffix)"
-        $"rusty-links-target-server-($suffix)"
-        $"rusty-links-target-wasm-($suffix)"
-        $"rusty-links-postgres-($suffix)"
-    ]
-    let existing = docker volume ls --quiet | lines
-    for vol in $vols {
-        if $vol in $existing {
-            # Force-remove any containers still holding this volume
-            let holders = docker ps -aq --filter $"volume=($vol)" | lines
-            for c in $holders {
-                docker rm -f $c
-            }
-            docker volume rm $vol
-        }
-    }
-
 # Open a dev session via the /dev/seed-session endpoint (saas mode, debug builds only)
 seed-session:
     @echo "Opening: https://{{env('USER')}}-links.a8n.run/dev/seed-session"
@@ -181,6 +156,56 @@ test-integration url="http://localhost:4002":
 # Format code
 fmt:
     cargo fmt
+
+# ── Cleanup ──────────────────────────────────────────────────────────────────
+
+# Tear down this repo's dev footprint: bring down the compose stack (both compose.dev.yml and the plain compose.yml stack, dropping their default networks), remove this repo's named volumes (cargo, dx, target-server, target-wasm, postgres, all ${USER}-suffixed), and delete the local Rust target/ and node_modules/ build artifacts. Scoped to this repo; safe on a shared host. Replaces the former `clean` recipe.
+[group: 'cleanup']
+dev-clean:
+    #!/usr/bin/env nu
+    docker compose -f compose.dev.yml down --remove-orphans
+    docker compose down --remove-orphans
+    let suffix = $env.USER
+    let vols = [
+        $"rusty-links-cargo-($suffix)"
+        $"rusty-links-dx-($suffix)"
+        $"rusty-links-target-server-($suffix)"
+        $"rusty-links-target-wasm-($suffix)"
+        $"rusty-links-postgres-($suffix)"
+    ]
+    let existing = docker volume ls --quiet | lines
+    for vol in $vols {
+        if $vol in $existing {
+            docker volume rm $vol
+            print $"removed volume ($vol)"
+        }
+    }
+    let paths = [target node_modules]
+    for p in $paths {
+        if ($p | path exists) {
+            rm --recursive $p
+            print $"removed ($p)"
+        }
+    }
+    print "dev-clean: done"
+
+# Everything dev-clean does, plus remove the Docker images this repo builds (rusty-links:check from check-docker, rusty-links:local from build-docker) and prune its buildx cache. Run for a from-scratch rebuild.
+[group: 'cleanup']
+dev-clean-all: dev-clean
+    #!/usr/bin/env nu
+    let images = [
+        "rusty-links:check"
+        "rusty-links:local"
+    ]
+    for img in $images {
+        let present = (do { ^docker image inspect $img } | complete).exit_code == 0
+        if $present {
+            docker image rm $img
+            print $"removed image ($img)"
+        }
+    }
+    docker buildx prune --force
+    print "dev-clean-all: done"
 
 # ── Release ──────────────────────────────────────────────────────────────────
 
