@@ -22,10 +22,8 @@ pre-commit: ensure-env
     ^docker compose --file compose.dev.yml run --rm --no-deps app cargo fmt --check
     print "\n[pre-commit] cargo clippy --all-targets -- --deny warnings"
     ^docker compose --file compose.dev.yml run --rm --no-deps app cargo clippy --all-targets -- --deny warnings
-    print "\n[pre-commit] cargo check --features standalone,web --target wasm32-unknown-unknown"
-    ^docker compose --file compose.dev.yml run --rm --no-deps app cargo check --features standalone,web --target wasm32-unknown-unknown
-    print "\n[pre-commit] cargo check --no-default-features --features saas,web --target wasm32-unknown-unknown"
-    ^docker compose --file compose.dev.yml run --rm --no-deps app cargo check --no-default-features --features saas,web --target wasm32-unknown-unknown
+    print "\n[pre-commit] cargo check --features web --target wasm32-unknown-unknown"
+    ^docker compose --file compose.dev.yml run --rm --no-deps app cargo check --features web --target wasm32-unknown-unknown
     print "\n[pre-commit] cargo build --all-targets"
     ^docker compose --file compose.dev.yml run --rm --no-deps app cargo build --all-targets
     print "\n[pre-commit] cargo test --lib"
@@ -38,7 +36,7 @@ compose := "docker compose -f compose.dev.yml "
 # Ensure .env exists (mode: standalone or saas)
 [private]
 ensure-env mode="standalone":
-    @test -f .env || cp .env.{{ mode }} .env
+    @test -f .env || cp .env.{{ mode }}.example .env
 
 # Install JS dependencies
 [private]

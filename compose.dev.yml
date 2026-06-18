@@ -22,8 +22,6 @@ services:
   app:
     build:
       context: .
-      args:
-        FEATURES: ${FEATURES:-standalone}
     container_name: dev-rusty-links-app-${USER}
     restart: unless-stopped
     volumes:
