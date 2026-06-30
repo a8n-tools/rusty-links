@@ -19,6 +19,16 @@ jobs:
     steps:
       - name: Clone the repository
         uses: https://code.forgejo.org/actions/checkout@v5
+        with:
+          # Full history so the merge-base with origin/main is available to the
+          # migration-immutability guard below.
+          fetch-depth: 0
+
+      - name: Guard migration immutability
+        # Reject any PR/push that edits, renames, or deletes a migration already
+        # committed on main (sqlx checksum drift breaks every applied DB). See
+        # scripts/check-migration-immutability.nu and LINKS-26 / DEV-395.
+        run: nu scripts/check-migration-immutability.nu
 
       - name: Cache Rust build
         uses: https://github.com/Swatinem/rust-cache@v2

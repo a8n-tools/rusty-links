@@ -623,6 +623,18 @@ sqlx migrate run
 - Keep migrations small and focused
 - Add comments explaining complex changes
 
+### Migrations Are Immutable Once Committed
+
+A committed migration file is immutable: once it has merged to `main`, never modify, rename, or delete it. Fixes always go in a NEW migration.
+
+SQLx records a SHA-384 checksum of each migration in the `_sqlx_migrations` table when it applies it, and re-verifies that checksum on every startup. If you edit a migration that any database has already applied, that database refuses to boot with `migration N was previously applied but has been modified`, and recovery requires reconciling the recorded checksum by hand against production. (This is exactly how the mokosh-server v0.4.0 deploy broke on nc-01 when an already-applied seed migration was edited during a cleanup.)
+
+This rule is enforced mechanically in CI: `scripts/check-migration-immutability.nu` runs in `.forgejo/workflows/check.yml` and fails any PR (or push to `main`) that modifies, renames, or deletes a `migrations/*.sql` file already present on `main`. Adding a new migration file passes. To run the same check locally:
+
+```bash
+nu scripts/check-migration-immutability.nu
+```
+
 ---
 
 ## Indexes
