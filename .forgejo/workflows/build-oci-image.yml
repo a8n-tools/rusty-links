@@ -33,6 +33,8 @@ on:
 jobs:
   build-and-push:
     name: Build and push rusty-links
+    # Base label: nothing compiles on the runner. The Rust build happens inside
+    # `docker buildx`, and the steps here only run git, nu and docker.
     runs-on: ${{ vars.RUNS_ON_OPENSUSE_BASE_LATEST }}
     permissions:
       contents: read

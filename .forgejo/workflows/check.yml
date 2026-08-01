@@ -14,7 +14,10 @@ on:
 jobs:
   check:
     name: clippy + fmt + tests
-    runs-on: ${{ vars.RUNS_ON_OPENSUSE_BASE_LATEST }}
+    # Dev label: this job compiles and links Rust on the runner (build scripts and
+    # the host-target build/test need cc/ld plus glibc and OpenSSL headers, which
+    # only the dev image carries).
+    runs-on: ${{ vars.RUNS_ON_OPENSUSE_DEV_LATEST }}
 
     steps:
       - name: Clone the repository
