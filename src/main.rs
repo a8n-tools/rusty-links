@@ -348,6 +348,20 @@ async fn main() {
         ));
     }
 
+    // LINKS-31: outermost layer, so every route observes only peer-gated
+    // forwarded headers. Must stay outside every reader of a client IP/country.
+    let trusted_proxies = std::sync::Arc::new(config.trusted_proxy_cidrs.clone());
+    let router = router.layer(axum::middleware::from_fn(
+        move |req: axum::http::Request<axum::body::Body>, next: axum::middleware::Next| {
+            let trusted_proxies = trusted_proxies.clone();
+            rusty_links::auth::trusted_proxy::normalize_forwarded_headers(
+                trusted_proxies,
+                req,
+                next,
+            )
+        },
+    ));
+
     let listener = tokio::net::TcpListener::bind(address)
         .await
         .expect("Failed to bind to address");

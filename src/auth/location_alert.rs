@@ -6,11 +6,13 @@
 //! database, so there is nothing to provision or license. Granularity is
 //! country-level.
 //!
-//! The header carries the same trust level as the forwarded IP, which this app
-//! believes as-is. Behind the geoblock edge it is authoritative; with no edge
-//! (a private IP, a direct client, an unset header) the country is `None` and
-//! no alert ever fires, so the feature degrades cleanly rather than raising a
-//! false alarm.
+//! The header carries the same trust level as the forwarded IP, so LINKS-31
+//! gates both on the socket peer: `X-Forwarded-For`, `X-Real-Ip`, and
+//! `X-IPCountry` are read only when the peer is a configured trusted proxy (see
+//! [`crate::auth::trusted_proxy`]), and are ignored otherwise. Behind the
+//! geoblock edge they are authoritative; off it (a direct client, no configured
+//! proxy, an unset header) the country is `None` and no alert ever fires, so a
+//! forged header can neither raise a false alarm nor suppress a real one.
 
 use std::sync::OnceLock;
 use std::time::Duration;
