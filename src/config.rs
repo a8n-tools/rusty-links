@@ -33,6 +33,63 @@ impl OidcConfig {
     }
 }
 
+/// Outbound email + new-sign-in-location alert settings (LINKS-27).
+///
+/// Carried by both `Config` and `OidcRpState` so either login path can raise an
+/// alert. Delivery is gated on `configured()`: with no SMTP host or sender the
+/// alert is logged instead of sent, so a login never depends on mail working.
+#[derive(Debug, Clone, Default)]
+pub struct MailConfig {
+    pub smtp_host: Option<String>,
+    pub smtp_port: Option<u16>,
+    pub smtp_username: Option<String>,
+    pub smtp_password: Option<String>,
+    pub smtp_from_email: Option<String>,
+    pub smtp_from_name: Option<String>,
+    /// Global kill switch for new-sign-in-location alerts. On by default.
+    pub login_location_alerts_enabled: bool,
+}
+
+impl MailConfig {
+    /// Whether SMTP delivery is configured. False means log-only mode.
+    pub fn configured(&self) -> bool {
+        self.smtp_host.is_some() && self.smtp_from_email.is_some()
+    }
+
+    fn from_env() -> Self {
+        let non_empty = |key: &str| {
+            std::env::var(key)
+                .ok()
+                .map(|v| v.trim().to_string())
+                .filter(|v| !v.is_empty())
+        };
+
+        let smtp_port = non_empty("SMTP_PORT").and_then(|v| match v.parse::<u16>() {
+            Ok(port) => Some(port),
+            Err(error) => {
+                tracing::warn!(value = %v, error = %error, "Ignoring invalid SMTP_PORT");
+                None
+            }
+        });
+
+        Self {
+            smtp_host: non_empty("SMTP_HOST"),
+            smtp_port,
+            smtp_username: non_empty("SMTP_USERNAME"),
+            smtp_password: non_empty("SMTP_PASSWORD"),
+            smtp_from_email: non_empty("SMTP_FROM_EMAIL"),
+            smtp_from_name: non_empty("SMTP_FROM_NAME"),
+            login_location_alerts_enabled: !matches!(
+                non_empty("LOGIN_LOCATION_ALERTS_ENABLED")
+                    .unwrap_or_default()
+                    .to_ascii_lowercase()
+                    .as_str(),
+                "false" | "0" | "no" | "off"
+            ),
+        }
+    }
+}
+
 /// Application configuration
 #[derive(Debug, Clone)]
 pub struct Config {
@@ -55,6 +112,8 @@ pub struct Config {
     pub account_lockout_attempts: i32,
     pub account_lockout_duration_minutes: i64,
     pub allow_registration: bool,
+    /// Outbound email + login-location alert settings (LINKS-27).
+    pub mail: MailConfig,
 }
 
 impl Config {
@@ -318,6 +377,7 @@ impl Config {
             account_lockout_attempts,
             account_lockout_duration_minutes,
             allow_registration,
+            mail: MailConfig::from_env(),
         })
     }
 
@@ -367,6 +427,7 @@ mod tests {
             account_lockout_attempts: 5,
             account_lockout_duration_minutes: 30,
             allow_registration: true,
+            mail: MailConfig::default(),
         }
     }
 

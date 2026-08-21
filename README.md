@@ -104,6 +104,22 @@ cp .env.saas .env         # SaaS mode
 | `ACCOUNT_LOCKOUT_DURATION`   | Lockout duration in minutes                    | `30`    |
 | `ALLOW_REGISTRATION`         | Allow new user registration (`true`/`1`)       | `true`  |
 
+#### Sign-in Location Alert Settings
+
+On a successful login the country is read from the `X-IPCountry` header injected by the reverse proxy's geoblock plugin (there is no geoip database). When it differs from the country of the account's previous login, the user is emailed a security alert. With no such header no country resolves and no alert is sent, so the feature degrades cleanly. Applies to both modes.
+
+| Variable                        | Description                                              | Default      |
+|---------------------------------|----------------------------------------------------------|--------------|
+| `LOGIN_LOCATION_ALERTS_ENABLED` | Global kill switch for new-location alerts               | `true`       |
+| `SMTP_HOST`                     | SMTP server hostname (unset means log-only delivery)     | None         |
+| `SMTP_PORT`                     | SMTP server port                                         | lettre default |
+| `SMTP_USERNAME`                 | SMTP username (omit for an unauthenticated relay)        | None         |
+| `SMTP_PASSWORD`                 | SMTP password                                            | None         |
+| `SMTP_FROM_EMAIL`               | Sender address (unset means log-only delivery)           | None         |
+| `SMTP_FROM_NAME`                | Sender display name                                      | None         |
+
+Alerts are also suppressed per user by the `users.notify_new_location` opt-out column, and are capped at one email per user per country per day.
+
 See `.env.standalone` and `.env.saas` for full documentation of all options.
 
 ---

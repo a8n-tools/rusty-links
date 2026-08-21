@@ -61,6 +61,14 @@ Cookie::build((SESSION_COOKIE_NAME, session_id))
 - Setup endpoint disabled after first user
 - Reduces multi-tenant security concerns
 
+✅ **New Sign-in Location Alerts** (LINKS-27)
+- Every completed login records the country the edge resolved for the request
+- A login from a country the account has not used before emails the user an alert with the country, time, IP, and device
+- The country comes from the `X-IPCountry` header injected by the reverse proxy's geoblock plugin; there is no geoip database, and with no such header no country resolves and no alert fires
+- A first-ever login and a repeat from the same country are never flagged
+- Per-user opt-out (`users.notify_new_location`), a global kill switch (`LOGIN_LOCATION_ALERTS_ENABLED`), and a cap of one alert per user per country per day
+- Runs off the login hot path, so a mail failure can never fail or slow a login
+
 ✅ **CSRF Protection**
 - SameSite cookie attribute
 - State-changing operations use POST/PUT/DELETE

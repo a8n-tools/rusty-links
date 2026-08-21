@@ -231,6 +231,7 @@ async fn main() {
         let oidc_router = rusty_links::auth::oidc_rp::create_router(
             pool.clone(),
             config.oidc.clone(),
+            config.mail.clone(),
             oidc_verifier.clone(),
         );
         router = router.merge(oidc_router);

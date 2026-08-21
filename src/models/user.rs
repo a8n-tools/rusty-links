@@ -114,6 +114,38 @@ impl User {
     pub fn verify_password(&self, password: &str) -> bool {
         verify_password(password, &self.password_hash).unwrap_or(false)
     }
+
+    /// Read what the new-sign-in-location check needs: the address to notify,
+    /// the country of the last login, and the per-user opt-out (LINKS-27).
+    /// Returns `None` when the user no longer exists.
+    pub async fn get_login_location(
+        pool: &PgPool,
+        id: Uuid,
+    ) -> Result<Option<(String, Option<String>, bool)>, AppError> {
+        let row = sqlx::query_as::<_, (String, Option<String>, bool)>(
+            "SELECT email, last_login_country, notify_new_location FROM users WHERE id = $1",
+        )
+        .bind(id)
+        .fetch_optional(pool)
+        .await?;
+
+        Ok(row)
+    }
+
+    /// Record the country of this login, compared against on the next one.
+    pub async fn update_last_login_country(
+        pool: &PgPool,
+        id: Uuid,
+        country: &str,
+    ) -> Result<(), AppError> {
+        sqlx::query("UPDATE users SET last_login_country = $1 WHERE id = $2")
+            .bind(country)
+            .bind(id)
+            .execute(pool)
+            .await?;
+
+        Ok(())
+    }
 }
 
 /// Data for creating a new user

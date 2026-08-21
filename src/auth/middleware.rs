@@ -4,27 +4,58 @@ use uuid::Uuid;
 
 use crate::error::AppError;
 
-/// Extract the client IP address from request parts.
-/// Checks X-Forwarded-For and X-Real-Ip headers first (for reverse proxy setups),
-/// then falls back to the connection info.
-fn client_ip(parts: &Parts) -> String {
-    if let Some(forwarded) = parts
-        .headers
-        .get("X-Forwarded-For")
-        .and_then(|v| v.to_str().ok())
-    {
+/// Extract the client IP address from request headers.
+/// Checks X-Forwarded-For and X-Real-Ip (for reverse proxy setups); returns
+/// `None` when neither is present, leaving the fallback to the caller.
+pub fn client_ip_from_headers(headers: &axum::http::HeaderMap) -> Option<String> {
+    if let Some(forwarded) = headers.get("X-Forwarded-For").and_then(|v| v.to_str().ok()) {
         if let Some(ip) = forwarded.split(',').next().map(|s| s.trim()) {
             if !ip.is_empty() {
-                return ip.to_string();
+                return Some(ip.to_string());
             }
         }
     }
 
-    if let Some(real_ip) = parts.headers.get("X-Real-Ip").and_then(|v| v.to_str().ok()) {
-        let trimmed = real_ip.trim();
-        if !trimmed.is_empty() {
-            return trimmed.to_string();
-        }
+    headers
+        .get("X-Real-Ip")
+        .and_then(|v| v.to_str().ok())
+        .map(str::trim)
+        .filter(|ip| !ip.is_empty())
+        .map(str::to_string)
+}
+
+/// The country the edge resolved this request to (LINKS-27).
+///
+/// Reads the `X-IPCountry` header injected by the reverse proxy's geoblock
+/// plugin, so there is no in-process geoip database. Accepted only as an
+/// ISO-3166-1 alpha-2 code; anything else (absent, empty, a sentinel, a
+/// three-letter code) resolves to `None` and never raises an alert. This
+/// carries the same trust level as the forwarded IP above, which is believed
+/// as-is; a trusted-proxy peer gate is tracked separately.
+pub fn client_country(headers: &axum::http::HeaderMap) -> Option<String> {
+    headers
+        .get("X-IPCountry")
+        .and_then(|value| value.to_str().ok())
+        .map(|value| value.trim().to_ascii_uppercase())
+        .filter(|value| value.len() == 2 && value.bytes().all(|b| b.is_ascii_alphabetic()))
+}
+
+/// The requesting device, from the User-Agent header, truncated for storage.
+pub fn device_info(headers: &axum::http::HeaderMap) -> Option<String> {
+    headers
+        .get("User-Agent")
+        .and_then(|value| value.to_str().ok())
+        .map(str::trim)
+        .filter(|value| !value.is_empty())
+        .map(|value| value.chars().take(256).collect())
+}
+
+/// Extract the client IP address from request parts.
+/// Prefers the forwarding headers (for reverse proxy setups), then falls back
+/// to the connection info.
+fn client_ip(parts: &Parts) -> String {
+    if let Some(ip) = client_ip_from_headers(&parts.headers) {
+        return ip;
     }
 
     if let Some(connect_info) = parts
