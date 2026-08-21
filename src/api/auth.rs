@@ -19,6 +19,7 @@ use sqlx::PgPool;
 
 use crate::auth::jwt::{create_jwt, generate_refresh_token};
 use crate::auth::location_alert::{resolve_notify_new_location, spawn_new_location_check};
+use crate::auth::login_approval::{approval_country, request_login_approval};
 use crate::auth::middleware::{AuthenticatedUser, Claims};
 use crate::config::Config;
 use crate::models::{
@@ -45,6 +46,44 @@ pub async fn check_setup_handler(
     Ok(Json(CheckSetupResponse {
         setup_required: !user_exists,
     }))
+}
+
+/// The one place a standalone session is minted: the access token, the stored
+/// refresh token, and the body a client reads them from.
+///
+/// Every completion path goes through here, so the LINKS-35 gate has a single
+/// thing to sit in front of and a second implementation cannot drift away from
+/// this one.
+async fn establish_jwt_session(
+    pool: &PgPool,
+    config: &Config,
+    user: &User,
+) -> Result<AuthResponse, AppError> {
+    let token = create_jwt(
+        &user.email,
+        user.id,
+        user.is_admin,
+        &config.jwt_secret,
+        config.jwt_expiry_hours,
+    )
+    .map_err(|e| AppError::Internal(format!("Failed to create JWT: {}", e)))?;
+
+    let refresh_token = generate_refresh_token();
+    let expires_at = chrono::Utc::now() + chrono::Duration::days(config.refresh_token_expiry_days);
+
+    sqlx::query("INSERT INTO refresh_tokens (user_id, token, expires_at) VALUES ($1, $2, $3)")
+        .bind(user.id)
+        .bind(&refresh_token)
+        .bind(expires_at)
+        .execute(pool)
+        .await?;
+
+    Ok(AuthResponse {
+        token,
+        refresh_token,
+        email: user.email.clone(),
+        is_admin: user.is_admin,
+    })
 }
 
 // ── Standalone mode handlers ──────────────────────────────────────────
@@ -77,38 +116,17 @@ pub async fn setup_handler(
     let user = User::create(&pool, &request.email, &request.password, &request.name).await?;
     tracing::info!(user_id = %user.id, email = %user.email, "First user created");
 
-    // Create JWT + refresh token
-    let token = create_jwt(
-        &user.email,
-        user.id,
-        user.is_admin,
-        &config.jwt_secret,
-        config.jwt_expiry_hours,
-    )
-    .map_err(|e| AppError::Internal(format!("Failed to create JWT: {}", e)))?;
-
-    let refresh_token = generate_refresh_token();
-
-    // Store refresh token in database
-    let expires_at = chrono::Utc::now() + chrono::Duration::days(config.refresh_token_expiry_days);
-    sqlx::query("INSERT INTO refresh_tokens (user_id, token, expires_at) VALUES ($1, $2, $3)")
-        .bind(user.id)
-        .bind(&refresh_token)
-        .bind(expires_at)
-        .execute(&pool)
-        .await?;
+    // Never gated by the LINKS-35 approval gate: this creates the first user,
+    // so there is no prior country to differ from and holding it would mean the
+    // first user could never sign in.
+    let response = establish_jwt_session(&pool, &config, &user).await?;
 
     // Baseline this account's country so the next login from elsewhere alerts.
     spawn_new_location_check(&pool, &config.mail, user.id, &headers);
 
     tracing::info!(user_id = %user.id, "Setup completed successfully");
 
-    Ok(Json(AuthResponse {
-        token,
-        refresh_token,
-        email: user.email,
-        is_admin: user.is_admin,
-    }))
+    Ok(Json(response))
 }
 
 /// POST /api/auth/register (standalone)
@@ -143,37 +161,16 @@ pub async fn register_handler(
     )
     .await?;
 
-    // Create JWT + refresh token
-    let token = create_jwt(
-        &user.email,
-        user.id,
-        user.is_admin,
-        &config.jwt_secret,
-        config.jwt_expiry_hours,
-    )
-    .map_err(|e| AppError::Internal(format!("Failed to create JWT: {}", e)))?;
-
-    let refresh_token = generate_refresh_token();
-
-    let expires_at = chrono::Utc::now() + chrono::Duration::days(config.refresh_token_expiry_days);
-    sqlx::query("INSERT INTO refresh_tokens (user_id, token, expires_at) VALUES ($1, $2, $3)")
-        .bind(user.id)
-        .bind(&refresh_token)
-        .bind(expires_at)
-        .execute(&pool)
-        .await?;
+    // Never gated by the LINKS-35 approval gate, for the same reason as setup:
+    // the account is being created, so it has no prior country.
+    let response = establish_jwt_session(&pool, &config, &user).await?;
 
     // Baseline this account's country so the next login from elsewhere alerts.
     spawn_new_location_check(&pool, &config.mail, user.id, &headers);
 
     tracing::info!(user_id = %user.id, email = %user.email, "Registration successful");
 
-    Ok(Json(AuthResponse {
-        token,
-        refresh_token,
-        email: user.email,
-        is_admin: user.is_admin,
-    }))
+    Ok(Json(response))
 }
 
 /// POST /api/auth/login (standalone)
@@ -230,28 +227,28 @@ pub async fn login_handler(
     // Record successful attempt
     security::record_login_attempt(&pool, &request.email, true).await;
 
+    // LINKS-35: the credential check passed, so this is the point where a
+    // session would be issued and therefore where the gate belongs. With the
+    // gate on and the country new to this account, nothing is issued: the
+    // sign-in is held until the owner approves it from an emailed link. The
+    // LINKS-27 alert is not also fired, because the approval mail reports the
+    // same event and additionally asks for a decision, and `last_login_country`
+    // stays unwritten so an unapproved attempt cannot look familiar next time.
+    if config.mail.login_approval_enabled {
+        // The third field is the per-user alert opt-out, deliberately unused: a
+        // preference set from a session must not switch a security gate off.
+        if let Some((email, previous, _opt_out)) = User::get_login_location(&pool, user.id).await? {
+            if let Some(country) = approval_country(&config.mail, previous.as_deref(), &headers) {
+                request_login_approval(&pool, &config, user.id, &email, &country, &headers).await?;
+                return Err(AppError::ApprovalRequired);
+            }
+        }
+    }
+
     // Alert on a sign-in from a country this account has not used before.
     spawn_new_location_check(&pool, &config.mail, user.id, &headers);
 
-    // Create JWT + refresh token
-    let token = create_jwt(
-        &user.email,
-        user.id,
-        user.is_admin,
-        &config.jwt_secret,
-        config.jwt_expiry_hours,
-    )
-    .map_err(|e| AppError::Internal(format!("Failed to create JWT: {}", e)))?;
-
-    let refresh_token = generate_refresh_token();
-
-    let expires_at = chrono::Utc::now() + chrono::Duration::days(config.refresh_token_expiry_days);
-    sqlx::query("INSERT INTO refresh_tokens (user_id, token, expires_at) VALUES ($1, $2, $3)")
-        .bind(user.id)
-        .bind(&refresh_token)
-        .bind(expires_at)
-        .execute(&pool)
-        .await?;
+    let response = establish_jwt_session(&pool, &config, &user).await?;
 
     tracing::info!(
         user_id = %user.id,
@@ -259,12 +256,7 @@ pub async fn login_handler(
         "Login successful"
     );
 
-    Ok(Json(AuthResponse {
-        token,
-        refresh_token,
-        email: user.email,
-        is_admin: user.is_admin,
-    }))
+    Ok(Json(response))
 }
 
 /// POST /api/auth/refresh (standalone)
@@ -307,33 +299,9 @@ pub async fn refresh_handler(
         .await?
         .ok_or(AppError::SessionExpired)?;
 
-    // Create new JWT + refresh token
-    let token = create_jwt(
-        &user.email,
-        user.id,
-        user.is_admin,
-        &config.jwt_secret,
-        config.jwt_expiry_hours,
-    )
-    .map_err(|e| AppError::Internal(format!("Failed to create JWT: {}", e)))?;
-
-    let new_refresh_token = generate_refresh_token();
-
-    let new_expires_at =
-        chrono::Utc::now() + chrono::Duration::days(config.refresh_token_expiry_days);
-    sqlx::query("INSERT INTO refresh_tokens (user_id, token, expires_at) VALUES ($1, $2, $3)")
-        .bind(user.id)
-        .bind(&new_refresh_token)
-        .bind(new_expires_at)
-        .execute(&pool)
-        .await?;
-
-    Ok(Json(AuthResponse {
-        token,
-        refresh_token: new_refresh_token,
-        email: user.email,
-        is_admin: user.is_admin,
-    }))
+    // Not gated by LINKS-35: this continues a session an earlier completed
+    // sign-in already issued, it is not a sign-in of its own.
+    Ok(Json(establish_jwt_session(&pool, &config, &user).await?))
 }
 
 /// POST /api/auth/logout (standalone)

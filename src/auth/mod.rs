@@ -2,6 +2,7 @@
 //!
 //! - `jwt`      — HS256 JWT creation/validation (standalone mode)
 //! - `location_alert` - new-sign-in-country detection (LINKS-27)
+//! - `login_approval` - approval gate for a sign-in from a new country (LINKS-35)
 //! - `mailer`   - outbound security notification email
 //! - `middleware` — Axum extractors for authentication
 //! - `oidc_rs`  — OIDC Resource Server token verifier (hosted mode)
@@ -13,6 +14,7 @@
 
 pub mod jwt;
 pub mod location_alert;
+pub mod login_approval;
 pub mod mailer;
 pub mod middleware;
 pub mod oidc_rp;

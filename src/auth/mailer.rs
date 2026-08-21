@@ -1,9 +1,13 @@
-//! Outbound email for security notifications (LINKS-27).
+//! Outbound email for security notifications (LINKS-27, LINKS-35).
 //!
-//! Minimal on purpose: one message type, built with `format!` because this
+//! Minimal on purpose: const bodies interpolated with `replace`, because this
 //! crate has no template engine. Delivery is gated on `MailConfig::configured`,
-//! so an unconfigured deployment logs the message instead of sending it and a
-//! login never depends on mail working.
+//! so an unconfigured deployment logs the message instead of sending it.
+//!
+//! The LINKS-27 alert is fire-and-forget: it must never fail a login. The
+//! LINKS-35 approval mail is not: it runs on the login hot path and a delivery
+//! failure propagates, so the sign-in fails closed instead of completing
+//! ungated. That difference is the caller's, not this module's.
 
 use chrono::Utc;
 use lettre::message::Mailbox;
@@ -28,6 +32,26 @@ Device: {device}
 If this was you, no action is needed.
 
 If you do not recognise this sign-in, someone else may have access to your account. Sign in and change your Rusty Links password now, then review your active sessions.
+";
+
+/// Plain-text body of the sign-in approval request (LINKS-35).
+const LOGIN_APPROVAL_BODY: &str = "\
+Approve the sign-in to your Rusty Links account
+
+A sign-in to your Rusty Links account came from a country you have not used before, so it is being held and no session was issued.
+
+Country: {country}
+When: {timestamp}
+IP address: {ip_address}
+Device: {device}
+
+If this was you, approve it here and then sign in again:
+
+{approval_url}
+
+The link works once and expires in {expires_in_minutes} minutes.
+
+If this was not you, do nothing. The sign-in never completes without your approval. Change your Rusty Links password anyway, because whoever tried it had it.
 ";
 
 /// Select the lettre constructor for the configured TLS mode (LINKS-37).
@@ -72,36 +96,32 @@ fn smtp_transport(mail: &MailConfig) -> Result<AsyncSmtpTransport<Tokio1Executor
     Ok(builder.build())
 }
 
-/// Email the user that their account was signed in to from a new country.
+/// Send one security notification, or log it when SMTP is unconfigured.
 ///
-/// Returns `Ok` without sending when SMTP is unconfigured (log mode), so the
-/// caller cannot fail a login on a missing mail server.
-pub async fn send_new_signin_location_email(
+/// `kind` names the message in the logs. Returns `Ok` without sending in log
+/// mode, so a caller that must not fail on a missing mail server does not, and
+/// the body (including any link it carries) still reaches the log.
+async fn deliver(
     mail: &MailConfig,
     email: &str,
-    country: &str,
-    ip: &str,
-    device: Option<&str>,
+    kind: &str,
+    subject: String,
+    body: String,
 ) -> Result<(), AppError> {
-    let subject = format!("New sign-in to your Rusty Links account from {country}");
-    let body = NEW_SIGNIN_LOCATION_BODY
-        .replace("{country}", country)
-        .replace("{timestamp}", &Utc::now().to_rfc3339())
-        .replace("{ip_address}", ip)
-        .replace("{device}", device.unwrap_or("unknown"));
-
     if !mail.configured() {
         tracing::warn!(
             delivery_mode = "log",
             email = %email,
+            kind,
             subject,
-            "New sign-in location email NOT sent: delivery in log mode. Set SMTP_HOST and SMTP_FROM_EMAIL to enable SMTP."
+            "Security email NOT sent: delivery in log mode. Set SMTP_HOST and SMTP_FROM_EMAIL to enable SMTP."
         );
         tracing::info!(
             delivery_mode = "log",
             email = %email,
+            kind,
             body = %body,
-            "New sign-in location email body (log mode)"
+            "Security email body (log mode)"
         );
         return Ok(());
     }
@@ -124,9 +144,7 @@ pub async fn send_new_signin_location_email(
         .to(Mailbox::new(None, to_mailbox))
         .subject(subject)
         .body(body)
-        .map_err(|error| {
-            AppError::Internal(format!("New sign-in location email build failed: {error}"))
-        })?;
+        .map_err(|error| AppError::Internal(format!("{kind} email build failed: {error}")))?;
 
     match smtp_transport(mail)?.send(message).await {
         Ok(_) => {
@@ -134,7 +152,8 @@ pub async fn send_new_signin_location_email(
                 delivery_mode = "smtp",
                 delivered = true,
                 email = %email,
-                "New sign-in location email delivered"
+                kind,
+                "Security email delivered"
             );
             Ok(())
         }
@@ -143,14 +162,63 @@ pub async fn send_new_signin_location_email(
                 delivery_mode = "smtp",
                 delivered = false,
                 email = %email,
+                kind,
                 error = %error,
-                "New sign-in location email delivery failed"
+                "Security email delivery failed"
             );
             Err(AppError::ExternalService(format!(
-                "New sign-in location email delivery failed: {error}"
+                "{kind} email delivery failed: {error}"
             )))
         }
     }
+}
+
+/// Email the user that their account was signed in to from a new country.
+///
+/// Returns `Ok` without sending when SMTP is unconfigured (log mode), so the
+/// caller cannot fail a login on a missing mail server.
+pub async fn send_new_signin_location_email(
+    mail: &MailConfig,
+    email: &str,
+    country: &str,
+    ip: &str,
+    device: Option<&str>,
+) -> Result<(), AppError> {
+    let subject = format!("New sign-in to your Rusty Links account from {country}");
+    let body = NEW_SIGNIN_LOCATION_BODY
+        .replace("{country}", country)
+        .replace("{timestamp}", &Utc::now().to_rfc3339())
+        .replace("{ip_address}", ip)
+        .replace("{device}", device.unwrap_or("unknown"));
+
+    deliver(mail, email, "New sign-in location", subject, body).await
+}
+
+/// Email the user the single-use link that approves a held sign-in (LINKS-35).
+///
+/// Unlike the alert above this runs on the login hot path, so a delivery
+/// failure propagates and the sign-in fails closed rather than completing
+/// ungated. In log mode nothing is sent, and the link is only in the log: a
+/// deployment turning the gate on must configure SMTP first.
+pub async fn send_login_approval_email(
+    mail: &MailConfig,
+    email: &str,
+    country: &str,
+    ip: &str,
+    device: Option<&str>,
+    approval_url: &str,
+    expires_in_minutes: i64,
+) -> Result<(), AppError> {
+    let subject = format!("Approve the sign-in to your Rusty Links account from {country}");
+    let body = LOGIN_APPROVAL_BODY
+        .replace("{country}", country)
+        .replace("{timestamp}", &Utc::now().to_rfc3339())
+        .replace("{ip_address}", ip)
+        .replace("{device}", device.unwrap_or("unknown"))
+        .replace("{approval_url}", approval_url)
+        .replace("{expires_in_minutes}", &expires_in_minutes.to_string());
+
+    deliver(mail, email, "Sign-in approval", subject, body).await
 }
 
 #[cfg(test)]
@@ -241,5 +309,42 @@ mod tests {
         assert!(body.contains("IP address: 203.0.113.7"));
         assert!(body.contains("Device: Firefox"));
         assert!(!body.contains('{'));
+    }
+
+    // The approval mail carries the link and its lifetime, and leaves no
+    // placeholder behind: a half-interpolated link is an unapprovable sign-in.
+    #[test]
+    fn approval_body_interpolates_every_placeholder() {
+        let body = LOGIN_APPROVAL_BODY
+            .replace("{country}", "DE")
+            .replace("{timestamp}", "2026-08-21T00:00:00Z")
+            .replace("{ip_address}", "203.0.113.7")
+            .replace("{device}", "Firefox")
+            .replace(
+                "{approval_url}",
+                "https://links.example.com/auth/approve-login?token=abc",
+            )
+            .replace("{expires_in_minutes}", "15");
+        assert!(body.contains("Country: DE"));
+        assert!(body.contains("https://links.example.com/auth/approve-login?token=abc"));
+        assert!(body.contains("expires in 15 minutes"));
+        assert!(!body.contains('{'));
+    }
+
+    // Log mode never errors, so an unconfigured deployment sees the link in the
+    // log rather than a failed request with nothing to show for it.
+    #[tokio::test]
+    async fn unconfigured_mail_logs_the_approval_link_instead_of_sending() {
+        let result = send_login_approval_email(
+            &MailConfig::default(),
+            "user@example.com",
+            "DE",
+            "203.0.113.7",
+            None,
+            "https://links.example.com/auth/approve-login?token=abc",
+            15,
+        )
+        .await;
+        assert!(result.is_ok());
     }
 }

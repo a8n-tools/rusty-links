@@ -123,6 +123,38 @@ Alert mail is sent over an encrypted connection by default: `SMTP_TLS` defaults 
 
 Alerts are also suppressed per user by the `users.notify_new_location` opt-out column, and are capped at one email per user per country per day. A signed-in user turns their own alerts off and back on with `PATCH /api/auth/me` (`{"notify_new_location": false}`), and reads the current setting from `GET /api/auth/me`; the write always targets the session's own account (LINKS-33).
 
+#### Sign-in Approval Gate Settings
+
+The gate turns the detection above into a block. With it on, a sign-in that passes the password but comes from a country the account has not been used from before issues no session at all: the user is emailed a single-use link, and the sign-in completes only after they open it, approve, and sign in again. An attempt nobody approves never completes, which is what an alert alone cannot do, because an attacker who reads the mailbox can delete an alert but cannot make an unapproved sign-in succeed. It is notify-and-approve, not a lock: nothing about the account is disabled.
+
+| Variable                  | Description                                                     | Default |
+|---------------------------|-----------------------------------------------------------------|---------|
+| `LOGIN_APPROVAL_ENABLED`  | Hold a sign-in from a new country until it is approved           | `false` |
+
+It is opt-in, unlike the alert kill switch, because it can stop a real user from signing in. Only the exact value `true` enables it; unset, empty, `TRUE`, `yes`, and `1` all leave behaviour exactly as the alert shipped it. Turn it on per deployment, and only where the geoblock edge and `TRUSTED_PROXY_CIDRS` are configured and SMTP is set up, since with no resolvable country the gate can never fire and with no SMTP the approval link is only written to the log.
+
+Two sign-ins are never gated, by construction, because gating either would lock a real user out:
+
+- a first-ever sign-in, which has no prior country for the new one to differ from (this is what `POST /api/auth/setup` creates)
+- a sign-in whose country does not resolve, which is any deployment with no geoblock edge or an empty `TRUSTED_PROXY_CIDRS`
+
+The gate deliberately ignores the per-user `notify_new_location` opt-out. That preference is written from an authenticated session, so honouring it would let anyone holding a session switch the security control off, and an opted-out user would be held with no mail to approve with. It continues to govern the alert alone.
+
+##### Locked out and cannot receive the email?
+
+Recovery does not depend on email. In order:
+
+1. Set `LOGIN_APPROVAL_ENABLED=false` (or remove it) and restart. The password sign-in works again immediately, with no deploy and no code change.
+2. If the environment cannot be changed but the database can, clear the stored country so the next sign-in is treated as a first-ever one:
+
+   ```sql
+   UPDATE users SET last_login_country = NULL WHERE email = '<address>';
+   ```
+
+3. If SMTP is in log mode, the approval mail (link included) is in the application log; the app warns about this at startup when the gate is on with no SMTP configured.
+
+There is deliberately no way to approve a held sign-in from the database: only the SHA-256 of the emailed token is stored, so nobody with database access can mint or replay an approval link.
+
 #### Trusted Proxy Settings
 
 `X-Forwarded-For`, `X-Real-Ip`, and `X-IPCountry` are believed only when the socket peer sits in a configured trusted CIDR. The peer is the one input a client cannot forge, so it gates all three: a client reaching the app directly can spoof neither its IP nor its country.
