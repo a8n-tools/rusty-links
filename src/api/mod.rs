@@ -46,6 +46,13 @@ impl axum::extract::FromRef<AppState> for Config {
     }
 }
 
+/// `/me` in both modes: read the session's account, and patch the settings it
+/// owns (LINKS-33). Same pair either side of the mode switch, because the
+/// account settings belong to the user, not to the deployment mode.
+fn me_routes() -> Router<AppState> {
+    Router::new().route("/me", get(auth::me_handler).patch(auth::update_me_handler))
+}
+
 /// Create the main API router with all endpoints.
 pub fn create_router(
     pool: PgPool,
@@ -74,7 +81,7 @@ pub fn create_router(
     // not mounted, so they return 404 (not a runtime 403) exactly as before.
     let auth_router = if config.hosted() {
         // Hosted mode: OIDC owns login/logout/setup; only /me is served here.
-        Router::new().route("/me", get(auth::me_handler))
+        me_routes()
     } else {
         // Standalone mode: local JWT auth surface.
         Router::new()
@@ -83,8 +90,8 @@ pub fn create_router(
             .route("/login", post(auth::login_handler))
             .route("/refresh", post(auth::refresh_handler))
             .route("/logout", post(auth::logout_handler))
-            .route("/me", get(auth::me_handler))
             .route("/check-setup", get(auth::check_setup_handler))
+            .merge(me_routes())
     };
 
     let mut router = Router::new()

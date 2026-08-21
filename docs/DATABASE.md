@@ -161,7 +161,7 @@ CREATE TABLE users (
 | `password_hash` | TEXT        | NOT NULL                | Argon2id password hash       |
 | `created_at`    | TIMESTAMPTZ | NOT NULL, DEFAULT NOW() | Account creation timestamp |
 | `last_login_country` | VARCHAR(2) | NULL | ISO-3166-1 alpha-2 country of the last login (LINKS-27) |
-| `notify_new_location` | BOOLEAN | NOT NULL, DEFAULT TRUE | Per-user opt-out for new-location alerts (LINKS-27) |
+| `notify_new_location` | BOOLEAN | NOT NULL, DEFAULT TRUE | Per-user opt-out for new-location alerts (LINKS-27), set by the user through `PATCH /api/auth/me` (LINKS-33) |
 
 **Indexes:**
 - `idx_users_email` - Fast email lookups for authentication

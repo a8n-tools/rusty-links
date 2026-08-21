@@ -68,6 +68,8 @@ Cookie::build((SESSION_COOKIE_NAME, session_id))
 - The header is honored only from a trusted-proxy peer (LINKS-31, `TRUSTED_PROXY_CIDRS`), so a client reaching the app directly can neither fake a foreign sign-in nor pin every login to one country and silence the alert
 - A first-ever login and a repeat from the same country are never flagged
 - Per-user opt-out (`users.notify_new_location`), a global kill switch (`LOGIN_LOCATION_ALERTS_ENABLED`), and a cap of one alert per user per country per day
+- The opt-out is the user's to set (LINKS-33): `GET /api/auth/me` reports it and `PATCH /api/auth/me` changes it, scoped to the session's account, so a request body can never flip another user's setting
+- An absent `notify_new_location` key on the patch means "not submitted" and leaves the stored value alone; an explicit `false` persists and a non-boolean is rejected with 400
 - Runs off the login hot path, so a mail failure can never fail or slow a login
 - Alert mail leaves over an encrypted SMTP connection by default (LINKS-37): `SMTP_TLS` defaults to `starttls` (STARTTLS required, port 587) and `tls` selects implicit TLS (port 465)
 - Plaintext SMTP is reachable only by setting `SMTP_TLS=none` for a trusted loopback or sidecar MTA, and every send logs a warning naming the host, so a plaintext deployment is never silent

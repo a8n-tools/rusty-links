@@ -146,6 +146,23 @@ impl User {
 
         Ok(())
     }
+
+    /// Turn this user's new-location alerts on or off (LINKS-33). `id` is the
+    /// session's account, never one named by a request body, so the write can
+    /// only ever reach the caller's own row. Returns false when no user matched.
+    pub async fn set_notify_new_location(
+        pool: &PgPool,
+        id: Uuid,
+        enabled: bool,
+    ) -> Result<bool, AppError> {
+        let result = sqlx::query("UPDATE users SET notify_new_location = $1 WHERE id = $2")
+            .bind(enabled)
+            .bind(id)
+            .execute(pool)
+            .await?;
+
+        Ok(result.rows_affected() > 0)
+    }
 }
 
 /// Data for creating a new user

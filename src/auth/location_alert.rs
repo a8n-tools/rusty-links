@@ -13,6 +13,10 @@
 //! geoblock edge they are authoritative; off it (a direct client, no configured
 //! proxy, an unset header) the country is `None` and no alert ever fires, so a
 //! forged header can neither raise a false alarm nor suppress a real one.
+//!
+//! The per-user opt-out (`users.notify_new_location`) is the user's to set:
+//! `GET /api/auth/me` reports it and `PATCH /api/auth/me` changes it, always
+//! for the session's own account (LINKS-33).
 
 use std::sync::OnceLock;
 use std::time::Duration;
@@ -51,6 +55,17 @@ pub fn should_alert(
 ) -> bool {
     notify_new_location
         && matches!((previous, current), (Some(prev), Some(curr)) if !prev.eq_ignore_ascii_case(curr))
+}
+
+/// Resolve an account-settings patch against the stored preference.
+///
+/// `submitted` is `None` when the request left the key out, which means "not
+/// submitted" rather than "turn it off", so the stored value stands; an
+/// explicit `Some(false)` is a real opt-out and wins (LINKS-33). Keeping this
+/// separate from the write is what stops a patch that touches one setting from
+/// silently reverting another.
+pub fn resolve_notify_new_location(stored: bool, submitted: Option<bool>) -> bool {
+    submitted.unwrap_or(stored)
 }
 
 /// Evaluate the new-location alert off the login hot path.
@@ -167,10 +182,31 @@ mod tests {
         assert!(!should_alert(true, None, None));
     }
 
-    // The per-user opt-out suppresses the alert even on a real change.
+    // The per-user opt-out suppresses the alert even on a real change. This is
+    // the end the LINKS-33 toggle writes to: turning it off silences the mail,
+    // turning it back on restores it.
     #[test]
     fn opt_out_suppresses_alert() {
         assert!(!should_alert(false, Some("US"), Some("DE")));
+        assert!(should_alert(true, Some("US"), Some("DE")));
+    }
+
+    // An absent key means "not submitted", so the stored preference stands
+    // rather than silently reverting to the column default.
+    #[test]
+    fn absent_key_leaves_the_stored_preference_unchanged() {
+        assert!(resolve_notify_new_location(true, None));
+        assert!(!resolve_notify_new_location(false, None));
+    }
+
+    // A submitted value wins in both directions, so an explicit opt-out is a
+    // real opt-out and opting back in is possible.
+    #[test]
+    fn a_submitted_preference_wins_over_the_stored_one() {
+        assert!(!resolve_notify_new_location(true, Some(false)));
+        assert!(resolve_notify_new_location(false, Some(true)));
+        assert!(!resolve_notify_new_location(false, Some(false)));
+        assert!(resolve_notify_new_location(true, Some(true)));
     }
 
     // The edge header is normalized to an uppercase alpha-2 code.
