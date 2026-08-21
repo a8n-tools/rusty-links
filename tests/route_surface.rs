@@ -23,7 +23,7 @@ use axum::body::Body;
 use axum::http::{Request, StatusCode};
 use rusty_links::api;
 use rusty_links::auth::oidc_rs::OidcVerifier;
-use rusty_links::config::{Config, OidcConfig};
+use rusty_links::config::{Config, MailConfig, OidcConfig};
 use sqlx::postgres::PgPoolOptions;
 use tower::ServiceExt; // for `oneshot`
 
@@ -71,6 +71,8 @@ fn config_with_issuer(issuer: &str) -> Config {
         account_lockout_attempts: 5,
         account_lockout_duration_minutes: 30,
         allow_registration: true,
+        // Unconfigured: no SMTP host or sender, so alerts are logged, never sent.
+        mail: MailConfig::default(),
     }
 }
 

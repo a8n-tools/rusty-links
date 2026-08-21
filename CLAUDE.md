@@ -7,6 +7,8 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 Rusty Links is a full-stack Rust web application using Dioxus 0.7 (fullstack mode) for the frontend. It uses PostgreSQL for data storage with SQLx for database access. Tailwind CSS v4 is used for the styling.
 IMPORTANT: Do NOT modify `./assets/tailwind.css`. All CSS should go in `./tailwind.css` and `dx` will automatically run the `tailwindcss` cli to generate `./assets/tailwind.css`.
 
+`./assets/tailwind.css` is gitignored, but `src/main.rs` `include_str!`s it, so a plain `cargo build --features server` fails on a fresh checkout until the file exists. `just pre-commit` and `.forgejo/workflows/check.yml` each create an empty placeholder first; `dx build` overwrites it with the real stylesheet.
+
 ## Build & Development Commands
 
 `just pre-commit` is the authoritative check suite: it runs every leg CI runs, in the dev container, and fails on the first red one. Run it before every commit.

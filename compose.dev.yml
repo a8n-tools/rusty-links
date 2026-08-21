@@ -26,6 +26,9 @@ services:
     restart: unless-stopped
     volumes:
       - ./src:/app/src
+      # tests/ is mounted so `cargo --all-targets` in `just pre-commit` sees the
+      # integration tests; without it they are silently skipped (LINKS-36).
+      - ./tests:/app/tests
       - ./assets:/app/assets
       - ./migrations:/app/migrations
       - ./Cargo.toml:/app/Cargo.toml
