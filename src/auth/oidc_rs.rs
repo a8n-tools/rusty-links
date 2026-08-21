@@ -139,7 +139,7 @@ impl OidcVerifier {
 
     /// Validate an `at+jwt` Bearer token.  Returns claims on success.
     pub async fn verify(&self, token: &str) -> Result<AtClaims, AppError> {
-        let header = jsonwebtoken::decode_header(token).map_err(|e| AppError::SessionExpired)?;
+        let header = jsonwebtoken::decode_header(token).map_err(|_| AppError::SessionExpired)?;
 
         if header.typ.as_deref() != Some("at+jwt") {
             return Err(AppError::SessionExpired);
@@ -404,7 +404,7 @@ impl OidcVerifier {
             if entry.crv.as_deref() != Some("Ed25519") {
                 continue;
             }
-            if entry.key_use.as_deref().map_or(false, |u| u != "sig") {
+            if entry.key_use.as_deref().is_some_and(|u| u != "sig") {
                 continue;
             }
             let Some(x) = &entry.x else { continue };

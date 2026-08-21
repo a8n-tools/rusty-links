@@ -273,15 +273,16 @@ Complete checklist for launching Rusty Links v1.0.0 to production.
 ## 💻 Code Quality
 
 ### Testing
-- [ ] `cargo test` passes all tests
+- [ ] `just pre-commit` passes (covers fmt, clippy, build and tests under default features and `--features server`, plus the wasm check)
+- [ ] `cargo test --features server --lib` passes all tests
 - [ ] Unit tests cover critical functions
 - [ ] Integration tests work
 - [ ] Test coverage > 70%
 - [ ] No ignored tests (except examples)
 
 ### Code Standards
-- [ ] `cargo clippy` has no warnings
-- [ ] `cargo clippy -- -D warnings` passes
+- [ ] `cargo clippy --all-targets -- --deny warnings` passes
+- [ ] `cargo clippy --all-targets --features server -- --deny warnings` passes
 - [ ] `cargo fmt` formatting applied
 - [ ] `cargo fmt -- --check` passes
 - [ ] No `TODO` comments in critical paths

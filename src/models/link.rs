@@ -126,7 +126,7 @@ impl Link {
 
         // Check if it's a GitHub repo
         let is_github_repo = domain == "github.com"
-            && path.as_ref().map_or(false, |p| {
+            && path.as_ref().is_some_and(|p| {
                 let parts: Vec<&str> = p.trim_matches('/').split('/').collect();
                 parts.len() >= 2
             });
@@ -1493,7 +1493,7 @@ mod tests {
             Some(path.to_string())
         };
         let is_repo = url.host_str() == Some("github.com")
-            && path_opt.as_ref().map_or(false, |p| {
+            && path_opt.as_ref().is_some_and(|p| {
                 let parts: Vec<&str> = p.trim_matches('/').split('/').collect();
                 parts.len() >= 2
             });

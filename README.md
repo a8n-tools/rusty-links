@@ -226,7 +226,13 @@ rusty-links/
 
 ### Running Tests
 
+`default = []` and every server module is behind `#[cfg(feature = "server")]`, so a bare `cargo test` compiles almost none of the crate.
+
 ```bash
+# Server-side unit tests (the bulk of the suite)
+cargo test --features server --lib
+
+# Default-feature tests
 cargo test
 ```
 
@@ -254,9 +260,18 @@ sqlx migrate run
 
 ### Code Quality
 
+`just pre-commit` runs every leg CI runs, in the dev container, and stops at the first failure.
+
+```bash
+just pre-commit
+```
+
+The individual legs:
+
 ```bash
 cargo fmt
-cargo clippy
+cargo clippy --all-targets -- --deny warnings
+cargo clippy --all-targets --features server -- --deny warnings
 cargo check
 cargo check --features server
 cargo check --features web --target wasm32-unknown-unknown

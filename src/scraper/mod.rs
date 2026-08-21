@@ -9,7 +9,7 @@ use std::time::Duration;
 use url::Url;
 
 /// Scraped metadata from a web page
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Default)]
 pub struct ScrapedMetadata {
     /// Page title from <title> tag or og:title meta tag
     pub title: Option<String>,
@@ -17,16 +17,6 @@ pub struct ScrapedMetadata {
     pub description: Option<String>,
     /// Favicon URL (absolute)
     pub favicon: Option<String>,
-}
-
-impl Default for ScrapedMetadata {
-    fn default() -> Self {
-        Self {
-            title: None,
-            description: None,
-            favicon: None,
-        }
-    }
 }
 
 /// Scrape metadata from a given URL
@@ -91,15 +81,14 @@ pub async fn scrape_url(url: &str) -> Result<ScrapedMetadata, AppError> {
     };
     // document is dropped here, before any await
 
-    // Create metadata
-    let mut metadata = ScrapedMetadata::default();
-    metadata.title = title;
-    metadata.description = description;
+    // Favicon validation is async, so resolve it before building the struct.
+    let favicon = validate_favicon_candidates(&client, favicon_candidates).await;
 
-    // Validate favicon candidates (async, no reference to Html)
-    metadata.favicon = validate_favicon_candidates(&client, favicon_candidates).await;
-
-    Ok(metadata)
+    Ok(ScrapedMetadata {
+        title,
+        description,
+        favicon,
+    })
 }
 
 /// Check if a URL is accessible (returns HTTP 2xx or 3xx)

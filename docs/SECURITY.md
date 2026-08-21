@@ -520,7 +520,7 @@ cargo audit
 git log --oneline --since="1 week ago"
 
 # Test updates
-cargo test
+cargo test --features server --lib
 
 # Deploy
 docker compose build
