@@ -1,3 +1,5 @@
+use ipnetwork::IpNetwork;
+
 use crate::error::AppError;
 
 /// OIDC Relying Party + Resource Server configuration (hosted mode).
@@ -154,6 +156,10 @@ pub struct Config {
     pub allow_registration: bool,
     /// Outbound email + login-location alert settings (LINKS-27).
     pub mail: MailConfig,
+    /// CIDRs whose socket peers may set `X-Forwarded-For`, `X-Real-Ip`, and
+    /// `X-IPCountry` (LINKS-31). Empty means trust no peer, so every
+    /// forwarded header is ignored in favor of the socket address.
+    pub trusted_proxy_cidrs: Vec<IpNetwork>,
 }
 
 impl Config {
@@ -394,6 +400,22 @@ impl Config {
             .transpose()?
             .unwrap_or(30);
 
+        // Secure default: unset means no peer is trusted, so a direct client
+        // cannot forge its IP or country. Deployments behind a proxy must set it.
+        let trusted_proxy_cidrs = crate::auth::trusted_proxy::parse_trusted_proxy_cidrs(
+            &std::env::var("TRUSTED_PROXY_CIDRS").unwrap_or_default(),
+        );
+        if trusted_proxy_cidrs.is_empty() {
+            tracing::info!(
+                "TRUSTED_PROXY_CIDRS is empty - forwarded IP and country headers are ignored and the socket peer is used"
+            );
+        } else {
+            tracing::info!(
+                count = trusted_proxy_cidrs.len(),
+                "Trusted-proxy CIDRs loaded - forwarded IP and country headers are honored only from these peers"
+            );
+        }
+
         let allow_registration = std::env::var("ALLOW_REGISTRATION")
             .ok()
             .map(|v| v == "true" || v == "1")
@@ -417,6 +439,7 @@ impl Config {
             account_lockout_duration_minutes,
             allow_registration,
             mail: MailConfig::from_env(),
+            trusted_proxy_cidrs,
         })
     }
 
@@ -467,6 +490,7 @@ mod tests {
             account_lockout_duration_minutes: 30,
             allow_registration: true,
             mail: MailConfig::default(),
+            trusted_proxy_cidrs: Vec::new(),
         }
     }
 

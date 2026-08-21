@@ -73,6 +73,9 @@ lettre = { version = "0.11", default-features = false, features = ["builder", "s
 # Cookie max-age handling (saas mode — cookie crate re-exports this)
 time = { version = "0.3", optional = true }
 
+# Trusted-proxy CIDR matching for the forwarded-header gate (server only)
+ipnetwork = { version = "0.20", optional = true }
+
 # WASM compatibility - must be in main dependencies to propagate to all transitive deps
 getrandom = "0.3.4"
 
@@ -130,6 +133,7 @@ server = [
     "dep:moka",
     "dep:time",
     "dep:lettre",
+    "dep:ipnetwork",
 ]
 web = [
     "dioxus/web",

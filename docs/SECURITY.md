@@ -65,11 +65,20 @@ Cookie::build((SESSION_COOKIE_NAME, session_id))
 - Every completed login records the country the edge resolved for the request
 - A login from a country the account has not used before emails the user an alert with the country, time, IP, and device
 - The country comes from the `X-IPCountry` header injected by the reverse proxy's geoblock plugin; there is no geoip database, and with no such header no country resolves and no alert fires
+- The header is honored only from a trusted-proxy peer (LINKS-31, `TRUSTED_PROXY_CIDRS`), so a client reaching the app directly can neither fake a foreign sign-in nor pin every login to one country and silence the alert
 - A first-ever login and a repeat from the same country are never flagged
 - Per-user opt-out (`users.notify_new_location`), a global kill switch (`LOGIN_LOCATION_ALERTS_ENABLED`), and a cap of one alert per user per country per day
 - Runs off the login hot path, so a mail failure can never fail or slow a login
 - Alert mail leaves over an encrypted SMTP connection by default (LINKS-37): `SMTP_TLS` defaults to `starttls` (STARTTLS required, port 587) and `tls` selects implicit TLS (port 465)
 - Plaintext SMTP is reachable only by setting `SMTP_TLS=none` for a trusted loopback or sidecar MTA, and every send logs a warning naming the host, so a plaintext deployment is never silent
+
+✅ **Trusted Proxy Gate** (LINKS-31)
+- `X-Forwarded-For`, `X-Real-Ip`, and `X-IPCountry` are read only when the socket peer sits in a CIDR listed in `TRUSTED_PROXY_CIDRS`; the peer is the one input a client cannot forge
+- Empty (the default) trusts no peer: all three headers are ignored and the socket address is used, so a direct client cannot spoof its IP or its country
+- Inside a proxy chain the rightmost `X-Forwarded-For` entry that is not itself a trusted proxy wins, so entries a client prepends are discarded
+- The gate runs as the outermost middleware and rewrites the request headers, so every downstream reader sees only peer-gated values
+- Unparseable CIDR entries log a warning and are skipped rather than failing boot
+- Deployments behind a reverse proxy MUST set the private ingress ranges (`10.0.0.0/8,172.16.0.0/12,192.168.0.0/16,fd00::/8`); leaving it empty collapses every client to the proxy address and silences the location alert
 
 ✅ **CSRF Protection**
 - SameSite cookie attribute

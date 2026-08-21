@@ -73,6 +73,8 @@ fn config_with_issuer(issuer: &str) -> Config {
         allow_registration: true,
         // Unconfigured: no SMTP host or sender, so alerts are logged, never sent.
         mail: MailConfig::default(),
+        // Trust no peer, the shipped default: forwarded headers are ignored.
+        trusted_proxy_cidrs: Vec::new(),
     }
 }
 

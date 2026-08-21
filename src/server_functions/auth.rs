@@ -91,17 +91,9 @@ pub async fn log_unauthenticated_access(path: String) -> Result<(), ServerFnErro
     .await
     .ok();
 
-    let ip = headers
-        .get("X-Forwarded-For")
-        .and_then(|v| v.to_str().ok())
-        .and_then(|v| v.split(',').next())
-        .map(|s| s.trim().to_string())
-        .or_else(|| {
-            headers
-                .get("X-Real-Ip")
-                .and_then(|v| v.to_str().ok())
-                .map(|s| s.trim().to_string())
-        })
+    // Shared reader so this path sees the same LINKS-31 peer-gated headers as
+    // every other client-IP reader; the socket peer is the fallback.
+    let ip = crate::auth::middleware::client_ip_from_headers(&headers)
         .or_else(|| connect_info.map(|ci| ci.0.ip().to_string()))
         .unwrap_or_else(|| "unknown".to_string());
 

@@ -106,7 +106,7 @@ cp .env.saas.example .env         # Hosted mode
 
 #### Sign-in Location Alert Settings
 
-On a successful login the country is read from the `X-IPCountry` header injected by the reverse proxy's geoblock plugin (there is no geoip database). When it differs from the country of the account's previous login, the user is emailed a security alert. With no such header no country resolves and no alert is sent, so the feature degrades cleanly. Applies to both modes.
+On a successful login the country is read from the `X-IPCountry` header injected by the reverse proxy's geoblock plugin (there is no geoip database). When it differs from the country of the account's previous login, the user is emailed a security alert. The header is believed only when the socket peer is a trusted proxy (`TRUSTED_PROXY_CIDRS`, see below); from any other peer, or with no such header, no country resolves and no alert is sent, so the feature degrades cleanly and a forged header can neither fake nor suppress an alert. Applies to both modes.
 
 | Variable                        | Description                                              | Default      |
 |---------------------------------|----------------------------------------------------------|--------------|
@@ -122,6 +122,22 @@ On a successful login the country is read from the `X-IPCountry` header injected
 Alert mail is sent over an encrypted connection by default: `SMTP_TLS` defaults to `starttls` (STARTTLS required on port 587), and `tls` selects implicit TLS on port 465. `none` is a plaintext escape hatch for a trusted loopback or sidecar MTA; it must be set explicitly and logs a warning naming the host on every send. Parsing is case-insensitive and an unrecognised value falls back to `starttls`.
 
 Alerts are also suppressed per user by the `users.notify_new_location` opt-out column, and are capped at one email per user per country per day.
+
+#### Trusted Proxy Settings
+
+`X-Forwarded-For`, `X-Real-Ip`, and `X-IPCountry` are believed only when the socket peer sits in a configured trusted CIDR. The peer is the one input a client cannot forge, so it gates all three: a client reaching the app directly can spoof neither its IP nor its country.
+
+| Variable               | Description                                                          | Default |
+|------------------------|----------------------------------------------------------------------|---------|
+| `TRUSTED_PROXY_CIDRS`  | Comma-separated CIDRs or bare IPs whose peers may set those headers   | Empty   |
+
+Empty is the secure default: no peer is trusted, every forwarded header is ignored, and the socket address is used. Unparseable entries log a warning and are skipped.
+
+Setting it is **required behind a reverse proxy**. The peer is then the proxy on a private Docker network, so an empty list collapses every client to the proxy address and the sign-in location alert stops firing. The deployed stacks use the private ingress ranges:
+
+```
+TRUSTED_PROXY_CIDRS=10.0.0.0/8,172.16.0.0/12,192.168.0.0/16,fd00::/8
+```
 
 See `.env.standalone` and `.env.saas` for full documentation of all options.
 

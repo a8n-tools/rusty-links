@@ -7,6 +7,11 @@ use crate::error::AppError;
 /// Extract the client IP address from request headers.
 /// Checks X-Forwarded-For and X-Real-Ip (for reverse proxy setups); returns
 /// `None` when neither is present, leaving the fallback to the caller.
+///
+/// Both headers are peer-gated upstream by
+/// [`crate::auth::trusted_proxy::normalize_forwarded_headers`] (LINKS-31),
+/// which collapses `X-Forwarded-For` to the single resolved client IP and drops
+/// `X-Real-Ip`, so what this reads is never attacker-supplied.
 pub fn client_ip_from_headers(headers: &axum::http::HeaderMap) -> Option<String> {
     if let Some(forwarded) = headers.get("X-Forwarded-For").and_then(|v| v.to_str().ok()) {
         if let Some(ip) = forwarded.split(',').next().map(|s| s.trim()) {
@@ -29,9 +34,11 @@ pub fn client_ip_from_headers(headers: &axum::http::HeaderMap) -> Option<String>
 /// Reads the `X-IPCountry` header injected by the reverse proxy's geoblock
 /// plugin, so there is no in-process geoip database. Accepted only as an
 /// ISO-3166-1 alpha-2 code; anything else (absent, empty, a sentinel, a
-/// three-letter code) resolves to `None` and never raises an alert. This
-/// carries the same trust level as the forwarded IP above, which is believed
-/// as-is; a trusted-proxy peer gate is tracked separately.
+/// three-letter code) resolves to `None` and never raises an alert.
+///
+/// The header is stripped upstream unless the socket peer is a configured
+/// trusted proxy (LINKS-31), so a direct client cannot forge a country or
+/// suppress the alert by supplying one.
 pub fn client_country(headers: &axum::http::HeaderMap) -> Option<String> {
     headers
         .get("X-IPCountry")
@@ -51,8 +58,8 @@ pub fn device_info(headers: &axum::http::HeaderMap) -> Option<String> {
 }
 
 /// Extract the client IP address from request parts.
-/// Prefers the forwarding headers (for reverse proxy setups), then falls back
-/// to the connection info.
+/// Prefers the peer-gated forwarding headers (LINKS-31), then falls back to the
+/// connection info, which is the socket peer and cannot be forged.
 fn client_ip(parts: &Parts) -> String {
     if let Some(ip) = client_ip_from_headers(&parts.headers) {
         return ip;
