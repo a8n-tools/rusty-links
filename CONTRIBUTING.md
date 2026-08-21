@@ -144,6 +144,10 @@ Branch naming conventions:
    cargo clippy --all-targets -- --deny warnings
    cargo clippy --all-targets --features server -- --deny warnings
    cargo check --features web --target wasm32-unknown-unknown
+
+   # Guard run by CI: every `--features` name the justfile passes exists in Cargo.toml
+   # and every `--build-arg` is declared by a Dockerfile
+   nu scripts/check-build-flags.nu
    ```
 
 4. **Commit your changes**

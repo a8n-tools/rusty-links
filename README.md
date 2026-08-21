@@ -18,7 +18,7 @@ A self-hosted bookmark manager built with Rust and Dioxus. Organize, search, and
 - **Scheduled updates** to keep metadata fresh
 - **Responsive UI** - works on mobile, tablet, and desktop
 - **Docker ready** - one command deployment
-- **Two build modes** - standalone (self-hosted) and SaaS (parent app auth)
+- **Two deployment modes** - standalone (self-hosted) and hosted (parent app auth), selected at runtime
 
 ---
 
@@ -56,17 +56,17 @@ See [Building from Source](#building-from-source) below.
 
 ## Configuration
 
-### Build Modes
+### Deployment Modes
 
-Rusty Links supports two build modes via the `BUILD_MODE` build argument:
+Rusty Links resolves its deployment mode at runtime from `OIDC_ISSUER`; a single binary and image serves both. There is no build-time mode argument and no `standalone` / `saas` Cargo feature.
 
-- **standalone** (default) - Self-hosted with built-in JWT authentication
-- **saas** - Authentication handled by a parent application's cookies
+- **standalone** (`OIDC_ISSUER` unset) - Self-hosted with built-in JWT authentication
+- **hosted** (`OIDC_ISSUER` set) - Authentication delegated to the parent application's OIDC provider
 
 Environment variable templates are provided for each mode:
 ```bash
-cp .env.standalone .env   # Standalone mode
-cp .env.saas .env         # SaaS mode
+cp .env.standalone.example .env   # Standalone mode
+cp .env.saas.example .env         # Hosted mode
 ```
 
 ### Environment Variables

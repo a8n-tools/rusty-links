@@ -72,7 +72,7 @@ dev mode="standalone": (ensure-env mode) css-build
 
 # Start development server in Docker with SSO (saas mode, detached, Traefik-routed)
 dev-sso: (ensure-env "saas") css-build
-    FEATURES=saas {{ compose }}up --build --detach --remove-orphans app
+    {{ compose }}up --build --detach --remove-orphans app
     @echo ""
     @echo "  App: https://{{env('USER')}}-links.a8n.run"
 
@@ -127,16 +127,9 @@ db-prepare:
 # Run all checks (web, clippy, fmt)
 check: check-web check-clippy check-fmt
 
-# Check web/WASM compilation (standalone + saas)
-check-web: check-web-standalone check-web-saas
-
-# Check standalone web/WASM compilation
-check-web-standalone:
-    cargo check --features standalone,web --target wasm32-unknown-unknown
-
-# Check saas web/WASM compilation
-check-web-saas:
-    cargo check --no-default-features --features saas,web --target wasm32-unknown-unknown
+# Check web/WASM compilation (matches the `Check web/WASM` step in .forgejo/workflows/check.yml)
+check-web: ensure-css
+    cargo check --features web --target wasm32-unknown-unknown
 
 # Run clippy lints
 check-clippy:
@@ -146,17 +139,18 @@ check-clippy:
 check-fmt:
     cargo fmt --check
 
-# Build Docker image for validation (mode: standalone or saas)
-check-docker mode="standalone":
-    docker buildx build --build-arg BUILD_MODE={{ mode }} --tag rusty-links:check -f oci-build/Dockerfile .
+# Build Docker image for validation. The image is mode-agnostic: standalone vs hosted is
+# resolved at runtime from OIDC_ISSUER, so there is no build-time mode argument.
+check-docker:
+    docker buildx build --tag rusty-links:check -f oci-build/Dockerfile .
 
 # Build release binary
 build:
     cargo build --release
 
-# Build Docker image (mode: standalone or saas)
-build-docker mode="standalone":
-    docker buildx build --build-arg BUILD_MODE={{ mode }} --tag rusty-links:local -f oci-build/Dockerfile .
+# Build Docker image. Mode-agnostic, same as check-docker.
+build-docker:
+    docker buildx build --tag rusty-links:local -f oci-build/Dockerfile .
 
 # Run tests
 test:
