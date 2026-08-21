@@ -225,7 +225,7 @@ Two sign-ins are never gated: a first-ever one (no prior country) and one whose 
 
 ### Get Current User
 
-Get information about the currently authenticated user.
+Get information about the currently authenticated user, including the account settings that user owns.
 
 **Endpoint:** `GET /api/auth/me`
 
@@ -237,9 +237,15 @@ Get information about the currently authenticated user.
 {
   "id": "123e4567-e89b-12d3-a456-426614174000",
   "email": "user@example.com",
-  "created_at": "2024-01-15T10:30:00Z"
+  "name": "Example User",
+  "is_admin": false,
+  "maintenance_mode": false,
+  "auth_via_oidc": false,
+  "notify_new_location": true
 }
 ```
+
+`notify_new_location` is this account's new-sign-in-location alert setting (LINKS-27); `true` means a login from a country the account has not used before emails a security alert.
 
 **Errors:**
 - 401 Unauthorized - No valid session
@@ -248,6 +254,59 @@ Get information about the currently authenticated user.
 
 ```bash
 curl http://localhost:8080/api/auth/me \
+  -b cookies.txt
+```
+
+---
+
+### Update Account Settings
+
+Change the settings the signed-in user owns. Answers with the same payload as `GET /api/auth/me`, so a client can render the saved state without a second call.
+
+**Endpoint:** `PATCH /api/auth/me`
+
+**Authentication:** Required
+
+**Request Body:**
+
+```json
+{
+  "notify_new_location": false
+}
+```
+
+| Field                 | Type    | Required | Description                                          |
+|-----------------------|---------|----------|------------------------------------------------------|
+| `notify_new_location` | boolean | No       | Turn new-location sign-in alerts off (`false`) or back on (`true`) |
+
+Every field is optional and independent. An absent key means "not submitted", so the stored value stands and a request that changes one setting can never clobber another; an explicit `false` persists. A non-boolean is rejected rather than coerced.
+
+The account is always the session's. The body carries no account id, so one user can never change another user's settings.
+
+**Response:** 200 OK
+
+```json
+{
+  "id": "123e4567-e89b-12d3-a456-426614174000",
+  "email": "user@example.com",
+  "name": "Example User",
+  "is_admin": false,
+  "maintenance_mode": false,
+  "auth_via_oidc": false,
+  "notify_new_location": false
+}
+```
+
+**Errors:**
+- 400 Bad Request - A field was sent with the wrong type (for example a string instead of a boolean)
+- 401 Unauthorized - No valid session
+
+**Example:**
+
+```bash
+curl -X PATCH http://localhost:8080/api/auth/me \
+  -H "Content-Type: application/json" \
+  -d '{"notify_new_location": false}' \
   -b cookies.txt
 ```
 
