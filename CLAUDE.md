@@ -9,11 +9,18 @@ IMPORTANT: Do NOT modify `./assets/tailwind.css`. All CSS should go in `./tailwi
 
 ## Build & Development Commands
 
+`just pre-commit` is the authoritative check suite: it runs every leg CI runs, in the dev container, and fails on the first red one. Run it before every commit.
+
+IMPORTANT: `default = []`, so a bare `cargo check` / `cargo clippy` / `cargo test` compiles almost none of this crate. Every server module is behind `#[cfg(feature = "server")]`, so any command meant to verify server code must pass `--features server`.
+
 ```bash
+# Run every check CI runs (fmt, clippy, build, and tests under default + server, plus the wasm check)
+just pre-commit
+
 # Run in development (requires PostgreSQL and .env file)
 dx serve
 
-# Check for compilation errors without building
+# Check for compilation errors without building (default features: UI only)
 cargo check
 
 # Check server feature only
@@ -22,15 +29,19 @@ cargo check --features server
 # Check web/WASM feature only
 cargo check --features web --target wasm32-unknown-unknown
 
-# Run tests
+# Run tests (default features runs only the handful of feature-independent tests)
 cargo test
 
-# Run a specific test
-cargo test <test_name>
+# Run the server-side test suite
+cargo test --features server --lib
 
-# Code quality
+# Run a specific test
+cargo test --features server <test_name>
+
+# Code quality (both legs; the default leg alone does not lint server code)
 cargo fmt
-cargo clippy
+cargo clippy --all-targets -- --deny warnings
+cargo clippy --all-targets --features server -- --deny warnings
 
 # Database migrations (auto-run on startup, but manual commands available)
 sqlx migrate add <migration_name>
@@ -44,6 +55,8 @@ The project uses Cargo features to separate server and client code:
 - `web` - Enables WASM/browser-specific dependencies (gloo-net, web-sys)
 
 Server-only modules (`#[cfg(feature = "server")]`): api, auth, config, error, github, models, scheduler, scraper
+
+Because `default = []`, any check that omits `--features server` compiles none of those modules. `just pre-commit` and `.forgejo/workflows/check.yml` therefore run clippy, build, and test twice: once with default features and once with `--features server`.
 
 There are no `standalone`/`saas` build features. A single binary and OCI image serves both deployment modes; the mode is resolved at runtime (see Configuration below).
 

@@ -84,8 +84,8 @@ impl Scheduler {
             let base_interval_secs = self.config.update_interval_hours as u64 * 3600;
             let jitter_range = (base_interval_secs * self.config.jitter_percent as u64) / 100;
             let jitter = if jitter_range > 0 {
-                let mut rng = rand::thread_rng();
-                rng.gen_range(0..=jitter_range * 2) as i64 - jitter_range as i64
+                let mut rng = rand::rng();
+                rng.random_range(0..=jitter_range * 2) as i64 - jitter_range as i64
             } else {
                 0
             };
@@ -398,7 +398,7 @@ mod tests {
         assert_eq!(jitter_range, 17280);
 
         // With zero jitter, interval should be at least 60 seconds
-        let zero_jitter_interval = (base_interval_secs as i64 + 0).max(60) as u64;
+        let zero_jitter_interval = (base_interval_secs as i64).max(60) as u64;
         assert_eq!(zero_jitter_interval, base_interval_secs);
 
         // Even with maximum negative jitter, floor is 60 seconds

@@ -716,7 +716,7 @@ mod tests {
     fn test_error_source_chain() {
         use std::error::Error;
 
-        let io_err = std::io::Error::new(std::io::ErrorKind::Other, "disk full");
+        let io_err = std::io::Error::other("disk full");
         let error = AppError::Io(io_err);
         assert!(error.source().is_some());
 

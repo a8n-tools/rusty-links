@@ -51,46 +51,48 @@ Rusty Links uses a multi-layered testing approach to ensure code quality and rel
 
 ### Basic Commands
 
+Server code lives behind `#[cfg(feature = "server")]` and `default = []`, so every command below needs `--features server` to compile and run the server-side tests.
+
 ```bash
 # Run all tests (unit + integration)
-cargo test
+cargo test --features server
 
 # Run with output visible
-cargo test -- --nocapture
+cargo test --features server -- --nocapture
 
 # Run specific test by name
-cargo test test_create_link
+cargo test --features server test_create_link
 
 # Run tests matching pattern
-cargo test auth
+cargo test --features server auth
 
 # Run tests in specific file
-cargo test --test integration_tests
+cargo test --features server --test integration_tests
 ```
 
 ### Advanced Options
 
 ```bash
 # Run unit tests only (no integration tests)
-cargo test --lib
+cargo test --features server --lib
 
 # Run integration tests only
-cargo test --test '*'
+cargo test --features server --test '*'
 
 # Run tests for specific package
-cargo test -p rusty-links
+cargo test --features server -p rusty-links
 
-# Run tests with specific features
+# Run every feature at once (server + web; web needs the wasm target, so this is rarely useful here)
 cargo test --all-features
 
 # Run tests in parallel (default)
-cargo test
+cargo test --features server
 
 # Run tests serially (useful for database tests)
-cargo test -- --test-threads=1
+cargo test --features server -- --test-threads=1
 
 # Show test output even for passing tests
-cargo test -- --nocapture --show-output
+cargo test --features server -- --nocapture --show-output
 ```
 
 ### Environment Setup
@@ -623,13 +625,18 @@ See `.github/workflows/test.yml` for complete configuration.
 ### Local Pre-commit Testing
 
 ```bash
-# Run all checks before committing
-./scripts/pre-commit.sh
+# Run all checks before committing (same legs as .forgejo/workflows/check.yml)
+just pre-commit
 
 # Or manually:
 cargo fmt --check
-cargo clippy -- -D warnings
-cargo test --all-features
+cargo clippy --all-targets -- --deny warnings
+cargo clippy --all-targets --features server -- --deny warnings
+cargo check --features web --target wasm32-unknown-unknown
+cargo build --all-targets
+cargo build --all-targets --features server
+cargo test --lib
+cargo test --features server --lib
 ```
 
 ### Test Matrix
@@ -808,10 +815,10 @@ DATABASE_URL=postgresql://rustylinks:password@localhost/rustylinks_test sqlx mig
 
 ```bash
 # Run test multiple times
-for i in {1..10}; do cargo test test_name || break; done
+for i in {1..10}; do cargo test --features server test_name || break; done
 
 # Run with single thread
-cargo test -- --test-threads=1
+cargo test --features server -- --test-threads=1
 
 # Add sleep/retry in test code
 tokio::time::sleep(Duration::from_millis(100)).await;
@@ -821,10 +828,10 @@ tokio::time::sleep(Duration::from_millis(100)).await;
 
 ```bash
 # Limit parallel tests
-cargo test -- --test-threads=2
+cargo test --features server -- --test-threads=2
 
 # Increase test timeout
-cargo test -- --nocapture --test-threads=1
+cargo test --features server -- --nocapture --test-threads=1
 ```
 
 ### CI/CD Issues

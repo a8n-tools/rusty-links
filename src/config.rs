@@ -344,8 +344,7 @@ impl Config {
             tracing::warn!(
                 "JWT_SECRET not set - using random secret (tokens will not survive restarts)"
             );
-            use rand::Rng;
-            let bytes: [u8; 32] = rand::thread_rng().gen();
+            let bytes: [u8; 32] = rand::random();
             base64::Engine::encode(&base64::engine::general_purpose::URL_SAFE_NO_PAD, bytes)
         });
 

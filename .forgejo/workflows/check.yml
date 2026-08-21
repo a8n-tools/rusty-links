@@ -42,17 +42,30 @@ jobs:
         # nproc/2 cap: never claim more than half the host (see CI.md "Concurrency cap").
         run: echo "CARGO_BUILD_JOBS=$(($(nproc) / 2))" >> "$GITHUB_ENV"
 
+      # Clippy, build and test each run twice, and the wasm check once, so all three
+      # compilation configurations are covered. `default = []` gates every server module
+      # behind `#[cfg(feature = "server")]`, so the default-feature legs on their own
+      # compile almost none of the crate (LINKS-36).
       - name: Check formatting
         run: cargo fmt --check
 
-      - name: Clippy
+      - name: Clippy (default features)
         run: cargo clippy --all-targets -- -D warnings
+
+      - name: Clippy (server)
+        run: cargo clippy --all-targets --features server -- -D warnings
 
       - name: Check web/WASM
         run: cargo check --features web --target wasm32-unknown-unknown
 
-      - name: Build
+      - name: Build (default features)
         run: cargo build --all-targets
 
-      - name: Unit tests
+      - name: Build (server)
+        run: cargo build --all-targets --features server
+
+      - name: Unit tests (default features)
         run: cargo test --lib
+
+      - name: Unit tests (server)
+        run: cargo test --features server --lib

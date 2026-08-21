@@ -16,18 +16,27 @@ install-hooks:
     print $"Wrote ($hook) -> just pre-commit"
 
 # Run the same checks as .forgejo/workflows/check.yml inside the dev compose `app` container.
+# Covers all three compilation configurations: default features, `server`, and `web` on wasm.
+# `default = []` gates every server module behind `#[cfg(feature = "server")]`, so the
+# default-feature legs alone compile almost none of the crate (LINKS-36).
 pre-commit: ensure-env
     #!/usr/bin/env nu
     print "\n[pre-commit] cargo fmt --check"
     ^docker compose --file compose.dev.yml run --rm --no-deps app cargo fmt --check
     print "\n[pre-commit] cargo clippy --all-targets -- --deny warnings"
     ^docker compose --file compose.dev.yml run --rm --no-deps app cargo clippy --all-targets -- --deny warnings
+    print "\n[pre-commit] cargo clippy --all-targets --features server -- --deny warnings"
+    ^docker compose --file compose.dev.yml run --rm --no-deps app cargo clippy --all-targets --features server -- --deny warnings
     print "\n[pre-commit] cargo check --features web --target wasm32-unknown-unknown"
     ^docker compose --file compose.dev.yml run --rm --no-deps app cargo check --features web --target wasm32-unknown-unknown
     print "\n[pre-commit] cargo build --all-targets"
     ^docker compose --file compose.dev.yml run --rm --no-deps app cargo build --all-targets
+    print "\n[pre-commit] cargo build --all-targets --features server"
+    ^docker compose --file compose.dev.yml run --rm --no-deps app cargo build --all-targets --features server
     print "\n[pre-commit] cargo test --lib"
     ^docker compose --file compose.dev.yml run --rm app cargo test --lib
+    print "\n[pre-commit] cargo test --features server --lib"
+    ^docker compose --file compose.dev.yml run --rm app cargo test --features server --lib
     print "\n[pre-commit] all checks passed"
 
 # Use the per-user dev compose file

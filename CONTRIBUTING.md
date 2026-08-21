@@ -117,27 +117,33 @@ Branch naming conventions:
    - Update documentation as needed
 
 2. **Test your changes**
+
+   `default = []` and every server module is behind `#[cfg(feature = "server")]`, so a bare `cargo test` compiles almost none of the crate. Pass `--features server` to exercise the server-side suite.
+
    ```bash
-   # Run all tests
+   # Run the server-side tests (the bulk of the suite)
+   cargo test --features server --lib
+
+   # Run the default-feature tests (feature-independent code only)
    cargo test
 
    # Run specific test
-   cargo test test_name
+   cargo test --features server test_name
 
    # Run with output
-   cargo test -- --nocapture
+   cargo test --features server -- --nocapture
    ```
 
 3. **Check code quality**
    ```bash
-   # Format code
+   # Run every check CI runs, in the dev container, failing on the first red leg
+   just pre-commit
+
+   # Or run the individual legs
    cargo fmt
-
-   # Run linter
-   cargo clippy
-
-   # Check for errors without building
-   cargo check
+   cargo clippy --all-targets -- --deny warnings
+   cargo clippy --all-targets --features server -- --deny warnings
+   cargo check --features web --target wasm32-unknown-unknown
    ```
 
 4. **Commit your changes**
@@ -203,9 +209,10 @@ test(links): add integration tests for link creation
 Before submitting, ensure:
 
 - [ ] Code follows project coding standards
-- [ ] All tests pass (`cargo test`)
+- [ ] `just pre-commit` passes (fmt, clippy, build, and tests under both default features and `--features server`, plus the wasm check)
+- [ ] Server-side tests pass (`cargo test --features server --lib`)
 - [ ] Code is formatted (`cargo fmt`)
-- [ ] No clippy warnings (`cargo clippy`)
+- [ ] No clippy warnings under either feature set (`cargo clippy --all-targets -- --deny warnings` and the same with `--features server`)
 - [ ] Documentation is updated
 - [ ] Commit messages follow conventions
 - [ ] PR description is clear and complete
@@ -225,7 +232,7 @@ Before submitting, ensure:
 Follow the official [Rust Style Guide](https://doc.rust-lang.org/stable/style-guide/):
 
 - Use `cargo fmt` to format code
-- Run `cargo clippy` and address warnings
+- Run `cargo clippy --all-targets --features server -- --deny warnings` (as well as the default-feature leg) and address warnings
 - Use meaningful variable and function names
 - Add comments for complex logic
 - Keep functions focused and small
@@ -333,21 +340,26 @@ mod tests {
 
 ### Running Tests
 
+Server code needs `--features server`; without it those modules are not compiled and their tests do not run.
+
 ```bash
-# Run all tests
+# Run the server-side unit tests
+cargo test --features server --lib
+
+# Run the default-feature tests
 cargo test
 
 # Run with output
-cargo test -- --nocapture
+cargo test --features server -- --nocapture
 
 # Run specific test
-cargo test test_name
+cargo test --features server test_name
 
 # Run integration tests only
-cargo test --test '*'
+cargo test --features server --test '*'
 
 # Run doc tests
-cargo test --doc
+cargo test --features server --doc
 ```
 
 ## Documentation

@@ -83,11 +83,13 @@ fn extract_pool() -> Result<&'static PgPool, ServerFnError> {
 /// Called from ProtectedLayout when the client-side auth check fails.
 #[server]
 pub async fn log_unauthenticated_access(path: String) -> Result<(), ServerFnError> {
-    let headers: axum::http::HeaderMap = dioxus_fullstack::extract().await?;
-    let connect_info =
-        dioxus_fullstack::extract::<axum::extract::ConnectInfo<std::net::SocketAddr>, _>()
-            .await
-            .ok();
+    let headers: axum::http::HeaderMap = dioxus_fullstack::FullstackContext::extract().await?;
+    let connect_info = dioxus_fullstack::FullstackContext::extract::<
+        axum::extract::ConnectInfo<std::net::SocketAddr>,
+        _,
+    >()
+    .await
+    .ok();
 
     let ip = headers
         .get("X-Forwarded-For")
