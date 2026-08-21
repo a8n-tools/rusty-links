@@ -68,6 +68,8 @@ Cookie::build((SESSION_COOKIE_NAME, session_id))
 - A first-ever login and a repeat from the same country are never flagged
 - Per-user opt-out (`users.notify_new_location`), a global kill switch (`LOGIN_LOCATION_ALERTS_ENABLED`), and a cap of one alert per user per country per day
 - Runs off the login hot path, so a mail failure can never fail or slow a login
+- Alert mail leaves over an encrypted SMTP connection by default (LINKS-37): `SMTP_TLS` defaults to `starttls` (STARTTLS required, port 587) and `tls` selects implicit TLS (port 465)
+- Plaintext SMTP is reachable only by setting `SMTP_TLS=none` for a trusted loopback or sidecar MTA, and every send logs a warning naming the host, so a plaintext deployment is never silent
 
 ✅ **CSRF Protection**
 - SameSite cookie attribute

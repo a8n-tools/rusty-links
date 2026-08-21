@@ -112,11 +112,14 @@ On a successful login the country is read from the `X-IPCountry` header injected
 |---------------------------------|----------------------------------------------------------|--------------|
 | `LOGIN_LOCATION_ALERTS_ENABLED` | Global kill switch for new-location alerts               | `true`       |
 | `SMTP_HOST`                     | SMTP server hostname (unset means log-only delivery)     | None         |
-| `SMTP_PORT`                     | SMTP server port                                         | lettre default |
+| `SMTP_TLS`                      | Connection encryption: `starttls`, `tls`, or `none`      | `starttls`   |
+| `SMTP_PORT`                     | SMTP server port (overrides the port `SMTP_TLS` implies) | Per `SMTP_TLS` |
 | `SMTP_USERNAME`                 | SMTP username (omit for an unauthenticated relay)        | None         |
 | `SMTP_PASSWORD`                 | SMTP password                                            | None         |
 | `SMTP_FROM_EMAIL`               | Sender address (unset means log-only delivery)           | None         |
 | `SMTP_FROM_NAME`                | Sender display name                                      | None         |
+
+Alert mail is sent over an encrypted connection by default: `SMTP_TLS` defaults to `starttls` (STARTTLS required on port 587), and `tls` selects implicit TLS on port 465. `none` is a plaintext escape hatch for a trusted loopback or sidecar MTA; it must be set explicitly and logs a warning naming the host on every send. Parsing is case-insensitive and an unrecognised value falls back to `starttls`.
 
 Alerts are also suppressed per user by the `users.notify_new_location` opt-out column, and are capped at one email per user per country per day.
 

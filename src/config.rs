@@ -33,6 +33,43 @@ impl OidcConfig {
     }
 }
 
+/// TLS posture for the outbound SMTP connection (LINKS-37).
+///
+/// `Starttls` is the default so a deployment that sets nothing gets an
+/// encrypted connection; `None` stays reachable only for a trusted local relay.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub enum SmtpTlsMode {
+    /// Plaintext. Trusted loopback or sidecar MTA only.
+    None,
+    /// Plaintext connect upgraded by a required STARTTLS (lettre default port 587).
+    #[default]
+    Starttls,
+    /// Implicit TLS from the first byte (lettre default port 465).
+    Tls,
+}
+
+impl SmtpTlsMode {
+    /// Parse `SMTP_TLS` case-insensitively. An unrecognised value warns and
+    /// falls back to the secure default rather than silently sending plaintext.
+    pub fn from_env_value(value: Option<&str>) -> Self {
+        let Some(raw) = value else {
+            return Self::default();
+        };
+        match raw.trim().to_ascii_lowercase().as_str() {
+            "none" => Self::None,
+            "starttls" => Self::Starttls,
+            "tls" => Self::Tls,
+            _ => {
+                tracing::warn!(
+                    value = %raw,
+                    "Unrecognised SMTP_TLS value; falling back to starttls"
+                );
+                Self::default()
+            }
+        }
+    }
+}
+
 /// Outbound email + new-sign-in-location alert settings (LINKS-27).
 ///
 /// Carried by both `Config` and `OidcRpState` so either login path can raise an
@@ -46,6 +83,8 @@ pub struct MailConfig {
     pub smtp_password: Option<String>,
     pub smtp_from_email: Option<String>,
     pub smtp_from_name: Option<String>,
+    /// TLS mode for the SMTP connection. Encrypted by default (LINKS-37).
+    pub smtp_tls: SmtpTlsMode,
     /// Global kill switch for new-sign-in-location alerts. On by default.
     pub login_location_alerts_enabled: bool,
 }
@@ -79,6 +118,7 @@ impl MailConfig {
             smtp_password: non_empty("SMTP_PASSWORD"),
             smtp_from_email: non_empty("SMTP_FROM_EMAIL"),
             smtp_from_name: non_empty("SMTP_FROM_NAME"),
+            smtp_tls: SmtpTlsMode::from_env_value(non_empty("SMTP_TLS").as_deref()),
             login_location_alerts_enabled: !matches!(
                 non_empty("LOGIN_LOCATION_ALERTS_ENABLED")
                     .unwrap_or_default()
@@ -503,6 +543,53 @@ mod tests {
         let mut config = test_config();
         config.oidc.issuer = String::new();
         assert!(!config.hosted());
+    }
+
+    // The default is encrypted: a deployment that sets no SMTP_TLS value stops
+    // sending plaintext after LINKS-37.
+    #[test]
+    fn smtp_tls_defaults_to_starttls() {
+        assert_eq!(SmtpTlsMode::from_env_value(None), SmtpTlsMode::Starttls);
+        assert_eq!(SmtpTlsMode::default(), SmtpTlsMode::Starttls);
+        assert_eq!(MailConfig::default().smtp_tls, SmtpTlsMode::Starttls);
+    }
+
+    #[test]
+    fn smtp_tls_parses_every_mode() {
+        assert_eq!(
+            SmtpTlsMode::from_env_value(Some("starttls")),
+            SmtpTlsMode::Starttls
+        );
+        assert_eq!(SmtpTlsMode::from_env_value(Some("tls")), SmtpTlsMode::Tls);
+        assert_eq!(SmtpTlsMode::from_env_value(Some("none")), SmtpTlsMode::None);
+    }
+
+    #[test]
+    fn smtp_tls_parsing_is_case_insensitive_and_trims() {
+        assert_eq!(
+            SmtpTlsMode::from_env_value(Some("STARTTLS")),
+            SmtpTlsMode::Starttls
+        );
+        assert_eq!(SmtpTlsMode::from_env_value(Some("TLS")), SmtpTlsMode::Tls);
+        assert_eq!(SmtpTlsMode::from_env_value(Some("None")), SmtpTlsMode::None);
+        assert_eq!(
+            SmtpTlsMode::from_env_value(Some("  Tls  ")),
+            SmtpTlsMode::Tls
+        );
+    }
+
+    // An unrecognised value must never downgrade the connection to plaintext.
+    #[test]
+    fn smtp_tls_unrecognised_falls_back_to_starttls() {
+        assert_eq!(
+            SmtpTlsMode::from_env_value(Some("plaintext")),
+            SmtpTlsMode::Starttls
+        );
+        assert_eq!(SmtpTlsMode::from_env_value(Some("")), SmtpTlsMode::Starttls);
+        assert_eq!(
+            SmtpTlsMode::from_env_value(Some("ssl")),
+            SmtpTlsMode::Starttls
+        );
     }
 
     #[test]
