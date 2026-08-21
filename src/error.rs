@@ -133,6 +133,13 @@ pub enum AppError {
     /// Account is locked due to too many failed login attempts
     AccountLocked,
 
+    /// The sign-in is held pending the owner's approval (LINKS-35)
+    ///
+    /// Returned instead of a session when a sign-in comes from a country the
+    /// account has not used before and the approval gate is on. Not a lock:
+    /// the emailed link approves it and the next sign-in completes.
+    ApprovalRequired,
+
     /// Membership required (SaaS mode)
     ///
     /// The user is authenticated but does not have an active membership.
@@ -249,6 +256,7 @@ impl AppError {
             AppError::Duplicate { .. } => 409,
             AppError::MembershipRequired(_) => 403,
             AppError::AccountLocked => 429,
+            AppError::ApprovalRequired => 403,
             AppError::Database(_) => 500,
             AppError::Io(_) => 500,
             AppError::Json(_) => 500,
@@ -275,6 +283,7 @@ impl AppError {
             AppError::NotFound { .. } => "NOT_FOUND",
             AppError::Duplicate { .. } => "DUPLICATE_FIELD",
             AppError::AccountLocked => "ACCOUNT_LOCKED",
+            AppError::ApprovalRequired => "APPROVAL_REQUIRED",
             AppError::ExternalService(_) => "EXTERNAL_SERVICE_ERROR",
             AppError::Io(_) => "IO_ERROR",
             AppError::Json(_) => "JSON_ERROR",
@@ -322,6 +331,9 @@ impl AppError {
             }
             AppError::AccountLocked => {
                 "Account is temporarily locked due to too many failed login attempts. Please try again later.".to_string()
+            }
+            AppError::ApprovalRequired => {
+                "This sign-in is from a new location, so we emailed you a link to approve it. Open the link, then sign in again.".to_string()
             }
             AppError::ExternalService(msg) => {
                 format!("External service error: {}", msg)
@@ -507,6 +519,9 @@ impl axum::response::IntoResponse for AppError {
             AppError::AccountLocked => {
                 tracing::warn!("Account locked due to too many failed attempts");
             }
+            AppError::ApprovalRequired => {
+                tracing::warn!("Sign-in held pending the owner's approval");
+            }
             AppError::Database(e) => {
                 tracing::error!(error = %e, "Database error");
             }
@@ -633,6 +648,17 @@ mod tests {
         assert_eq!(error.status_code(), 429);
         assert_eq!(error.error_code(), "ACCOUNT_LOCKED");
         assert!(error.to_string().contains("temporarily locked"));
+    }
+
+    // A held sign-in is not a lock: the message tells the user what to do, and
+    // the code is what a client keys on to say so.
+    #[test]
+    fn test_approval_required_error() {
+        let error = AppError::ApprovalRequired;
+        assert_eq!(error.status_code(), 403);
+        assert_eq!(error.error_code(), "APPROVAL_REQUIRED");
+        assert!(error.to_string().contains("approve"));
+        assert!(!error.to_string().contains("locked"));
     }
 
     #[test]

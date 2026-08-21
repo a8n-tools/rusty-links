@@ -72,6 +72,36 @@ fn build_session_cookie(token: &str, ttl_seconds: u64, secure: bool) -> Cookie<'
         .build()
 }
 
+/// The one place an `rl_session` is minted: the hashed row plus the cookie the
+/// browser carries. Both completion paths (the OIDC callback and the debug-only
+/// dev seed) go through here so the two cannot drift apart.
+async fn establish_user_session(
+    pool: &PgPool,
+    user_id: Uuid,
+    session_version: i32,
+    expires_at: chrono::DateTime<Utc>,
+    auth_via_oidc: bool,
+    ttl_seconds: u64,
+    secure: bool,
+) -> Result<Cookie<'static>, AppError> {
+    let session_token = random_b64url(32);
+    let token_hash = hash_session_token(&session_token);
+
+    sqlx::query(
+        "INSERT INTO user_sessions (session_token_hash, user_id, session_version, expires_at, auth_via_oidc)
+         VALUES ($1, $2, $3, $4, $5)",
+    )
+    .bind(token_hash.as_slice())
+    .bind(user_id)
+    .bind(session_version)
+    .bind(expires_at)
+    .bind(auth_via_oidc)
+    .execute(pool)
+    .await?;
+
+    Ok(build_session_cookie(&session_token, ttl_seconds, secure))
+}
+
 fn clear_session_cookie(secure: bool) -> Cookie<'static> {
     Cookie::build(("rl_session", ""))
         .http_only(true)
@@ -338,22 +368,26 @@ pub async fn callback(
         .await
         .ok();
 
-    // Generate session token, hash it, and store in user_sessions.
-    let session_token = random_b64url(32);
-    let token_hash = hash_session_token(&session_token);
     let expires_at =
         Utc::now() + chrono::Duration::seconds(state.config.session_ttl_seconds as i64);
+    let secure = state.config.redirect_uri.starts_with("https://");
 
-    sqlx::query(
-        "INSERT INTO user_sessions (session_token_hash, user_id, session_version, expires_at, auth_via_oidc)
-         VALUES ($1, $2, $3, $4, $5)",
+    // Deliberately NOT gated by LINKS-35. Here this service is a relying party:
+    // the authentication decision was made by the external OP, which is where a
+    // step-up on a suspicious sign-in belongs and where the user's recovery
+    // lives. There is no local credential on this path for a stolen password to
+    // replay, and holding a sign-in the OP already approved behind mail this
+    // deployment may not have configured turns a security control into a
+    // lockout. LINKS-35 scopes the gate to the login paths this service owns.
+    let cookie = establish_user_session(
+        &state.pool,
+        provisioned.id,
+        provisioned.session_version,
+        expires_at,
+        true,
+        state.config.session_ttl_seconds,
+        secure,
     )
-    .bind(token_hash.as_slice())
-    .bind(provisioned.id)
-    .bind(provisioned.session_version)
-    .bind(expires_at)
-    .bind(true)
-    .execute(&state.pool)
     .await?;
 
     // Alert on a sign-in from a country this account has not used before. The
@@ -365,8 +399,6 @@ pub async fn callback(
         &headers,
     );
 
-    let secure = state.config.redirect_uri.starts_with("https://");
-    let cookie = build_session_cookie(&session_token, state.config.session_ttl_seconds, secure);
     let jar = jar.add(cookie);
 
     // Same-origin only. `s.starts_with('/')` alone would accept protocol-relative
@@ -692,25 +724,20 @@ pub async fn dev_seed_session(
             .fetch_one(&state.pool)
             .await?;
 
-    let session_token = random_b64url(32);
-    let token_hash = hash_session_token(&session_token);
     let expires_at = Utc::now() + chrono::Duration::days(30);
-
-    sqlx::query(
-        "INSERT INTO user_sessions (session_token_hash, user_id, session_version, expires_at, auth_via_oidc)
-         VALUES ($1, $2, $3, $4, $5)
-         ON CONFLICT DO NOTHING",
-    )
-    .bind(token_hash.as_slice())
-    .bind(user_id)
-    .bind(session_version)
-    .bind(expires_at)
-    .bind(false)
-    .execute(&state.pool)
-    .await?;
-
     let secure = state.config.redirect_uri.starts_with("https://");
-    let cookie = build_session_cookie(&session_token, state.config.session_ttl_seconds, secure);
+
+    // Not gated by LINKS-35: this route only exists in a debug build.
+    let cookie = establish_user_session(
+        &state.pool,
+        user_id,
+        session_version,
+        expires_at,
+        false,
+        state.config.session_ttl_seconds,
+        secure,
+    )
+    .await?;
     let jar = jar.add(cookie);
 
     Ok((jar, Redirect::to("/links")).into_response())

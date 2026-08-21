@@ -225,6 +225,15 @@ async fn main() {
 
     let mut router = axum::Router::new().nest("/api", api_router);
 
+    // Standalone only: the LINKS-35 approval page the held sign-in's email
+    // links to. Served at the root because a human opens it in a browser, and
+    // only in this mode because only this mode's credential login is gated.
+    if !config.hosted() {
+        router = router.merge(rusty_links::auth::login_approval::create_router(
+            pool.clone(),
+        ));
+    }
+
     // In hosted mode, merge the OIDC RP routes at root level (before the
     // dioxus router) so the `/oauth2/*` BFF endpoints are reachable.
     if config.hosted() {

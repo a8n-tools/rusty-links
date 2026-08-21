@@ -72,6 +72,36 @@ Cookie::build((SESSION_COOKIE_NAME, session_id))
 - Alert mail leaves over an encrypted SMTP connection by default (LINKS-37): `SMTP_TLS` defaults to `starttls` (STARTTLS required, port 587) and `tls` selects implicit TLS (port 465)
 - Plaintext SMTP is reachable only by setting `SMTP_TLS=none` for a trusted loopback or sidecar MTA, and every send logs a warning naming the host, so a plaintext deployment is never silent
 
+✅ **Sign-in Approval Gate** (LINKS-35)
+- Opt-in (`LOGIN_APPROVAL_ENABLED=true`, exact match, OFF by default) because unlike the alert it can stop a real sign-in
+- Turns the LINKS-27 detection into a gate: a sign-in that passes the password but comes from a country the account has not used before issues no JWT, no refresh token, and no session, and answers `403 APPROVAL_REQUIRED`
+- The user is emailed a single-use link; opening it shows the country, IP, device, and time, and a POST behind a button approves it. An attempt nobody approves simply never completes
+- Notify-and-approve, not a lock: nothing about the account is disabled, and the owner stays in control
+- NEVER gated, by construction, because gating either would lock a real user out: a first-ever sign-in (no prior country, which is what `POST /api/auth/setup` creates) and a sign-in whose country does not resolve (no geoblock edge, or `TRUSTED_PROXY_CIDRS` empty)
+- The token is 256 bits of randomness and only its SHA-256 is stored, so a database dump cannot mint or replay an approval link
+- Single use: the claim is a conditional `UPDATE ... WHERE consumed_at IS NULL AND expires_at > NOW()`, and the affected-row count decides the race, so two concurrent clicks cannot both succeed. The link expires after 15 minutes
+- The GET deliberately does not consume the token, so a mail gateway or link scanner opening the URL cannot burn the user's only link
+- Ignores the `users.notify_new_location` opt-out on purpose: that preference is written from an authenticated session, so honoring it would let anyone holding a session switch the control off, and an opted-out user would be held with no mail to approve with
+- `last_login_country` is written only when a sign-in completes or an approval is claimed, so an attempt nobody approves cannot make its country look familiar next time
+- Scope: only this service's own credential login. The OIDC callback is not gated, because there the external OP made the authentication decision and that is where a step-up belongs
+- Recovery when the approval email cannot be received is below, and does not depend on email
+
+#### Recovering from a lost approval email
+
+This gate can lock a user out of their own instance, so the way back in does not depend on email. In order:
+
+1. **Turn the gate off.** Set `LOGIN_APPROVAL_ENABLED=false` (or remove it) and restart the container. The password sign-in works again immediately. No deploy and no code change, which is the whole point of the flag being an environment variable.
+2. **Clear the stored country**, when the environment cannot be changed but the database can:
+
+   ```sql
+   UPDATE users SET last_login_country = NULL WHERE email = '<address>';
+   ```
+
+   The next sign-in then has no prior country, so it is treated as a first-ever sign-in and is never gated. The country is re-recorded on that sign-in.
+3. **Read the link out of the log**, when SMTP is in log mode. With no `SMTP_HOST`/`SMTP_FROM_EMAIL` the approval mail is logged instead of sent, body and link included, and the app warns about exactly this at startup. Prefer path 1 or 2; a deployment turning the gate on should configure SMTP first.
+
+There is deliberately **no** way to approve a held sign-in from the database: only the SHA-256 of the emailed token is stored.
+
 ✅ **Trusted Proxy Gate** (LINKS-31)
 - `X-Forwarded-For`, `X-Real-Ip`, and `X-IPCountry` are read only when the socket peer sits in a CIDR listed in `TRUSTED_PROXY_CIDRS`; the peer is the one input a client cannot forge
 - Empty (the default) trusts no peer: all three headers are ignored and the socket address is used, so a direct client cannot spoof its IP or its country

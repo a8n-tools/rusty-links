@@ -181,6 +181,8 @@ Sets `session_id` cookie (HTTP-only, secure in production).
 
 **Errors:**
 - 401 Unauthorized - Invalid email or password
+- 403 Forbidden, `APPROVAL_REQUIRED` - the sign-in is held by the approval gate (LINKS-35); see below
+- 429 Too Many Requests - account temporarily locked after repeated failures
 
 **Example:**
 
@@ -193,6 +195,31 @@ curl -X POST http://localhost:8080/api/auth/login \
     "password": "password123"
   }'
 ```
+
+---
+
+### Sign-in Approval Gate
+
+Only when `LOGIN_APPROVAL_ENABLED=true` (standalone mode; default off). A sign-in that passes the password but comes from a country the account has not been used from before issues no token at all and answers:
+
+```json
+{
+  "error": "This sign-in is from a new location, so we emailed you a link to approve it. Open the link, then sign in again.",
+  "code": "APPROVAL_REQUIRED",
+  "status": 403
+}
+```
+
+No JWT, no refresh token, and no `last_login_country` write. The user is emailed a single-use link to the approval page, which is served at the server root rather than under `/api` because a human opens it in a browser:
+
+| Endpoint                              | Purpose                                                                 |
+|---------------------------------------|-------------------------------------------------------------------------|
+| `GET /auth/approve-login?token=<t>`   | Shows the country, IP, device, and time. Validates only; never consumes the token, so a link scanner cannot burn it |
+| `POST /auth/approve-login`            | Form post with `token=<t>`. Claims the token, once, and records the country as the account's known one |
+
+Both answer HTML: 200 for a valid token, 400 for one that is unknown, already used, or past its 15-minute expiry. After approving, sign in again; the country is no longer new, so the sign-in completes.
+
+Two sign-ins are never gated: a first-ever one (no prior country) and one whose country the edge did not resolve. The gate ignores the per-user `notify_new_location` opt-out, which governs the alert only. Recovery when the email cannot be received is in `docs/SECURITY.md` and does not depend on email.
 
 ---
 

@@ -74,6 +74,7 @@ postgres:
 | Table        | Purpose                 | Rows (typical)  |
 |--------------|-------------------------|-----------------|
 | `users`      | User accounts           | 1-10            |
+| `pending_login_approvals` | Sign-ins held by the LINKS-35 approval gate | 0 (empty unless the gate is on) |
 | `sessions`   | Authentication sessions | 1-5 per user    |
 | `links`      | Bookmarked links        | 100-10,000+     |
 | `categories` | Link categorization     | 10-100          |
@@ -170,7 +171,51 @@ CREATE TABLE users (
 - Passwords are hashed using Argon2id
 - Email must be unique (case-sensitive)
 - Deleting a user cascades to all their data
-- `last_login_country` is written on every login whose country the edge resolved, and is what the next login is compared against
+- `last_login_country` is written when a sign-in completes (or when a held sign-in is approved, LINKS-35) and the edge resolved a country, and is what the next sign-in is compared against. A sign-in held for approval and never approved writes nothing, so it cannot make its country look familiar next time
+
+---
+
+### pending_login_approvals
+
+A sign-in held by the LINKS-35 approval gate, waiting for the account owner to approve it from a single-use emailed link.
+
+```sql
+CREATE TABLE pending_login_approvals (
+    id          UUID        PRIMARY KEY DEFAULT gen_random_uuid(),
+    user_id     UUID        NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    token_hash  BYTEA       NOT NULL UNIQUE,
+    country     VARCHAR(2)  NOT NULL,
+    ip          TEXT        NOT NULL,
+    device      TEXT,
+    created_at  TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    expires_at  TIMESTAMPTZ NOT NULL,
+    consumed_at TIMESTAMPTZ
+);
+```
+
+**Columns:**
+
+| Column        | Type        | Constraints                | Description                                             |
+|---------------|-------------|----------------------------|---------------------------------------------------------|
+| `id`          | UUID        | PRIMARY KEY                | Row identifier                                          |
+| `user_id`     | UUID        | NOT NULL, FK -> users(id)  | Account whose sign-in is held                           |
+| `token_hash`  | BYTEA       | NOT NULL, UNIQUE           | SHA-256 of the emailed token; the token is never stored |
+| `country`     | VARCHAR(2)  | NOT NULL                   | ISO-3166-1 alpha-2 country the sign-in came from        |
+| `ip`          | TEXT        | NOT NULL                   | Client IP shown on the approval page                    |
+| `device`      | TEXT        | NULL                       | User-Agent shown on the approval page                   |
+| `created_at`  | TIMESTAMPTZ | NOT NULL, DEFAULT NOW()    | When the sign-in was held                               |
+| `expires_at`  | TIMESTAMPTZ | NOT NULL                   | 15 minutes after `created_at`                           |
+| `consumed_at` | TIMESTAMPTZ | NULL                       | When the link was claimed; NULL means still claimable   |
+
+**Indexes:**
+- `pending_login_approvals_user_id` - rows for one account
+- `pending_login_approvals_expires` - expiry sweep
+
+**Notes:**
+- Only the SHA-256 of the token is stored, so a database dump can neither mint nor replay an approval link, and there is no way to approve a held sign-in from the database
+- Single use is enforced by a conditional `UPDATE ... SET consumed_at = NOW() WHERE token_hash = $1 AND consumed_at IS NULL AND expires_at > NOW()`; the affected-row count decides a race between two concurrent clicks
+- Expired rows are swept opportunistically when the next sign-in is held; a leftover row is inert because every read is guarded on `expires_at` anyway
+- Rows exist only where `LOGIN_APPROVAL_ENABLED=true`; with the gate off the table stays empty
 
 ---
 
@@ -607,6 +652,7 @@ sqlx migrate info
 | 20250101000003 | Add sessions table for authentication | 2025-01-01 |
 | 20250101000004 | Add consecutive_failures to links | 2025-01-01 |
 | 20250101000005 | Add scheduler fields (last_checked) to links | 2025-01-01 |
+| 20260821000014 | Add pending_login_approvals for the sign-in approval gate (LINKS-35) | 2026-08-21 |
 
 ### Creating Custom Migrations
 

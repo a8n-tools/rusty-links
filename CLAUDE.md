@@ -67,7 +67,7 @@ There are no `standalone`/`saas` build features. A single binary and OCI image s
 - **Entry point**: `src/main.rs` - Initializes database pool, starts scheduler, creates Axum router with Dioxus frontend and API routes. The LINKS-31 trusted-proxy gate is the OUTERMOST layer and must stay there: it rewrites the forwarded headers, so anything layered outside it would read forgeable values.
 - **API layer**: `src/api/` - REST endpoints nested under `/api`, with auth routes at `/api/auth/*`
 - **Server functions**: `src/server_functions/` - Dioxus server functions bridging client/server communication (available on both sides)
-- **Auth**: `src/auth/` - Session-based authentication using cookies, Argon2id password hashing. `trusted_proxy.rs` gates `X-Forwarded-For` / `X-Real-Ip` / `X-IPCountry` on the socket peer; every client-IP and country reader goes through `middleware.rs` so the gate covers them all.
+- **Auth**: `src/auth/` - Session-based authentication using cookies, Argon2id password hashing. `trusted_proxy.rs` gates `X-Forwarded-For` / `X-Real-Ip` / `X-IPCountry` on the socket peer; every client-IP and country reader goes through `middleware.rs` so the gate covers them all. `location_alert.rs::is_new_country` is the single definition of a suspicious sign-in: the LINKS-27 alert and the LINKS-35 approval gate (`login_approval.rs`) both call it, so they cannot disagree.
 - **UI**: `src/ui/` - Dioxus components with pages (`pages/`) and reusable components (`components/`)
 - **Models**: `src/models/` - Database models (User, Link, Category, Tag, etc.)
 - **Scheduler**: `src/scheduler/` - Background task runner for periodic metadata updates
@@ -98,6 +98,8 @@ The deployment mode is selected at runtime, not at compile time. The same binary
 - `OIDC_ISSUER` set → hosted mode (OIDC login against a8n Tools, active-membership gate). `Config::hosted()` (`src/config.rs`) returns `!oidc.issuer.is_empty()`.
 
 `TRUSTED_PROXY_CIDRS` lists the CIDRs whose socket peers may set `X-Forwarded-For`, `X-Real-Ip`, and `X-IPCountry` (LINKS-31). Empty (the default) trusts no peer and ignores all three, which is correct for local dev; a deployment behind a reverse proxy must set the private ingress ranges or every client collapses to the proxy address and the sign-in location alert stops firing.
+
+`LOGIN_APPROVAL_ENABLED` (LINKS-35) is opt-in and exact-match `true`, OFF by default: it withholds a session on a sign-in from a country the account has not used before until the owner approves it from an emailed link. Standalone mode only, since it gates this app's own credential login. Recovery from a lost approval email is in `docs/SECURITY.md` and does not depend on email.
 
 `/api/health` reports the resolved mode in its `auth_mode` field (`"standalone"` or `"hosted"`); the WASM client reads it once to render the correct login experience.
 

@@ -72,6 +72,15 @@ impl SmtpTlsMode {
     }
 }
 
+/// Parse `LOGIN_APPROVAL_ENABLED` (LINKS-35).
+///
+/// Opt-in and exact-match, not the alert's permissive off-switch: this gate can
+/// stop a real user signing in, so only `true` turns it on and anything else
+/// (unset, empty, `TRUE`, `yes`, `1`) leaves it off.
+fn login_approval_from_env_value(value: Option<&str>) -> bool {
+    value == Some("true")
+}
+
 /// Outbound email + new-sign-in-location alert settings (LINKS-27).
 ///
 /// Carried by both `Config` and `OidcRpState` so either login path can raise an
@@ -89,6 +98,10 @@ pub struct MailConfig {
     pub smtp_tls: SmtpTlsMode,
     /// Global kill switch for new-sign-in-location alerts. On by default.
     pub login_location_alerts_enabled: bool,
+    /// Opt-in gate that withholds a session on a sign-in from a new country
+    /// until the owner approves it (LINKS-35). OFF unless `LOGIN_APPROVAL_ENABLED`
+    /// is exactly `true`, because unlike the alert it can stop a real sign-in.
+    pub login_approval_enabled: bool,
 }
 
 impl MailConfig {
@@ -113,7 +126,10 @@ impl MailConfig {
             }
         });
 
-        Self {
+        let login_approval_enabled =
+            login_approval_from_env_value(std::env::var("LOGIN_APPROVAL_ENABLED").ok().as_deref());
+
+        let config = Self {
             smtp_host: non_empty("SMTP_HOST"),
             smtp_port,
             smtp_username: non_empty("SMTP_USERNAME"),
@@ -128,7 +144,16 @@ impl MailConfig {
                     .as_str(),
                 "false" | "0" | "no" | "off"
             ),
+            login_approval_enabled,
+        };
+
+        if config.login_approval_enabled && !config.configured() {
+            tracing::warn!(
+                "LOGIN_APPROVAL_ENABLED=true with no SMTP host or sender: a held sign-in cannot be approved from mail. The approval link is written to the log instead. Configure SMTP_HOST and SMTP_FROM_EMAIL, or set LOGIN_APPROVAL_ENABLED=false."
+            );
         }
+
+        config
     }
 }
 
@@ -575,6 +600,21 @@ mod tests {
         assert_eq!(SmtpTlsMode::from_env_value(None), SmtpTlsMode::Starttls);
         assert_eq!(SmtpTlsMode::default(), SmtpTlsMode::Starttls);
         assert_eq!(MailConfig::default().smtp_tls, SmtpTlsMode::Starttls);
+    }
+
+    // The LINKS-35 gate is off unless asked for by name. It can lock a real
+    // user out, so every near-miss spelling leaves it off.
+    #[test]
+    fn login_approval_defaults_off_and_is_exact_match() {
+        assert!(!MailConfig::default().login_approval_enabled);
+        assert!(!login_approval_from_env_value(None));
+        for value in ["", " ", "TRUE", "True", "true ", "yes", "on", "1", "false"] {
+            assert!(
+                !login_approval_from_env_value(Some(value)),
+                "expected {value:?} to leave the gate off"
+            );
+        }
+        assert!(login_approval_from_env_value(Some("true")));
     }
 
     #[test]

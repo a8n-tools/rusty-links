@@ -38,6 +38,16 @@ fn alert_dedup() -> &'static moka::future::Cache<String, ()> {
     })
 }
 
+/// Whether this login is from a country the account has not used before.
+///
+/// The single definition of "suspicious" in this crate: the LINKS-27 alert and
+/// the LINKS-35 approval gate both call it, so they can never disagree about
+/// what a new country is. False whenever either side is absent, which is what
+/// keeps a first-ever login and an unresolved country out of both.
+pub fn is_new_country(previous: Option<&str>, current: Option<&str>) -> bool {
+    matches!((previous, current), (Some(prev), Some(curr)) if !prev.eq_ignore_ascii_case(curr))
+}
+
 /// Whether a login warrants a new-location alert.
 ///
 /// A change is significant only when a prior country is known and the new one
@@ -49,8 +59,7 @@ pub fn should_alert(
     previous: Option<&str>,
     current: Option<&str>,
 ) -> bool {
-    notify_new_location
-        && matches!((previous, current), (Some(prev), Some(curr)) if !prev.eq_ignore_ascii_case(curr))
+    notify_new_location && is_new_country(previous, current)
 }
 
 /// Evaluate the new-location alert off the login hot path.
