@@ -146,7 +146,9 @@ CREATE TABLE users (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     email TEXT NOT NULL UNIQUE,
     password_hash TEXT NOT NULL,
-    created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW()
+    created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW(),
+    last_login_country VARCHAR(2),
+    notify_new_location BOOLEAN NOT NULL DEFAULT TRUE
 );
 ```
 
@@ -158,6 +160,8 @@ CREATE TABLE users (
 | `email`         | TEXT        | NOT NULL, UNIQUE        | User email address         |
 | `password_hash` | TEXT        | NOT NULL                | Argon2id password hash       |
 | `created_at`    | TIMESTAMPTZ | NOT NULL, DEFAULT NOW() | Account creation timestamp |
+| `last_login_country` | VARCHAR(2) | NULL | ISO-3166-1 alpha-2 country of the last login (LINKS-27) |
+| `notify_new_location` | BOOLEAN | NOT NULL, DEFAULT TRUE | Per-user opt-out for new-location alerts (LINKS-27) |
 
 **Indexes:**
 - `idx_users_email` - Fast email lookups for authentication
@@ -166,6 +170,7 @@ CREATE TABLE users (
 - Passwords are hashed using Argon2id
 - Email must be unique (case-sensitive)
 - Deleting a user cascades to all their data
+- `last_login_country` is written on every login whose country the edge resolved, and is what the next login is compared against
 
 ---
 

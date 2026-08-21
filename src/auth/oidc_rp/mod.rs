@@ -13,7 +13,7 @@ pub mod jit;
 
 use axum::{
     extract::{Query, State},
-    http::StatusCode,
+    http::{HeaderMap, StatusCode},
     response::{IntoResponse, Redirect, Response},
     routing::{get, post},
     Form, Router,
@@ -40,6 +40,8 @@ use crate::error::AppError;
 pub struct OidcRpState {
     pub pool: PgPool,
     pub config: OidcConfig,
+    /// Mail + login-location alert settings (LINKS-27).
+    pub mail: crate::config::MailConfig,
     pub verifier: Arc<OidcVerifier>,
     pub jti_cache: Arc<moka::future::Cache<String, ()>>,
 }
@@ -208,6 +210,7 @@ pub async fn login(
 pub async fn callback(
     State(state): State<OidcRpState>,
     jar: CookieJar,
+    headers: HeaderMap,
     Query(params): Query<CallbackQuery>,
 ) -> Result<Response, AppError> {
     if !state.config.enabled() {
@@ -352,6 +355,15 @@ pub async fn callback(
     .bind(true)
     .execute(&state.pool)
     .await?;
+
+    // Alert on a sign-in from a country this account has not used before. The
+    // OP alerts on sign-ins to itself; a reused OP session would be silent here.
+    crate::auth::location_alert::spawn_new_location_check(
+        &state.pool,
+        &state.mail,
+        provisioned.id,
+        &headers,
+    );
 
     let secure = state.config.redirect_uri.starts_with("https://");
     let cookie = build_session_cookie(&session_token, state.config.session_ttl_seconds, secure);
@@ -706,7 +718,12 @@ pub async fn dev_seed_session(
 
 // ── Router ────────────────────────────────────────────────────────────────────
 
-pub fn create_router(pool: PgPool, config: OidcConfig, verifier: Arc<OidcVerifier>) -> Router {
+pub fn create_router(
+    pool: PgPool,
+    config: OidcConfig,
+    mail: crate::config::MailConfig,
+    verifier: Arc<OidcVerifier>,
+) -> Router {
     let jti_cache = Arc::new(
         moka::future::Cache::builder()
             .time_to_live(Duration::from_secs(config.lifecycle_jti_cache_ttl))
@@ -716,6 +733,7 @@ pub fn create_router(pool: PgPool, config: OidcConfig, verifier: Arc<OidcVerifie
     let state = OidcRpState {
         pool,
         config,
+        mail,
         verifier,
         jti_cache,
     };

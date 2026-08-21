@@ -8,11 +8,12 @@
 
 use crate::error::AppError;
 use crate::models::{check_user_exists, User};
-use axum::{extract::State, response::IntoResponse, Json};
+use axum::{extract::State, http::HeaderMap, response::IntoResponse, Json};
 use serde::Serialize;
 use sqlx::PgPool;
 
 use crate::auth::jwt::{create_jwt, generate_refresh_token};
+use crate::auth::location_alert::spawn_new_location_check;
 use crate::auth::middleware::{AuthenticatedUser, Claims};
 use crate::config::Config;
 use crate::models::{
@@ -50,6 +51,7 @@ pub async fn check_setup_handler(
 pub async fn setup_handler(
     State(pool): State<PgPool>,
     State(config): State<Config>,
+    headers: HeaderMap,
     Json(request): Json<SetupRequest>,
 ) -> Result<impl IntoResponse, AppError> {
     tracing::info!(email = %request.email, "Setup request received");
@@ -91,6 +93,9 @@ pub async fn setup_handler(
         .execute(&pool)
         .await?;
 
+    // Baseline this account's country so the next login from elsewhere alerts.
+    spawn_new_location_check(&pool, &config.mail, user.id, &headers);
+
     tracing::info!(user_id = %user.id, "Setup completed successfully");
 
     Ok(Json(AuthResponse {
@@ -107,6 +112,7 @@ pub async fn setup_handler(
 pub async fn register_handler(
     State(pool): State<PgPool>,
     State(config): State<Config>,
+    headers: HeaderMap,
     Json(request): Json<LoginRequest>,
 ) -> Result<impl IntoResponse, AppError> {
     tracing::info!(email = %request.email, "Registration attempt");
@@ -152,6 +158,9 @@ pub async fn register_handler(
         .execute(&pool)
         .await?;
 
+    // Baseline this account's country so the next login from elsewhere alerts.
+    spawn_new_location_check(&pool, &config.mail, user.id, &headers);
+
     tracing::info!(user_id = %user.id, email = %user.email, "Registration successful");
 
     Ok(Json(AuthResponse {
@@ -168,6 +177,7 @@ pub async fn register_handler(
 pub async fn login_handler(
     State(pool): State<PgPool>,
     State(config): State<Config>,
+    headers: HeaderMap,
     Json(request): Json<LoginRequest>,
 ) -> Result<impl IntoResponse, AppError> {
     tracing::info!(email = %request.email, "Login attempt");
@@ -214,6 +224,9 @@ pub async fn login_handler(
 
     // Record successful attempt
     security::record_login_attempt(&pool, &request.email, true).await;
+
+    // Alert on a sign-in from a country this account has not used before.
+    spawn_new_location_check(&pool, &config.mail, user.id, &headers);
 
     // Create JWT + refresh token
     let token = create_jwt(
