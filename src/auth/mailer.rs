@@ -8,9 +8,10 @@
 use chrono::Utc;
 use lettre::message::Mailbox;
 use lettre::transport::smtp::authentication::Credentials;
+use lettre::transport::smtp::AsyncSmtpTransportBuilder;
 use lettre::{AsyncSmtpTransport, AsyncTransport, Message, Tokio1Executor};
 
-use crate::config::MailConfig;
+use crate::config::{MailConfig, SmtpTlsMode};
 use crate::error::AppError;
 
 /// Plain-text body of the new-sign-in-location alert.
@@ -29,12 +30,37 @@ If this was you, no action is needed.
 If you do not recognise this sign-in, someone else may have access to your account. Sign in and change your Rusty Links password now, then review your active sessions.
 ";
 
+/// Select the lettre constructor for the configured TLS mode (LINKS-37).
+///
+/// `relay`/`starttls_relay` each set the default port for their mode, so the
+/// caller's explicit `SMTP_PORT` stays an override applied afterwards.
+fn transport_builder(mode: SmtpTlsMode, host: &str) -> Result<AsyncSmtpTransportBuilder, AppError> {
+    match mode {
+        SmtpTlsMode::Tls => AsyncSmtpTransport::<Tokio1Executor>::relay(host).map_err(|error| {
+            AppError::Configuration(format!("SMTP TLS transport setup failed: {error}"))
+        }),
+        SmtpTlsMode::Starttls => AsyncSmtpTransport::<Tokio1Executor>::starttls_relay(host)
+            .map_err(|error| {
+                AppError::Configuration(format!("SMTP STARTTLS transport setup failed: {error}"))
+            }),
+        SmtpTlsMode::None => {
+            tracing::warn!(
+                smtp_host = %host,
+                "SMTP_TLS=none: mail is sent over an UNENCRYPTED connection. Use this only for a trusted local relay."
+            );
+            Ok(AsyncSmtpTransport::<Tokio1Executor>::builder_dangerous(
+                host,
+            ))
+        }
+    }
+}
+
 fn smtp_transport(mail: &MailConfig) -> Result<AsyncSmtpTransport<Tokio1Executor>, AppError> {
     let host = mail
         .smtp_host
         .clone()
         .ok_or_else(|| AppError::Configuration("SMTP host is missing".into()))?;
-    let mut builder = AsyncSmtpTransport::<Tokio1Executor>::builder_dangerous(host);
+    let mut builder = transport_builder(mail.smtp_tls, &host)?;
     if let Some(port) = mail.smtp_port {
         builder = builder.port(port);
     }
@@ -153,6 +179,54 @@ mod tests {
         assert!(!mail.configured());
         mail.smtp_from_email = Some("alerts@example.com".into());
         assert!(mail.configured());
+    }
+
+    // lettre exposes no getter for a transport's TLS setting, so the mode ->
+    // constructor mapping is asserted through the builder's Debug output.
+    fn builder_debug(mode: SmtpTlsMode) -> String {
+        let builder = transport_builder(mode, "smtp.example.com").expect("builder should be built");
+        format!("{builder:?}")
+    }
+
+    #[test]
+    fn tls_mode_selects_implicit_tls_relay() {
+        let debug = builder_debug(SmtpTlsMode::Tls);
+        assert!(debug.contains("tls: Wrapper"), "{debug}");
+        assert!(debug.contains("port: 465"), "{debug}");
+    }
+
+    #[test]
+    fn starttls_mode_selects_starttls_relay() {
+        let debug = builder_debug(SmtpTlsMode::Starttls);
+        assert!(debug.contains("tls: Required"), "{debug}");
+        assert!(debug.contains("port: 587"), "{debug}");
+    }
+
+    // The plaintext escape hatch stays reachable for a trusted local relay.
+    #[test]
+    fn none_mode_selects_plaintext_builder() {
+        let debug = builder_debug(SmtpTlsMode::None);
+        assert!(debug.contains("tls: None"), "{debug}");
+        assert!(debug.contains("port: 25"), "{debug}");
+    }
+
+    // An unconfigured deployment gets an encrypted transport, not plaintext.
+    #[test]
+    fn default_mail_config_transport_is_encrypted() {
+        let mail = MailConfig::default();
+        assert_eq!(mail.smtp_tls, SmtpTlsMode::Starttls);
+        assert!(!builder_debug(mail.smtp_tls).contains("tls: None"));
+    }
+
+    // SMTP_PORT stays an override on top of the port the mode supplies.
+    #[test]
+    fn explicit_port_overrides_the_mode_default() {
+        let builder = transport_builder(SmtpTlsMode::Starttls, "smtp.example.com")
+            .expect("builder should be built")
+            .port(2525);
+        let debug = format!("{builder:?}");
+        assert!(debug.contains("port: 2525"), "{debug}");
+        assert!(debug.contains("tls: Required"), "{debug}");
     }
 
     // The body carries the country, IP, and device the alert is about.
