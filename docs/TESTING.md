@@ -76,8 +76,11 @@ cargo test --features server --test integration_tests
 # Run unit tests only (no integration tests)
 cargo test --features server --lib
 
-# Run integration tests only
+# Run integration tests only (needs DATABASE_URL; see "Database Setup for Tests")
 cargo test --features server --test '*'
+
+# Run them the way `just pre-commit` and CI do, with the skip guard
+nu scripts/check-db-tests-ran.nu
 
 # Run tests for specific package
 cargo test --features server -p rusty-links
@@ -97,37 +100,22 @@ cargo test --features server -- --nocapture --show-output
 
 ### Environment Setup
 
-Tests require environment variables:
+The `tests/db_*.rs` targets need `DATABASE_URL`, and they never skip without it: an unset or unreachable value is a panic, because a suite that skips still exits 0 and looks green (LINKS-44).
 
 ```bash
-# Set test database URL
-export DATABASE_URL="postgresql://rustylinks:password@localhost/rustylinks_test"
+# The compose `app` container already has it, which is what `just pre-commit` uses
+just test-db
 
-# Or use .env.test file
-cp .env.standalone .env.test
-# Edit .env.test with test database URL
-
-# Run tests with custom env file
-DATABASE_URL=$(grep DATABASE_URL .env.test | cut -d= -f2) cargo test
+# Standalone Postgres for a bare `cargo test`
+just db-up
+export DATABASE_URL="postgresql://rustylinks:changeme_secure_password_here@localhost/rustylinks"
 ```
 
 ### Database Setup for Tests
 
-```bash
-# Create test database
-createdb rustylinks_test
+Nothing to create by hand. `tests/common/mod.rs::test_pool` derives a sibling `<database>_test` from `DATABASE_URL`, creates it if it is missing, and applies `migrations/` to it with `sqlx::migrate!`. The database named in `DATABASE_URL` is only ever connected to in order to issue the `CREATE DATABASE`, so running the suites against a dev database does not touch dev data.
 
-# Run migrations
-DATABASE_URL=postgresql://rustylinks:password@localhost/rustylinks_test sqlx migrate run
-
-# Or use Docker for isolated test database
-docker run -d --name rustylinks-test-db \
-  -e POSTGRES_USER=rustylinks \
-  -e POSTGRES_PASSWORD=test \
-  -e POSTGRES_DB=rustylinks_test \
-  -p 5433:5432 \
-  postgres:16-alpine
-```
+In CI the same code path runs against the `postgres:17-alpine` service declared in `.forgejo/workflows/check.yml`.
 
 ---
 
@@ -148,10 +136,12 @@ rusty-links/
 │       └── auth.rs          # API logic (tested via integration tests)
 ├── tests/
 │   ├── common/
-│   │   └── mod.rs           # Test utilities and helpers
-│   ├── integration_tests.rs # Integration tests
-│   ├── api_tests.rs         # API endpoint tests
-│   └── auth_tests.rs        # Authentication flow tests
+│   │   └── mod.rs             # Pool, fixtures, router and session helpers
+│   ├── db_account_settings.rs # PATCH/GET /api/auth/me through the column
+│   ├── db_login_approval.rs   # LINKS-35 approval-gate lifecycle
+│   ├── db_schema.rs           # Migrations apply; UNIQUE and CASCADE shapes
+│   ├── db_users.rs            # User creation round trips
+│   └── route_surface.rs       # Per-mode route mounting (no database)
 └── Cargo.toml
 ```
 
@@ -203,24 +193,21 @@ Common test helpers in `tests/common/mod.rs`:
 ```rust
 // tests/common/mod.rs
 
-use sqlx::PgPool;
+// Pool for the `<database>_test` sibling, created and migrated on first use.
+// Panics when DATABASE_URL is unset or unreachable; it never skips.
+pub async fn test_pool() -> PgPool;
 
-pub async fn setup_test_db() -> PgPool {
-    // Create test database connection
-    // Run migrations
-    // Return pool
-}
+// Fixtures are per test rather than a global truncate, because the targets
+// share one database.
+pub fn unique_email() -> String;
+pub async fn new_user(pool: &PgPool) -> User;
+pub async fn delete_user(pool: &PgPool, id: Uuid);
 
-pub async fn cleanup_test_db(pool: &PgPool) {
-    // Clean up test data
-}
-
-pub fn create_test_user() -> CreateUser {
-    CreateUser {
-        email: "test@example.com".to_string(),
-        password: "password123".to_string(),
-    }
-}
+// Standalone-mode config, the `/api` router over a real pool, and a session
+// for a fixture user.
+pub fn test_config() -> Config;
+pub fn api_router(pool: PgPool, config: Config) -> axum::Router;
+pub fn bearer(config: &Config, user: &User) -> String;
 ```
 
 ---
@@ -613,14 +600,9 @@ Focus on testing:
 
 ## CI/CD Testing
 
-### GitHub Actions Workflow
+### Forgejo Actions Workflow
 
-Tests run automatically on:
-- Every push to main branch
-- Every pull request
-- Manual workflow dispatch
-
-See `.github/workflows/test.yml` for complete configuration.
+Tests run automatically on every push to `main` and every pull request. See `.forgejo/workflows/check.yml` for the complete configuration; the `check` job declares a `postgres:17-alpine` service and exports `DATABASE_URL` for the database-backed legs.
 
 ### Local Pre-commit Testing
 
@@ -637,14 +619,18 @@ cargo build --all-targets
 cargo build --all-targets --features server
 cargo test --lib
 cargo test --features server --lib
+cargo test --features server --test db_schema
+nu scripts/check-db-tests-ran.nu --self-test
+nu scripts/check-db-tests-ran.nu
 ```
+
+### Why the last two legs are a script and not a bare `cargo test`
+
+`cargo test` exits 0 when a target has no tests, when every case is filtered out by a name argument, and when every case is `#[ignore]`d. That is how the `tests/` targets sat compiled but unexecuted while every check stayed green (LINKS-44). `scripts/check-db-tests-ran.nu` runs each `tests/*.rs` target, parses its harness summary, and fails when a `db_*` target is missing, ignored, filtered, or below the floor on database-backed passes. `--self-test` runs first so a guard that stopped detecting fails the job instead of passing vacuously.
 
 ### Test Matrix
 
-CI tests against:
-- Rust stable
-- Rust beta (optional)
-- Multiple PostgreSQL versions (14, 15, 16)
+CI runs one configuration: Rust stable against `postgres:17-alpine`, matching `compose.dev.yml` so dev and CI agree.
 
 ---
 

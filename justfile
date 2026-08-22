@@ -19,6 +19,8 @@ install-hooks:
 # Covers all three compilation configurations: default features, `server`, and `web` on wasm.
 # `default = []` gates every server module behind `#[cfg(feature = "server")]`, so the
 # default-feature legs alone compile almost none of the crate (LINKS-36).
+# The last leg runs the tests/ targets against the compose `postgres` service, which
+# `cargo test --lib` never did, so no SQL was executed by any check (LINKS-44).
 pre-commit: ensure-env ensure-css
     #!/usr/bin/env nu
     print "\n[pre-commit] cargo fmt --check"
@@ -37,6 +39,9 @@ pre-commit: ensure-env ensure-css
     ^docker compose --file compose.dev.yml run --rm app cargo test --lib
     print "\n[pre-commit] cargo test --features server --lib"
     ^docker compose --file compose.dev.yml run --rm app cargo test --features server --lib
+    print "\n[pre-commit] integration tests against the compose postgres"
+    ^nu scripts/check-db-tests-ran.nu --self-test
+    ^nu scripts/check-db-tests-ran.nu --runner "docker compose --file compose.dev.yml run --rm app"
     print "\n[pre-commit] all checks passed"
 
 # Use the per-user dev compose file
@@ -155,6 +160,13 @@ build-docker:
 # Run tests
 test:
     cargo test
+
+# Run the tests/ targets against the compose `postgres` service, the same leg
+# `just pre-commit` and CI run. Fails if a database-backed target is skipped.
+test-db:
+    #!/usr/bin/env nu
+    ^nu scripts/check-db-tests-ran.nu --self-test
+    ^nu scripts/check-db-tests-ran.nu --runner "docker compose --file compose.dev.yml run --rm app"
 
 # Run integration tests against a running instance
 test-integration url="http://localhost:4002":

@@ -9,6 +9,7 @@ Complete database schema reference for Rusty Links PostgreSQL database.
 - [Schema Summary](#schema-summary)
 - [Entity Relationship Diagram](#entity-relationship-diagram)
 - [Tables Reference](#tables-reference)
+- [Test Database](#test-database)
 - [Migrations](#migrations)
 - [Indexes](#indexes)
 - [Backup and Restore](#backup-and-restore)
@@ -596,6 +597,12 @@ CREATE TABLE link_tags (
 
 **Notes:**
 - `order_num` allows custom tag ordering per link
+
+---
+
+## Test Database
+
+The integration suites never run against the database named in `DATABASE_URL`. `tests/common/mod.rs::test_pool` derives a sibling `<database>_test` from it, creates it if missing, and applies `migrations/` to it with `sqlx::migrate!`, so running them against a dev database does not touch dev data. Nothing to create by hand, and nothing skips: an unset or unreachable `DATABASE_URL` fails the suite rather than passing vacuously (LINKS-44). See [TESTING.md](TESTING.md).
 
 ---
 

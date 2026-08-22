@@ -19,6 +19,31 @@ jobs:
     # only the dev image carries).
     runs-on: ${{ vars.RUNS_ON_OPENSUSE_DEV_LATEST }}
 
+    # Postgres for the tests/ targets (LINKS-44). Without it the only test legs
+    # were `cargo test --lib`, so every query in src/models/ and src/auth/ was
+    # compile-checked and never executed. 17-alpine matches compose.dev.yml.
+    services:
+      postgres:
+        image: postgres:17-alpine
+        env:
+          POSTGRES_USER: rustylinks
+          POSTGRES_PASSWORD: rustylinks
+          POSTGRES_DB: rustylinks
+        # No published port: the runner puts the job container and this service
+        # on one network, so the service alias is the address. A published port
+        # lands in the docker daemon's namespace, which the job cannot reach.
+        options: >-
+          --health-cmd="pg_isready --username=rustylinks --dbname=rustylinks"
+          --health-interval=5s
+          --health-timeout=3s
+          --health-retries=10
+
+    env:
+      # tests/common/mod.rs derives a sibling `rustylinks_test` database from
+      # this and migrates that, so the suites never share a database with
+      # anything else pointed at the same server.
+      DATABASE_URL: postgres://rustylinks:rustylinks@postgres:5432/rustylinks
+
     steps:
       - name: Clone the repository
         uses: https://code.forgejo.org/actions/checkout@v5
@@ -81,3 +106,21 @@ jobs:
 
       - name: Unit tests (server)
         run: cargo test --features server --lib
+
+      - name: Apply migrations to the test database
+        # Creates the sibling `rustylinks_test` database and applies every
+        # migration through sqlx::migrate!, so a migration that does not apply
+        # to an empty database fails here by name rather than inside an
+        # unrelated test. No sqlx-cli install needed.
+        run: cargo test --features server --test db_schema
+
+      - name: Integration tests (Postgres-backed)
+        shell: nu {0}
+        # Runs every tests/*.rs target and fails when a database-backed one is
+        # skipped, ignored, filtered out or absent: `cargo test` exits 0 on an
+        # empty run, which is how LINKS-33 and LINKS-35 both shipped with no
+        # executed SQL. --self-test first, so a guard that stopped detecting
+        # fails the job rather than passing vacuously.
+        run: |
+          nu scripts/check-db-tests-ran.nu --self-test
+          nu scripts/check-db-tests-ran.nu

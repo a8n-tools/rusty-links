@@ -121,11 +121,14 @@ Branch naming conventions:
    `default = []` and every server module is behind `#[cfg(feature = "server")]`, so a bare `cargo test` compiles almost none of the crate. Pass `--features server` to exercise the server-side suite.
 
    ```bash
-   # Run the server-side tests (the bulk of the suite)
+   # Run the server-side unit tests (the bulk of the suite)
    cargo test --features server --lib
 
    # Run the default-feature tests (feature-independent code only)
    cargo test
+
+   # Run the tests/ targets against the compose postgres, with the skip guard
+   just test-db
 
    # Run specific test
    cargo test --features server test_name
@@ -213,8 +216,9 @@ test(links): add integration tests for link creation
 Before submitting, ensure:
 
 - [ ] Code follows project coding standards
-- [ ] `just pre-commit` passes (fmt, clippy, build, and tests under both default features and `--features server`, plus the wasm check)
+- [ ] `just pre-commit` passes (fmt, clippy, build, and tests under both default features and `--features server`, the wasm check, and the Postgres-backed `tests/` targets)
 - [ ] Server-side tests pass (`cargo test --features server --lib`)
+- [ ] Any new SQL is covered by a `tests/db_*.rs` case, since a query with no database-backed test is only compile-checked
 - [ ] Code is formatted (`cargo fmt`)
 - [ ] No clippy warnings under either feature set (`cargo clippy --all-targets -- --deny warnings` and the same with `--features server`)
 - [ ] Documentation is updated
@@ -359,7 +363,9 @@ cargo test --features server -- --nocapture
 # Run specific test
 cargo test --features server test_name
 
-# Run integration tests only
+# Run integration tests only. The db_* targets need DATABASE_URL and panic without
+# it: a suite that skips still exits 0, which is what left every query in this
+# repo unexecuted until LINKS-44. `just test-db` runs them the way CI does.
 cargo test --features server --test '*'
 
 # Run doc tests
