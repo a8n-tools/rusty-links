@@ -81,7 +81,11 @@ fn config_with_issuer(issuer: &str) -> Config {
 /// Build the `/api` router for a given config, backed by a lazy pool that never
 /// connects (unmounted routes 404 before any handler touches the database).
 fn api_router(config: Config) -> axum::Router {
+    // One-second acquire timeout, not the 30s default: the two assertions that
+    // reach a handler wait out this timeout, and since LINKS-44 runs this target
+    // that wait is on every CI run.
     let pool = PgPoolOptions::new()
+        .acquire_timeout(std::time::Duration::from_secs(1))
         .connect_lazy(&config.database_url)
         .expect("lazy pool");
     let verifier = Arc::new(OidcVerifier::new(config.oidc.clone()));

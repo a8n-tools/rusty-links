@@ -13,6 +13,8 @@ IMPORTANT: Do NOT modify `./assets/tailwind.css`. All CSS should go in `./tailwi
 
 `just pre-commit` is the authoritative check suite: it runs every leg CI runs, in the dev container, and fails on the first red one. Run it before every commit.
 
+Its last leg runs the `tests/` targets against the compose `postgres` service via `scripts/check-db-tests-ran.nu`. Before LINKS-44 the only test legs were `cargo test --lib`, so every `tests/` target was compiled by `--all-targets` and never executed and no SQL in the repo was covered. New SQL belongs in a `tests/db_*.rs` case; the guard fails the build when a `db_*` target is missing, ignored, filtered out, or below its floor on passes, because `cargo test` exits 0 on an empty run.
+
 IMPORTANT: `default = []`, so a bare `cargo check` / `cargo clippy` / `cargo test` compiles almost none of this crate. Every server module is behind `#[cfg(feature = "server")]`, so any command meant to verify server code must pass `--features server`.
 
 ```bash
@@ -58,7 +60,7 @@ The project uses Cargo features to separate server and client code:
 
 Server-only modules (`#[cfg(feature = "server")]`): api, auth, config, error, github, models, scheduler, scraper
 
-Because `default = []`, any check that omits `--features server` compiles none of those modules. `just pre-commit` and `.forgejo/workflows/check.yml` therefore run clippy, build, and test twice: once with default features and once with `--features server`.
+Because `default = []`, any check that omits `--features server` compiles none of those modules. `just pre-commit` and `.forgejo/workflows/check.yml` therefore run clippy, build, and test twice: once with default features and once with `--features server`. The `tests/` targets are all `#![cfg(feature = "server")]`, so they only ever run on the server leg.
 
 There are no `standalone`/`saas` build features. A single binary and OCI image serves both deployment modes; the mode is resolved at runtime (see Configuration below).
 
@@ -90,6 +92,7 @@ Migrations are embedded at compile time by `sqlx::migrate!()` and are not copied
 - PostgreSQL with SQLx (compile-time checked queries)
 - Migrations in `migrations/` directory, run automatically on startup
 - Connection pool: 5 max connections, 30s timeout, 10min idle timeout
+- Tests get their own database: `tests/common/mod.rs::test_pool` derives `<database>_test` from `DATABASE_URL`, creates it, and migrates it, so a `just pre-commit` run never writes to dev data
 
 ## Configuration
 
