@@ -27,12 +27,17 @@ Rusty Links uses a multi-layered testing approach to ensure code quality and rel
    - Fast execution, no external dependencies
    - Test pure logic and algorithms
 
-2. **Integration Tests** - Test API endpoints and component interactions
+2. **Doc Tests** - Compile and run the examples in `///` comments
+   - Located in the doc comments of `src/`, so they only exist for the library target
+   - Run by `cargo test --features server --doc`, which no `--lib` or `--all-targets` command builds
+   - Keep the public API documentation honest: an example that stops compiling fails the build (LINKS-48)
+
+3. **Integration Tests** - Test API endpoints and component interactions
    - Located in `tests/` directory
    - Use test database
    - Test complete workflows
 
-3. **End-to-End Tests** - Test full user flows
+4. **End-to-End Tests** - Test full user flows
    - Simulated user interactions
    - Database, API, and UI integration
    - Catch regression issues
@@ -81,6 +86,13 @@ cargo test --features server --test '*'
 
 # Run them the way `just pre-commit` and CI do, with the skip guard
 nu scripts/check-db-tests-ran.nu
+
+# Run the doc examples only (the library target's examples; needs --features
+# server, since every documented module is cfg'd out without it)
+cargo test --features server --doc
+
+# Run them the way `just pre-commit` and CI do, with the vacuity guard
+nu scripts/check-doc-tests-ran.nu
 
 # Run tests for specific package
 cargo test --features server -p rusty-links
@@ -602,7 +614,7 @@ Focus on testing:
 
 ### Forgejo Actions Workflow
 
-Tests run automatically on every push to `main` and every pull request. See `.forgejo/workflows/check.yml` for the complete configuration; the `check` job declares a `postgres:17-alpine` service and exports `DATABASE_URL` for the database-backed legs.
+Tests run automatically on every push to `main` and every pull request. See `.forgejo/workflows/check.yml` for the complete configuration; the `check` job declares a `postgres:17-alpine` service and exports `DATABASE_URL` for the database-backed legs. The `Doc tests (server)` step needs no database and runs before them.
 
 ### Local Pre-commit Testing
 
@@ -619,14 +631,19 @@ cargo build --all-targets
 cargo build --all-targets --features server
 cargo test --lib
 cargo test --features server --lib
+nu scripts/check-doc-tests-ran.nu --self-test
+nu scripts/check-doc-tests-ran.nu
 cargo test --features server --test db_schema
 nu scripts/check-db-tests-ran.nu --self-test
 nu scripts/check-db-tests-ran.nu
 ```
 
-### Why the last two legs are a script and not a bare `cargo test`
+### Why the test legs are scripts and not a bare `cargo test`
 
-`cargo test` exits 0 when a target has no tests, when every case is filtered out by a name argument, and when every case is `#[ignore]`d. That is how the `tests/` targets sat compiled but unexecuted while every check stayed green (LINKS-44). `scripts/check-db-tests-ran.nu` runs each `tests/*.rs` target, parses its harness summary, and fails when a `db_*` target is missing, ignored, filtered, or below the floor on database-backed passes. `--self-test` runs first so a guard that stopped detecting fails the job instead of passing vacuously.
+`cargo test` exits 0 when a target has no tests, when every case is filtered out by a name argument, and when every case is `#[ignore]`d. That is how the `tests/` targets sat compiled but unexecuted while every check stayed green (LINKS-44), and how all ten doc examples rotted into compile errors without failing anything (LINKS-48). Each guard runs its leg, parses the harness summary, and fails on a run that proves nothing. `--self-test` runs first in both, so a guard that stopped detecting fails the job instead of passing vacuously.
+
+- `scripts/check-db-tests-ran.nu` runs each `tests/*.rs` target and fails when a `db_*` target is missing, ignored, filtered, or below the floor on database-backed passes.
+- `scripts/check-doc-tests-ran.nu` runs `cargo test --features server --doc` and fails when the harness collected nothing, when anything is ignored or filtered out, or when passes fall below the floor. The server leg is the one that runs it: `default = []` cfgs out every module holding an example, so the default-feature leg would collect zero doc tests and still exit 0. An example that must not execute is marked ```` ```no_run ````, which rustdoc compiles and type-checks and reports as a pass; ```` ```ignore ```` is not compiled at all and fails the leg.
 
 ### Test Matrix
 

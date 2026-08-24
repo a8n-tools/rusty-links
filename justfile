@@ -19,8 +19,9 @@ install-hooks:
 # Covers all three compilation configurations: default features, `server`, and `web` on wasm.
 # `default = []` gates every server module behind `#[cfg(feature = "server")]`, so the
 # default-feature legs alone compile almost none of the crate (LINKS-36).
-# The last leg runs the tests/ targets against the compose `postgres` service, which
-# `cargo test --lib` never did, so no SQL was executed by any check (LINKS-44).
+# The last two legs cover the test targets no `--lib` run reaches: the doc examples,
+# which nothing in the repo compiled until LINKS-48, and the tests/ targets against
+# the compose `postgres` service, which `cargo test --lib` never ran (LINKS-44).
 pre-commit: ensure-env ensure-css
     #!/usr/bin/env nu
     print "\n[pre-commit] cargo fmt --check"
@@ -39,6 +40,9 @@ pre-commit: ensure-env ensure-css
     ^docker compose --file compose.dev.yml run --rm app cargo test --lib
     print "\n[pre-commit] cargo test --features server --lib"
     ^docker compose --file compose.dev.yml run --rm app cargo test --features server --lib
+    print "\n[pre-commit] doc tests (server)"
+    ^nu scripts/check-doc-tests-ran.nu --self-test
+    ^nu scripts/check-doc-tests-ran.nu --runner "docker compose --file compose.dev.yml run --rm --no-deps app"
     print "\n[pre-commit] integration tests against the compose postgres"
     ^nu scripts/check-db-tests-ran.nu --self-test
     ^nu scripts/check-db-tests-ran.nu --runner "docker compose --file compose.dev.yml run --rm app"
@@ -160,6 +164,14 @@ build-docker:
 # Run tests
 test:
     cargo test
+
+# Run the doc tests, the same leg `just pre-commit` and CI run. Fails if the
+# harness collected nothing, since `cargo test --doc` exits 0 on an empty run.
+# No database needed, so the container starts with --no-deps.
+test-doc:
+    #!/usr/bin/env nu
+    ^nu scripts/check-doc-tests-ran.nu --self-test
+    ^nu scripts/check-doc-tests-ran.nu --runner "docker compose --file compose.dev.yml run --rm --no-deps app"
 
 # Run the tests/ targets against the compose `postgres` service, the same leg
 # `just pre-commit` and CI run. Fails if a database-backed target is skipped.

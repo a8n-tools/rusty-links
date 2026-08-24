@@ -23,10 +23,18 @@ use std::time::Duration;
 /// - Checking for broken links
 ///
 /// # Example
-/// ```rust
-/// let scheduler = Scheduler::new(pool.clone(), config.clone());
-/// let handle = scheduler.start();
-/// // Scheduler now runs in background
+/// `no_run`: `start` spawns onto a tokio runtime and then polls Postgres, so it
+/// is compiled and type-checked but never executed by the test suite.
+/// ```no_run
+/// use rusty_links::config::Config;
+/// use rusty_links::scheduler::Scheduler;
+/// use sqlx::PgPool;
+///
+/// # fn example(pool: PgPool, config: Config) {
+/// let scheduler = Scheduler::new(pool, config);
+/// // The handle is usually dropped: the task runs until the process exits.
+/// let _handle = scheduler.start();
+/// # }
 /// ```
 pub struct Scheduler {
     pool: PgPool,

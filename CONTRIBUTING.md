@@ -127,6 +127,9 @@ Branch naming conventions:
    # Run the default-feature tests (feature-independent code only)
    cargo test
 
+   # Run the doc examples with the vacuity guard
+   just test-doc
+
    # Run the tests/ targets against the compose postgres, with the skip guard
    just test-db
 
@@ -216,9 +219,10 @@ test(links): add integration tests for link creation
 Before submitting, ensure:
 
 - [ ] Code follows project coding standards
-- [ ] `just pre-commit` passes (fmt, clippy, build, and tests under both default features and `--features server`, the wasm check, and the Postgres-backed `tests/` targets)
+- [ ] `just pre-commit` passes (fmt, clippy, build, and tests under both default features and `--features server`, the wasm check, the doc examples, and the Postgres-backed `tests/` targets)
 - [ ] Server-side tests pass (`cargo test --features server --lib`)
 - [ ] Any new SQL is covered by a `tests/db_*.rs` case, since a query with no database-backed test is only compile-checked
+- [ ] Any new doc example compiles (`just test-doc`); mark one that must not execute ```` ```no_run ````, never ```` ```ignore ````, which is not compiled at all and fails the leg
 - [ ] Code is formatted (`cargo fmt`)
 - [ ] No clippy warnings under either feature set (`cargo clippy --all-targets -- --deny warnings` and the same with `--features server`)
 - [ ] Documentation is updated
@@ -368,7 +372,10 @@ cargo test --features server test_name
 # repo unexecuted until LINKS-44. `just test-db` runs them the way CI does.
 cargo test --features server --test '*'
 
-# Run doc tests
+# Run the doc examples. `just test-doc` wraps this with the guard that fails on an
+# empty collection: nothing in the repo compiled an example until LINKS-48, and
+# without --features server every documented module is cfg'd out, so the run
+# collects nothing and still exits 0.
 cargo test --features server --doc
 ```
 
@@ -385,6 +392,7 @@ cargo test --features server --doc
    - Use `///` for public APIs
    - Include examples when helpful
    - Document errors and panics
+   - Examples are compiled and run by `just test-doc`, so an example needs its own `use rusty_links::...;` lines. One that must not execute (network or database I/O) is marked ```` ```no_run ````, which still compiles and type-checks it.
 
 3. **README and Guides**
    - Keep README up to date
