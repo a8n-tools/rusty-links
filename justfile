@@ -18,6 +18,8 @@ install-hooks:
 # Run every check .forgejo/workflows/check.yml runs: the four static guards on the host, then
 # the cargo legs inside the dev compose `app` container. scripts/check-suite-parity.nu compares
 # this recipe against the workflow and fails when either grows, loses or weakens a leg (LINKS-49).
+# The dependency audit runs next, before anything compiles: it reads Cargo.lock rather than the
+# build, so a RUSTSEC advisory fails in seconds instead of after the Rust legs (LINKS-52).
 # Covers all three compilation configurations: default features, `server`, and `web` on wasm.
 # `default = []` gates every server module behind `#[cfg(feature = "server")]`, so the
 # default-feature legs alone compile almost none of the crate (LINKS-36).
@@ -35,6 +37,9 @@ pre-commit: ensure-env ensure-css
     ^nu scripts/check-migration-docs.nu --self-test
     ^nu scripts/check-migration-docs.nu
     ^nu scripts/check-build-flags.nu
+    print "\n[pre-commit] dependency audit"
+    ^nu scripts/check-dependency-audit.nu --self-test
+    ^nu scripts/check-dependency-audit.nu --runner "docker compose --file compose.dev.yml run --rm --no-deps --env RUST_LOG=warn app"
     print "\n[pre-commit] cargo fmt --check"
     ^docker compose --file compose.dev.yml run --rm --no-deps app cargo fmt --check
     print "\n[pre-commit] cargo clippy --all-targets -- --deny warnings"
@@ -185,6 +190,14 @@ test-doc:
     #!/usr/bin/env nu
     ^nu scripts/check-doc-tests-ran.nu --self-test
     ^nu scripts/check-doc-tests-ran.nu --runner "docker compose --file compose.dev.yml run --rm --no-deps app"
+
+# Audit Cargo.lock against the RustSec advisory database, the same leg `just pre-commit`
+# and CI run. Fails on a vulnerability no dated exception covers; warnings are printed.
+# No database needed, so the container starts with --no-deps.
+audit:
+    #!/usr/bin/env nu
+    ^nu scripts/check-dependency-audit.nu --self-test
+    ^nu scripts/check-dependency-audit.nu --runner "docker compose --file compose.dev.yml run --rm --no-deps --env RUST_LOG=warn app"
 
 # Run the tests/ targets against the compose `postgres` service, the same leg
 # `just pre-commit` and CI run. Fails if a database-backed target is skipped.

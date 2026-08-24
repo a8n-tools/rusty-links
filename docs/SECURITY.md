@@ -233,10 +233,11 @@ pub fn masked_database_url(&self) -> String {
 
 ### Dependency Security
 
-⚠️ **Dependency Audits (manual)**
-- `cargo audit` is run by hand, as a monthly task; see [Security Audit](#security-audit) below
-- Nothing scans dependencies automatically: `.forgejo/workflows/check.yml` has no audit step, and there is no Dependabot or Renovate configuration
-- Automating it is tracked in LINKS-52
+✅ **Dependency Audits (automated)**
+- `scripts/check-dependency-audit.nu` runs `cargo audit` against `Cargo.lock` in `just pre-commit` and in the `Dependency audit` step of `.forgejo/workflows/check.yml`, so every push and pull request is audited before anything compiles
+- `.forgejo/workflows/audit.yml` runs the same guard weekly. That is the only run that sees an advisory published against a `Cargo.lock` nobody has touched, which a push-triggered job never catches
+- A RustSec vulnerability fails the run unless a dated exception covers it; see [Security Audit](#security-audit) below for the policy
+- No Dependabot (a GitHub feature, and this repo is Forgejo-hosted) and no Renovate configuration: nothing opens dependency-bump pull requests on its own, so `cargo update` is still a human action
 - Minimal dependency footprint
 
 ✅ **Supply Chain Security**
@@ -551,7 +552,7 @@ Security advisories are published in the release notes at <https://dev.a8n.run/a
 ### Monthly Tasks
 
 - [ ] Update dependencies (`cargo update`)
-- [ ] Run security audit (`cargo audit`)
+- [ ] Review the warnings the weekly audit reports, and the exception rows coming up for review in `scripts/check-dependency-audit.nu`
 - [ ] Review access logs for anomalies
 - [ ] Test backup restoration
 - [ ] Review and rotate logs
@@ -586,8 +587,8 @@ rustup update
 # Update dependencies
 cargo update
 
-# Check for vulnerabilities
-cargo audit
+# Check for vulnerabilities (the same leg CI runs)
+just audit
 
 # Review changes
 git log --oneline --since="1 week ago"
@@ -739,16 +740,31 @@ find $BACKUP_DIR -name "rustylinks_*.dump.gpg" -mtime +30 -delete
 
 #### Rust Dependencies
 
+The audit is a check-suite leg rather than a ritual someone has to remember. `scripts/check-dependency-audit.nu` wraps `cargo audit` and runs in three places: `just pre-commit`, the `Dependency audit` step of `.forgejo/workflows/check.yml` on every push and pull request, and `.forgejo/workflows/audit.yml` on a weekly schedule. It reads `Cargo.lock`, so it needs no build and finishes in seconds. `cargo-audit` itself is baked into the dev image; the guard installs it when it is missing.
+
 ```bash
-# Install cargo-audit
-cargo install cargo-audit
+# The leg on its own, in the dev container
+just audit
 
-# Run audit
-cargo audit
+# The same guard against a cargo already on PATH
+nu scripts/check-dependency-audit.nu
 
-# Check for specific advisory
+# Prove the guard still rejects an uncovered advisory and a malformed exception
+nu scripts/check-dependency-audit.nu --self-test
+
+# The stricter view, on demand: warnings fail too
 cargo audit --deny warnings
 ```
+
+**Failure policy**
+
+- A **vulnerability** fails the run, naming the advisory id, the crate, the version in the lockfile and the patched range. A vulnerability is normally one `cargo update --package <crate>` away, so failing the run is a fix instruction rather than a toll.
+- A **warning** (`unmaintained`, `unsound`, `yanked`, `notice`) is printed in full and does not fail the run. The ones open at any time are typically against transitive crates with no fix this repository can take, and failing on them would block unrelated pull requests until somebody wrote an exception for work nobody can do. `cargo audit --deny warnings` gives the stricter view to anyone deliberately looking.
+- The push/pull-request run and the weekly run share that one policy. The schedule is not a stricter gate; it exists because a push-triggered job only ever audits a lockfile somebody just touched.
+
+**Exceptions**
+
+An advisory with no fix is suppressed only by a row in the `EXCEPTIONS` table in `scripts/check-dependency-audit.nu`. Each row names the advisory id, the crate, the LINKS issue that tracks removing it, the date the acceptance stops holding and the reason it holds until then. The guard rejects a row that is past its date, a row that covers no reported advisory, a row naming no LINKS issue and a date it cannot read, so an acceptance can neither become permanent by neglect nor linger as a dead entry. The rows in force are in the script, each pointing at its own issue; adding one means filing that issue first.
 
 #### Docker Image Scanning
 

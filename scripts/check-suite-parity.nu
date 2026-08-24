@@ -33,11 +33,11 @@ const JUSTFILE = "justfile"
 const WORKFLOW = ".forgejo/workflows/check.yml"
 const RECIPE = "pre-commit"
 
-# Floors, not targets: nine cargo legs and six guard scripts run today. They
+# Floors, not targets: nine cargo legs and seven guard scripts run today. They
 # exist so a parser that stopped matching fails instead of comparing [] to [].
 # Raise them as the suite grows rather than lowering after a near miss.
 const MIN_CARGO_LEGS = 7
-const MIN_GUARD_SCRIPTS = 4
+const MIN_GUARD_SCRIPTS = 5
 
 # The three compilation configurations the crate has. `default = []` gates every
 # server module behind `#[cfg(feature = "server")]`, and the wasm leg is the only
@@ -387,6 +387,8 @@ def sample-justfile []: nothing -> string {
         '    ^nu scripts/check-migration-docs.nu --self-test'
         '    ^nu scripts/check-migration-docs.nu'
         '    ^nu scripts/check-build-flags.nu'
+        '    ^nu scripts/check-dependency-audit.nu --self-test'
+        '    ^nu scripts/check-dependency-audit.nu --runner "docker compose --file compose.dev.yml run --rm --no-deps app"'
         '    ^docker compose --file compose.dev.yml run --rm --no-deps app cargo fmt --check'
         '    ^docker compose --file compose.dev.yml run --rm --no-deps app cargo clippy --all-targets -- --deny warnings'
         '    ^docker compose --file compose.dev.yml run --rm --no-deps app cargo clippy --all-targets --features server -- --deny warnings'
@@ -422,6 +424,10 @@ def sample-workflow []: nothing -> string {
         '          nu scripts/check-migration-docs.nu'
         '      - name: Guard justfile build flags'
         '        run: nu scripts/check-build-flags.nu'
+        '      - name: Dependency audit'
+        '        run: |'
+        '          nu scripts/check-dependency-audit.nu --self-test'
+        '          nu scripts/check-dependency-audit.nu'
         '      - name: Cap build parallelism'
         '        run: echo "CARGO_BUILD_JOBS=$(($(nproc) / 2))" >> "$GITHUB_ENV"'
         '      - name: Check formatting'

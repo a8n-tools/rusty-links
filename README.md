@@ -324,7 +324,7 @@ sqlx migrate run
 
 ### Code Quality
 
-`just pre-commit` runs every check `.forgejo/workflows/check.yml` runs and stops at the first failure. The four static guards run on the host first, in well under a second; the cargo legs then run in the dev container.
+`just pre-commit` runs every check `.forgejo/workflows/check.yml` runs and stops at the first failure. The four static guards run on the host first, in well under a second; the dependency audit and then the cargo legs run in the dev container.
 
 ```bash
 just pre-commit
@@ -337,6 +337,7 @@ nu scripts/check-suite-parity.nu             # the justfile and the workflow sti
 nu scripts/check-migration-immutability.nu   # no committed migration was edited
 nu scripts/check-migration-docs.nu           # migrations/ and the docs/DATABASE.md table agree
 nu scripts/check-build-flags.nu              # every justfile --features / --build-arg exists downstream
+nu scripts/check-dependency-audit.nu         # Cargo.lock against the RustSec advisory database
 cargo fmt --check
 cargo clippy --all-targets -- --deny warnings
 cargo clippy --all-targets --features server -- --deny warnings
@@ -349,6 +350,8 @@ nu scripts/check-doc-tests-ran.nu            # the doc examples, with the vacuit
 cargo test --features server --test db_schema
 nu scripts/check-db-tests-ran.nu             # the tests/ targets against Postgres, with the skip guard
 ```
+
+`.forgejo/workflows/audit.yml` runs the audit leg again weekly, which is the only run that sees an advisory published against a `Cargo.lock` nobody has touched; [docs/SECURITY.md](docs/SECURITY.md#security-audit) has the failure policy and the exception rules.
 
 `.forgejo/workflows/check.yml` runs exactly this list, and `scripts/check-suite-parity.nu` is what holds the two in step: it parses both files and fails when a leg or a guard script is in one and not the other, in either direction, after normalising the flag spellings each file uses locally. Change one copy and CI tells you about the other (LINKS-49).
 

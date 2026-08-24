@@ -180,7 +180,8 @@ Complete checklist for launching Rusty Links v1.0.0 to production.
 - [ ] No sensitive data in environment variables
 
 #### Dependency Security
-- [ ] `cargo audit` shows no critical vulnerabilities
+- [ ] `just audit` is green: no RUSTSEC vulnerability outside a dated exception
+- [ ] Every exception row in `scripts/check-dependency-audit.nu` is still in date and still justified
 - [ ] Dependencies are up to date
 - [ ] No deprecated dependencies
 - [ ] Supply chain verified (Cargo.lock committed)
@@ -273,11 +274,10 @@ Complete checklist for launching Rusty Links v1.0.0 to production.
 ## 💻 Code Quality
 
 ### Testing
-- [ ] `just pre-commit` passes (covers the four static guards, then fmt, clippy under default features, `--features server` and `--features web` on wasm, build and tests under both feature sets, the doc examples, and the Postgres-backed `tests/` targets; `scripts/check-suite-parity.nu` keeps it equal to `.forgejo/workflows/check.yml`)
+- [ ] `just pre-commit` passes (covers the four static guards, the dependency audit, then fmt, clippy under default features, `--features server` and `--features web` on wasm, build and tests under both feature sets, the doc examples, and the Postgres-backed `tests/` targets; `scripts/check-suite-parity.nu` keeps it equal to `.forgejo/workflows/check.yml`)
 - [ ] `cargo test --features server --lib` passes all tests
 - [ ] Unit tests cover critical functions
 - [ ] Integration tests work
-- [ ] Test coverage > 70%
 - [ ] No ignored tests: both guard scripts fail on any ignored case, and an example that must not execute uses ```` ```no_run ```` so it is still compiled
 
 ### Code Standards
@@ -298,7 +298,7 @@ Complete checklist for launching Rusty Links v1.0.0 to production.
 - [ ] API returns proper HTTP status codes
 
 ### Security
-- [ ] `cargo audit` shows no vulnerabilities
+- [ ] The `Dependency audit` step is green on the release commit
 - [ ] No hardcoded secrets in code
 - [ ] No passwords in logs
 - [ ] Database URLs masked in logs
@@ -344,6 +344,7 @@ Complete checklist for launching Rusty Links v1.0.0 to production.
 ### CI/CD
 - [ ] `.forgejo/workflows/check.yml` green on `main` and on the release PR
 - [ ] Checks run on push to `main` and on pull requests
+- [ ] `.forgejo/workflows/audit.yml` green on its weekly schedule, or on a `workflow_dispatch` run if it has not fired yet
 - [ ] `.forgejo/workflows/build-oci-image.yml` builds and pushes the image
 - [ ] `.forgejo/workflows/create-release.yml` creates the tag and release from the merged `release/v*` PR
 - [ ] No workflow failures in `fj --host dev.a8n.run actions tasks`

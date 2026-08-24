@@ -11,7 +11,7 @@ IMPORTANT: Do NOT modify `./assets/tailwind.css`. All CSS should go in `./tailwi
 
 ## Build & Development Commands
 
-`just pre-commit` is the authoritative check suite: it runs every check `.forgejo/workflows/check.yml` runs, and fails on the first red one. Run it before every commit. It starts with the four static guards that need no compiler (`scripts/check-suite-parity.nu`, `scripts/check-migration-immutability.nu`, `scripts/check-migration-docs.nu`, `scripts/check-build-flags.nu`), which run on the host in well under a second, then the cargo legs in the dev container.
+`just pre-commit` is the authoritative check suite: it runs every check `.forgejo/workflows/check.yml` runs, and fails on the first red one. Run it before every commit. It starts with the four static guards that need no compiler (`scripts/check-suite-parity.nu`, `scripts/check-migration-immutability.nu`, `scripts/check-migration-docs.nu`, `scripts/check-build-flags.nu`), which run on the host in well under a second, then the dependency audit, then the cargo legs in the dev container.
 
 `scripts/check-suite-parity.nu` is what keeps that claim true. The recipe and the workflow are two hand-maintained copies of one suite, so it parses the cargo invocations and guard-script calls out of both and fails when either side has a leg the other lacks, in either direction. It normalises the spellings each file uses locally (`-D warnings` in the workflow, `--deny warnings` in the recipe; `--features=web` and `--features web`; flag order), so only a real difference is drift. It also fails when a clippy leg carries no `--deny warnings`, and when no clippy leg covers one of the three compilation configurations, which is the drift that survives being applied to both copies at once: `.cargo/config.toml` pins `[build] target = "x86_64-unknown-linux-gnu"`, so a wasm leg that lost `--target` silently re-lints the host build instead of failing (LINKS-39, LINKS-49).
 
@@ -20,10 +20,14 @@ Its last two legs run the test targets that `cargo test --lib` never reaches, ea
 - `scripts/check-doc-tests-ran.nu` runs `cargo test --features server --doc`. Nothing in the repo compiled a doc example before LINKS-48, so all ten had rotted into compile errors on missing `use` lines. The guard fails when the harness collected nothing, when anything is ignored or filtered out, or when passes fall below its floor. An example that must not execute is marked ```` ```no_run ```` (compiled and type-checked, never run) and still counts as a pass; ```` ```ignore ```` is never compiled and fails the leg.
 - `scripts/check-db-tests-ran.nu` runs the `tests/` targets against the compose `postgres` service. Before LINKS-44 every `tests/` target was compiled by `--all-targets` and never executed, so no SQL in the repo was covered. New SQL belongs in a `tests/db_*.rs` case; the guard fails when a `db_*` target is missing, ignored, filtered out, or below its floor on passes.
 
+`scripts/check-dependency-audit.nu` is the dependency-audit leg (LINKS-52). It runs `cargo audit` against `Cargo.lock`, so it needs cargo but no build and finishes in seconds, and it fails on a RustSec vulnerability that no dated row in its `EXCEPTIONS` table covers. Warnings (`unmaintained`, `unsound`, `yanked`, `notice`) are printed and do not fail: they are usually unfixable from here and would block unrelated work, and `cargo audit --deny warnings` is the stricter view on demand. An exception row names the crate, the LINKS issue tracking its removal and the date the acceptance stops holding, and the guard rejects a row that is expired, stale, undated or names no issue, so file the issue before adding a row. `.forgejo/workflows/audit.yml` runs the same guard weekly, which is the only run that catches an advisory published against an unchanged `Cargo.lock`.
+
+Nothing measures test coverage and that is deliberate, so do not add a percentage to a doc or a threshold to a job without reopening the decision in docs/TESTING.md (LINKS-51).
+
 IMPORTANT: `default = []`, so a bare `cargo check` / `cargo clippy` / `cargo test` compiles almost none of this crate. Every server module is behind `#[cfg(feature = "server")]`, so any command meant to verify server code must pass `--features server`.
 
 ```bash
-# Run every check CI runs (the four static guards, then fmt, clippy under default + server + web/wasm, build, unit/doc/Postgres tests under default + server)
+# Run every check CI runs (the four static guards, the dependency audit, then fmt, clippy under default + server + web/wasm, build, unit/doc/Postgres tests under default + server)
 just pre-commit
 
 # Run in development (requires PostgreSQL and .env file)
@@ -52,6 +56,9 @@ just test-doc
 
 # Run the tests/ targets against the compose postgres, with the skip guard
 just test-db
+
+# Audit Cargo.lock against the RustSec advisory database, the same leg pre-commit and CI run
+just audit
 
 # Code quality (both legs; the default leg alone does not lint server code)
 cargo fmt

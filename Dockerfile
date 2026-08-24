@@ -35,6 +35,11 @@ RUN mkdir src && \
     cargo build --features server && \
     rm -rf src
 
+# cargo-audit for the dependency-audit leg of `just pre-commit` (LINKS-52).
+# Prebuilt, like the dioxus-cli install above; scripts/check-dependency-audit.nu
+# installs it at run time when an image predating this line is still in use.
+RUN cargo binstall --no-confirm --locked cargo-audit@^0.22
+
 # Source code is mounted via volumes in compose.yml
 
 EXPOSE 4002
