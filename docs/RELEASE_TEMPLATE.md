@@ -1,5 +1,7 @@
 <!--
-GitHub Release Template for Rusty Links
+Release notes template for Rusty Links.
+
+`.forgejo/workflows/create-release.yml` generates the release body from `git log` since the previous tag. Use this template when a release warrants more than that generated list: fill it in and paste it over the generated body on the release page.
 
 Instructions:
 1. Update the version number in the title
@@ -80,9 +82,8 @@ A self-hosted bookmark manager built with Rust, featuring powerful organization 
 - Multi-stage Dockerfile for optimized builds (< 150MB)
 - Docker Compose configuration for one-command deployment
 - Development mode with hot reloading
-- CI/CD with GitHub Actions (testing, coverage, security audits)
-- Multi-platform Docker images (AMD64, ARM64)
-- Automatic publishing to GitHub Container Registry
+- CI/CD with Forgejo Actions: fmt, clippy and the test suite on every push and pull request
+- Automatic image publishing to the Forgejo container registry at `dev.a8n.run`
 
 #### Documentation
 - **API.md** - Complete REST API reference with examples
@@ -119,7 +120,7 @@ N/A - Initial release
 
 ```bash
 # Pull the image
-docker pull ghcr.io/NiceGuyIT/rusty-links:1.0.0
+docker pull dev.a8n.run/a8n-tools/rusty-links:v1.0.0
 
 # Create .env file
 cat > .env <<EOF
@@ -141,7 +142,7 @@ version: '3.8'
 
 services:
   postgres:
-    image: postgres:16-alpine
+    image: postgres:17-alpine
     environment:
       POSTGRES_USER: rustylinks
       POSTGRES_PASSWORD: ${DB_PASSWORD}
@@ -150,7 +151,7 @@ services:
       - postgres_data:/var/lib/postgresql/data
 
   app:
-    image: ghcr.io/NiceGuyIT/rusty-links:1.0.0
+    image: dev.a8n.run/a8n-tools/rusty-links:v1.0.0
     depends_on:
       - postgres
     environment:
@@ -167,11 +168,11 @@ volumes:
 
 ```bash
 # Clone repository
-git clone https://github.com/NiceGuyIT/rusty-links.git
+git clone https://dev.a8n.run/a8n-tools/rusty-links.git
 cd rusty-links
 
 # Copy environment template
-cp .env.standalone .env
+cp .env.standalone.example .env
 
 # Edit .env with your configuration
 nano .env
@@ -226,7 +227,7 @@ See [Configuration Guide](README.md#configuration) for complete details.
 
 ## Known Issues
 
-None at this time. Please report issues at: https://github.com/NiceGuyIT/rusty-links/issues
+None at this time. Please report issues at: https://dev.a8n.run/a8n-tools/rusty-links/issues
 
 ---
 
@@ -234,7 +235,7 @@ None at this time. Please report issues at: https://github.com/NiceGuyIT/rusty-l
 
 - **Container Size:** < 150MB (optimized multi-stage build)
 - **Memory Usage:** ~256MB typical, 512MB limit
-- **Database:** PostgreSQL 16+ with optimized indexes
+- **Database:** PostgreSQL 17+ with optimized indexes
 - **Response Times:** < 100ms for most operations
 - **Scalability:** Tested with 10,000+ links
 
@@ -278,7 +279,7 @@ See [CHANGELOG.md](CHANGELOG.md) for the complete roadmap.
 
 Thank you to everyone who contributed to this release!
 
-- [@NiceGuyIT](https://github.com/NiceGuyIT) - Project creator and maintainer
+- [@NiceGuyIT](https://dev.a8n.run/NiceGuyIT) - Project creator and maintainer
 
 Want to contribute? See [CONTRIBUTING.md](CONTRIBUTING.md) for guidelines.
 
@@ -286,9 +287,8 @@ Want to contribute? See [CONTRIBUTING.md](CONTRIBUTING.md) for guidelines.
 
 ## Support
 
-- **Documentation:** https://github.com/NiceGuyIT/rusty-links/tree/main/docs
-- **Issues:** https://github.com/NiceGuyIT/rusty-links/issues
-- **Discussions:** https://github.com/NiceGuyIT/rusty-links/discussions
+- **Documentation:** https://dev.a8n.run/a8n-tools/rusty-links/src/branch/main/docs
+- **Issues:** https://dev.a8n.run/a8n-tools/rusty-links/issues
 
 ---
 
@@ -317,13 +317,13 @@ Special thanks to the Rust community for their excellent tools and libraries.
 
 See [CHANGELOG.md](CHANGELOG.md) for complete version history.
 
-**Compare:** [v0.0.0...v1.0.0](https://github.com/NiceGuyIT/rusty-links/compare/v0.0.0...v1.0.0)
+**Compare:** [v0.0.0...v1.0.0](https://dev.a8n.run/a8n-tools/rusty-links/compare/v0.0.0...v1.0.0)
 
 ---
 
 **Download:**
-- Docker: `docker pull ghcr.io/NiceGuyIT/rusty-links:1.0.0`
-- Source: [rusty-links-1.0.0.tar.gz](https://github.com/NiceGuyIT/rusty-links/archive/refs/tags/v1.0.0.tar.gz)
+- Docker: `docker pull dev.a8n.run/a8n-tools/rusty-links:v1.0.0`
+- Source: [rusty-links-1.0.0.tar.gz](https://dev.a8n.run/a8n-tools/rusty-links/archive/v1.0.0.tar.gz)
 
 **Checksums:** (Add SHA256 checksums if distributing binaries)
 

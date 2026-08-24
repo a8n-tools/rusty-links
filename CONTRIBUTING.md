@@ -46,7 +46,7 @@ Before you begin, ensure you have:
 
 1. **Fork the repository**
    ```bash
-   # Click "Fork" on GitHub, then clone your fork
+   # Click "Fork" on dev.a8n.run, then clone your fork
    git clone https://dev.a8n.run/a8n-tools/rusty-links.git
    cd rusty-links
    ```
@@ -71,7 +71,7 @@ Before you begin, ensure you have:
    createdb rustylinks
 
    # Copy environment template
-   cp .env.standalone .env
+   cp .env.standalone.example .env
    # Edit .env with your database credentials
 
    # Run migrations
@@ -202,10 +202,10 @@ test(links): add integration tests for link creation
    ```
 
 2. **Open a Pull Request**
-   - Go to your fork on GitHub
-   - Click "New Pull Request"
+   - From the terminal: `fj --host dev.a8n.run pr create "<title>" --body-file <file>`
+   - Or open your fork on dev.a8n.run and click "New Pull Request"
    - Select your feature branch
-   - Fill out the PR template
+   - Describe the change
 
 3. **PR Description Should Include**
    - What changes were made
@@ -424,42 +424,37 @@ sqlx migrate add descriptive_name
 
 # Run migrations
 sqlx migrate run
-
-# Revert last migration
-sqlx migrate revert
 ```
 
 ### Migration Guidelines
 
-- Keep migrations atomic and reversible
-- Test both up and down migrations
-- Document complex migrations
-- Never modify existing migrations
-- Include sample data in comments
+- Keep migrations atomic and focused
+- Migrations here are simple (one `.sql` per version), not reversible: there is no `.down.sql` and `sqlx migrate revert` does not apply
+- Never modify, rename or delete a migration that has merged to `main`; `scripts/check-migration-immutability.nu` fails the PR if you do
+- Add a row for the new migration to the Migration History table in [docs/DATABASE.md](docs/DATABASE.md); `scripts/check-migration-docs.nu` fails the PR if you do not
+- Document complex migrations in the file's leading comment
 
 ## Release Process
 
 See [RELEASE.md](docs/RELEASE.md) for the complete release process.
 
 For maintainers:
-1. Update version in `Cargo.toml`
-2. Update `CHANGELOG.md`
-3. Create and push tag
-4. GitHub Actions will build and publish
+1. Run `just create-release <major|minor|hotfix>`, which bumps `Cargo.toml`, pushes a `release/vX.Y.Z` branch and opens the release PR
+2. Update `CHANGELOG.md` on that branch if the release needs a hand-written entry
+3. Merge the PR
+4. `.forgejo/workflows/create-release.yml` creates the tag and the release, and `.forgejo/workflows/build-oci-image.yml` builds and pushes the image
 
 ## Community
 
 ### Getting Help
 
-- **GitHub Issues**: Bug reports and feature requests
-- **Discussions**: Questions and general discussion
+- **Issues**: Bug reports and feature requests, at <https://dev.a8n.run/a8n-tools/rusty-links/issues>
 - **Pull Requests**: Code review and collaboration
 
 ### Recognition
 
 Contributors are recognized in:
-- GitHub contributors list
+- The repository's contributor list
 - Release notes
-- Project credits
 
 Thank you for contributing to Rusty Links!

@@ -131,7 +131,7 @@ docker-compose --version
 ```bash
 cd ~/rustylinks
 
-# Clone from GitHub
+# Clone the repository
 git clone https://dev.a8n.run/a8n-tools/rusty-links.git .
 
 # Or pull pre-built image (recommended for production)
@@ -788,7 +788,7 @@ For deployment issues:
 - Check [TROUBLESHOOTING.md](TROUBLESHOOTING.md)
 - Review [SECURITY.md](SECURITY.md)
 - Consult [DATABASE.md](DATABASE.md)
-- Check GitHub Issues
+- Check the issue tracker at <https://dev.a8n.run/a8n-tools/rusty-links/issues>
 
 ---
 

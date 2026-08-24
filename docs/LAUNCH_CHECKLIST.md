@@ -305,7 +305,7 @@ Complete checklist for launching Rusty Links v1.0.0 to production.
 - [ ] Environment variables used for config
 
 ### Configuration
-- [ ] `.env.standalone` and `.env.saas` up to date
+- [ ] `.env.standalone.example` and `.env.saas.example` up to date
 - [ ] All environment variables documented
 - [ ] Default values sensible
 - [ ] Required vs optional vars clear
@@ -342,21 +342,17 @@ Complete checklist for launching Rusty Links v1.0.0 to production.
 - [ ] Application responds to requests
 
 ### CI/CD
-- [ ] GitHub Actions workflow working
-- [ ] Tests run on push
-- [ ] Tests run on pull requests
-- [ ] Docker image builds in CI
-- [ ] Image pushed to container registry
-- [ ] Workflow has no failures
-- [ ] Coverage reports generated
-- [ ] Security scans passing
+- [ ] `.forgejo/workflows/check.yml` green on `main` and on the release PR
+- [ ] Checks run on push to `main` and on pull requests
+- [ ] `.forgejo/workflows/build-oci-image.yml` builds and pushes the image
+- [ ] `.forgejo/workflows/create-release.yml` creates the tag and release from the merged `release/v*` PR
+- [ ] No workflow failures in `fj --host dev.a8n.run actions tasks`
 
 ### Container Registry
-- [ ] Images pushed to GHCR successfully
-- [ ] Image tags correct (latest, semver)
-- [ ] Package visibility set (public/private)
-- [ ] Package README updated
-- [ ] Can pull and run published image
+- [ ] Image pushed to `dev.a8n.run/a8n-tools/rusty-links` successfully
+- [ ] Tag correct for the trigger: `latest` from a push to `main`, `vX.Y.Z` from the tag push
+- [ ] `Verify pushed image` step green, so the registry digest matches what buildx pushed
+- [ ] Can pull and run the published image
 
 ---
 
@@ -372,10 +368,8 @@ Complete checklist for launching Rusty Links v1.0.0 to production.
 
 ### Release
 - [ ] `CHANGELOG.md` updated for v1.0.0
-- [ ] GitHub release created
-- [ ] Release notes written
-- [ ] Release assets uploaded (if any)
-- [ ] Release marked as latest
+- [ ] Forgejo release created by `create-release.yml` from the merged `release/v*` PR
+- [ ] Release notes read correctly (the workflow generates them from `git log` since the previous tag)
 
 ### Optional
 - [ ] Demo instance running (live demo)
@@ -391,8 +385,8 @@ Complete checklist for launching Rusty Links v1.0.0 to production.
 ## 📊 Post-Launch Monitoring
 
 ### First 24 Hours
-- [ ] Monitor GitHub issues for bug reports
-- [ ] Watch Docker Hub/GHCR pull statistics
+- [ ] Monitor the issue tracker for bug reports
+- [ ] Watch registry pull statistics
 - [ ] Check application logs for errors
 - [ ] Verify health endpoint responds
 - [ ] Monitor resource usage
@@ -446,18 +440,15 @@ Complete checklist for launching Rusty Links v1.0.0 to production.
 
 Once all items are checked:
 
-1. **Create final release tag**
+1. **Cut the release**
    ```bash
-   git tag -a v1.0.0 -m "Release v1.0.0"
-   git push origin v1.0.0
+   just create-release major
    ```
+   Merge the resulting `release/v1.0.0` PR. `create-release.yml` creates the tag and the release; `build-oci-image.yml` publishes the image. See [RELEASE.md](RELEASE.md).
 
-2. **Publish GitHub release**
-   - Go to Releases on GitHub
-   - Create new release from v1.0.0 tag
-   - Use release template
-   - Attach any assets
-   - Publish release
+2. **Check the release page**
+   - Open <https://dev.a8n.run/a8n-tools/rusty-links/releases>
+   - Confirm the tag, the generated notes, and the published image tag
 
 3. **Announce**
    - Post to social media
@@ -467,7 +458,7 @@ Once all items are checked:
    - Send to mailing list
 
 4. **Monitor**
-   - Watch GitHub issues
+   - Watch the issue tracker
    - Check error logs
    - Monitor resource usage
    - Respond to questions
