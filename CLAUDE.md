@@ -11,7 +11,7 @@ IMPORTANT: Do NOT modify `./assets/tailwind.css`. All CSS should go in `./tailwi
 
 ## Build & Development Commands
 
-`just pre-commit` is the authoritative check suite: it runs every leg CI runs, in the dev container, and fails on the first red one. Run it before every commit.
+`just pre-commit` is the authoritative check suite: it runs every cargo leg CI runs, in the dev container, and fails on the first red one. Run it before every commit. `.forgejo/workflows/check.yml` also runs three static guards that need no compiler and that `just pre-commit` does not invoke (`scripts/check-migration-immutability.nu`, `scripts/check-migration-docs.nu`, `scripts/check-build-flags.nu`); run those directly. A guard over that divergence is tracked in LINKS-49.
 
 Its last two legs run the test targets that `cargo test --lib` never reaches, each behind a guard script, because `cargo test` exits 0 on an empty run and a suite that runs nothing looks identical to one that passes:
 
@@ -21,7 +21,7 @@ Its last two legs run the test targets that `cargo test --lib` never reaches, ea
 IMPORTANT: `default = []`, so a bare `cargo check` / `cargo clippy` / `cargo test` compiles almost none of this crate. Every server module is behind `#[cfg(feature = "server")]`, so any command meant to verify server code must pass `--features server`.
 
 ```bash
-# Run every check CI runs (fmt, clippy under default + server + web/wasm, build, unit/doc/Postgres tests under default + server)
+# Run every cargo leg CI runs (fmt, clippy under default + server + web/wasm, build, unit/doc/Postgres tests under default + server)
 just pre-commit
 
 # Run in development (requires PostgreSQL and .env file)
@@ -100,6 +100,8 @@ Migrations are embedded at compile time by `sqlx::migrate!()` and are not copied
 
 - PostgreSQL with SQLx (compile-time checked queries)
 - Migrations in `migrations/` directory, run automatically on startup
+- A committed migration is immutable; fixes go in a NEW migration (`scripts/check-migration-immutability.nu`)
+- A new migration also needs a row in the Migration History table in `docs/DATABASE.md`, or `scripts/check-migration-docs.nu` fails CI. The table had drifted to six of fourteen rows before that guard existed (LINKS-46)
 - Connection pool: 5 max connections, 30s timeout, 10min idle timeout
 - Tests get their own database: `tests/common/mod.rs::test_pool` derives `<database>_test` from `DATABASE_URL`, creates it, and migrates it, so a `just pre-commit` run never writes to dev data
 

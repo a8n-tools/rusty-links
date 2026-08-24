@@ -612,20 +612,13 @@ The integration suites never run against the database named in `DATABASE_URL`. `
 
 Rusty Links uses SQLx migrations for schema management.
 
-**Migration Files Location:**
-```
-migrations/
-├── 20250101000001_initial_schema.sql
-├── 20250101000002_seed_data.sql
-├── 20250101000003_sessions_table.sql
-├── 20250101000004_add_failure_count.sql
-└── 20250101000005_add_scheduler_fields.sql
-```
+**Migration Files Location:** `migrations/`, one file per migration, named:
 
-**Naming Convention:**
 ```
 YYYYMMDDHHMMSS_description.sql
 ```
+
+The files themselves are the list; [Migration History](#migration-history) below describes each one, and `scripts/check-migration-docs.nu` fails CI when the two disagree.
 
 ### Running Migrations
 
@@ -640,15 +633,14 @@ cargo install sqlx-cli --no-default-features --features postgres
 # Run all pending migrations
 sqlx migrate run
 
-# Revert last migration
-sqlx migrate revert
-
 # Create new migration
 sqlx migrate add <migration_name>
 
 # Get migration status
 sqlx migrate info
 ```
+
+These migrations are simple (a single `.sql` per version), not reversible, so there is no `.down.sql` and `sqlx migrate revert` does not apply. Roll a change back with a new migration.
 
 ### Migration History
 
@@ -659,7 +651,22 @@ sqlx migrate info
 | 20250101000003 | Add sessions table for authentication | 2025-01-01 |
 | 20250101000004 | Add consecutive_failures to links | 2025-01-01 |
 | 20250101000005 | Add scheduler fields (last_checked) to links | 2025-01-01 |
+| 20250101000006 | Add name to users | 2025-01-01 |
+| 20250101000007 | Add is_github_repo to links, widen logo from BYTEA to TEXT, make path nullable | 2025-01-01 |
+| 20250101000008 | Add is_admin to users, add refresh_tokens and login_attempts, drop sessions | 2025-01-01 |
+| 20260417000009 | Add saas_user_id, suspended_at and session_version to users for SSO | 2026-04-17 |
+| 20260417000010 | Add rp_sessions, the transient PKCE state for the BFF authorization code flow | 2026-04-17 |
+| 20260417000011 | Add user_sessions, the long-lived BFF sessions keyed by a hashed cookie value | 2026-04-17 |
+| 20260427000012 | Add auth_via_oidc to user_sessions | 2026-04-27 |
+| 20260821000013 | Add last_login_country and notify_new_location to users for the new-location alert (LINKS-27) | 2026-08-21 |
 | 20260821000014 | Add pending_login_approvals for the sign-in approval gate (LINKS-35) | 2026-08-21 |
+
+Every file in `migrations/` has a row here and every row names a file: `scripts/check-migration-docs.nu` compares the two in both directions and runs in `.forgejo/workflows/check.yml`. It fails a migration with no row, a row with no migration, a Date that contradicts the version prefix, and a table it can no longer parse, so a shape change is a red job rather than a silent pass. Before the guard existed the table listed six of the fourteen migrations, the first five plus the most recent, and read as if the schema had stopped changing in January 2025 (LINKS-46). To run it locally:
+
+```bash
+nu scripts/check-migration-docs.nu --self-test
+nu scripts/check-migration-docs.nu
+```
 
 ### Creating Custom Migrations
 
@@ -676,10 +683,9 @@ sqlx migrate run
 
 **Migration Best Practices:**
 - Always test migrations on backup first
-- Include both UP and DOWN migrations
 - Never modify existing migrations (create new ones)
 - Keep migrations small and focused
-- Add comments explaining complex changes
+- Add comments explaining complex changes; the file's leading comment is what the Migration History row above summarises
 
 ### Migrations Are Immutable Once Committed
 

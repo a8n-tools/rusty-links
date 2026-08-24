@@ -15,7 +15,9 @@ install-hooks:
     ^chmod +x $hook
     print $"Wrote ($hook) -> just pre-commit"
 
-# Run the same checks as .forgejo/workflows/check.yml inside the dev compose `app` container.
+# Run the cargo checks from .forgejo/workflows/check.yml inside the dev compose `app` container.
+# The workflow's three static guards (check-migration-immutability.nu, check-migration-docs.nu,
+# check-build-flags.nu) are not run here; LINKS-49 tracks guarding that divergence.
 # Covers all three compilation configurations: default features, `server`, and `web` on wasm.
 # `default = []` gates every server module behind `#[cfg(feature = "server")]`, so the
 # default-feature legs alone compile almost none of the crate (LINKS-36).
@@ -293,7 +295,7 @@ create-release bump:
     [
         $"Automated release PR for ($tag)."
         ""
-        $"After merge, `.forgejo/workflows/create-release.yml` tags and publishes ($tag) to the Generic Packages registry."
+        $"After merge, `.forgejo/workflows/create-release.yml` creates the ($tag) tag and release, and `.forgejo/workflows/build-oci-image.yml` publishes the ($tag) image."
     ] | str join "\n" | save --force $body_file
     let fj_result = (^fj --host dev.a8n.run pr create $"Release ($tag)" --body-file $body_file | complete)
     rm $body_file

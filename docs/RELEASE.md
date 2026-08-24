@@ -2,10 +2,13 @@
 
 This document describes the process for creating and publishing releases of Rusty Links.
 
+CI here is Forgejo Actions, under `.forgejo/workflows/`. There is no `.github/` directory and no GitHub mirror.
+
 ## Prerequisites
 
-- Maintainer access to the repository
-- Git configured with your GitHub credentials
+- Push access to `a8n-tools/rusty-links` on `dev.a8n.run`
+- `just` and `nu` on your machine
+- `fj` authenticated against `dev.a8n.run` (`fj auth add-key`), since `just create-release` opens the release PR with it
 - Understanding of semantic versioning (SemVer)
 
 ## Semantic Versioning
@@ -18,97 +21,82 @@ We follow [Semantic Versioning](https://semver.org/):
 
 ## Creating a Release
 
-### 1. Prepare the Release
-
-Update version in `Cargo.toml`:
-
-```toml
-[package]
-name = "rusty-links"
-version = "1.0.0"  # Update this
-```
-
-Update `Cargo.lock`:
+### 1. Cut the release branch
 
 ```bash
-cargo build
+just create-release major    # vX.0.0
+just create-release minor    # v0.X.0
+just create-release hotfix   # v0.0.X
 ```
 
-### 2. Update Changelog
+The recipe refuses to run on a dirty working tree. It switches to `main`, pulls, computes the next version from `package.version` in `Cargo.toml`, writes it back, commits on a `release/vX.Y.Z` branch, pushes the branch, opens the release PR with `fj`, and prints the PR URL.
 
-Create or update `CHANGELOG.md` with release notes:
+Nothing else is bumped for you. If the release needs a hand-written `CHANGELOG.md` entry, add it to the release branch before merging.
 
-```markdown
-## [1.0.0] - 2024-01-15
+### 2. Merge the release PR
 
-### Added
-- New feature X
-- New feature Y
+Merging is the trigger for everything that follows. Two workflows fire off the merge:
 
-### Changed
-- Improved performance of Z
+| Workflow | Trigger | What it does |
+|----------|---------|--------------|
+| `.forgejo/workflows/create-release.yml` | a merged PR whose head branch starts with `release/v` | Builds a changelog from `git log` since the previous tag and POSTs it to the Forgejo releases API, which creates both the tag and the release |
+| `.forgejo/workflows/build-oci-image.yml` | the `v*` tag push that the release creates, and separately the push to `main` | Builds `oci-build/Dockerfile` with `docker buildx` and pushes one image tag to `dev.a8n.run/<owner>/rusty-links` |
 
-### Fixed
-- Fixed bug in component A
-- Resolved issue with B
+### 3. Watch the run
 
-### Security
-- Updated dependency X to patch CVE-YYYY-XXXXX
-```
-
-### 3. Commit Changes
+From the terminal:
 
 ```bash
-# Add all changes
-git add Cargo.toml Cargo.lock CHANGELOG.md
+# List recent Actions tasks for this repo
+fj --host dev.a8n.run actions tasks
 
-# Commit with conventional commit message
-git commit -m "chore: bump version to v1.0.0"
-
-# Push to main branch
-git push origin main
+# Read the log of one run
+fj --host dev.a8n.run actions logs <task-number>
 ```
 
-### 4. Create and Push Tag
+Or open the repository's **Actions** tab at <https://dev.a8n.run/a8n-tools/rusty-links/actions>.
+
+### 4. Verify the published image
+
+The build workflow verifies itself: after pushing, it resolves the pushed tag in the registry with `docker buildx imagetools inspect` and fails the job when the registry digest does not match the digest `buildx` reported pushing. A green `Verify pushed image` step means the registry really was updated.
+
+To check by hand:
 
 ```bash
-# Create annotated tag
-git tag -a v1.0.0 -m "Release v1.0.0"
-
-# Push tag to GitHub
-git push origin v1.0.0
+docker buildx imagetools inspect dev.a8n.run/a8n-tools/rusty-links:v1.0.0
 ```
 
-### 5. Monitor GitHub Actions
+## Image Tags
 
-1. Go to your repository on GitHub
-2. Click the **Actions** tab
-3. Find the "Build and Publish Docker Image" workflow
-4. Verify it runs successfully (green checkmark)
+`oci-build/get-tags.nu` resolves exactly one tag per run, from the trigger rather than from `git describe`:
 
-The workflow will:
-- Build the Docker image for AMD64 and ARM64 platforms
-- Tag the image with multiple versions
-- Push to GitHub Container Registry
-- Create build attestations for security
+| Trigger | Tag pushed | Notes |
+|---------|-----------|-------|
+| push of a `v*` tag | `vX.Y.Z` | Immutable. This is the release artifact |
+| push to `main` | `latest` | Rolling |
+| `workflow_dispatch` | none by default | A dry run; see below |
 
-### 6. Verify Package Publication
+A release commit fires both events at once. The tag sets are disjoint on purpose: the tag-push run publishes only `vX.Y.Z` and the branch-push run publishes only `latest`, so the two runs never race to write the same destination (governance GOV-13). There are no `vX` or `vX.Y` moving tags, and no `BRANCH-SHA` tag.
 
-1. Go to your repository on GitHub
-2. Click on **Packages** (right sidebar)
-3. Find the `rusty-links` package
-4. Verify the new version tag appears
+The image is built for the runner's own platform. There is no multi-platform (AMD64 plus ARM64) build.
 
-### 7. Create GitHub Release (Optional)
+### Best Practices
 
-Create a GitHub Release for better visibility:
+- **Production**: pin to a specific version (`v1.0.0`)
+- **Development**: use `latest`
 
-1. Go to repository → **Releases**
-2. Click **Draft a new release**
-3. Select the tag (v1.0.0)
-4. Set release title: "Rusty Links v1.0.0"
-5. Copy changelog content to description
-6. Click **Publish release**
+## Manual Workflow Dispatch
+
+`build-oci-image.yml` accepts a manual dispatch with two inputs:
+
+- `dry_run` (default `true`): build, resolve tags and print every registry action without pushing anything. Only an explicit `false` mutates the registry.
+- `simulate_tag` (e.g. `v9.9.9`): exercise the release publish path. Empty exercises the `latest` path.
+
+```bash
+fj --host dev.a8n.run actions dispatch build-oci-image.yml main
+```
+
+Or use **Actions → Build OCI container → Run workflow** in the web UI. This is useful for rebuilding an existing tag and for testing a change to the publish path without cutting a version.
 
 ## Using Published Images
 
@@ -124,15 +112,7 @@ docker pull dev.a8n.run/a8n-tools/rusty-links:latest
 docker pull dev.a8n.run/a8n-tools/rusty-links:v1.0.0
 ```
 
-### Pull by Major/Minor Version
-
-```bash
-# Latest v1.x.x release
-docker pull dev.a8n.run/a8n-tools/rusty-links:v1
-
-# Latest v1.0.x release
-docker pull dev.a8n.run/a8n-tools/rusty-links:v1.0
-```
+The registry is private. `docker login dev.a8n.run` with a token that can read packages before pulling.
 
 ## Update compose.yml to Use Published Image
 
@@ -155,181 +135,55 @@ docker compose pull  # Pull latest images
 docker compose up -d
 ```
 
-## Package Visibility
-
-### Making Package Public
-
-By default, packages are private. To make them public:
-
-1. Go to your repository on GitHub
-2. Click **Packages** → `rusty-links`
-3. Click **Package settings** (right sidebar)
-4. Scroll to **Danger Zone**
-5. Click **Change visibility** → **Public**
-6. Confirm the change
-
-### Configuring Package Permissions
-
-You can control who can access your package:
-
-1. In Package settings
-2. Go to **Manage Actions access**
-3. Add repositories or teams that can access the package
-
-## Image Tags Strategy
-
-The CI/CD pipeline automatically creates multiple tags:
-
-| Tag Pattern | Example | Description | Updates |
-|-------------|---------|-------------|---------|
-| `latest` | `latest` | Most recent release from main branch | On every main branch release |
-| `vX.Y.Z` | `v1.0.0` | Specific version | Never (immutable) |
-| `vX.Y` | `v1.0` | Minor version | On new patch releases |
-| `vX` | `v1` | Major version | On new minor/patch releases |
-| `BRANCH-SHA` | `main-abc123` | Development builds | On tagged commits |
-
-### Best Practices
-
-- **Production**: Pin to specific version (`v1.0.0`) for stability
-- **Staging**: Use minor version (`v1.0`) for automatic patch updates
-- **Development**: Use `latest` for newest features
-
-## Manual Workflow Dispatch
-
-You can manually trigger the build workflow:
-
-1. Go to repository → **Actions**
-2. Select "Build and Publish Docker Image"
-3. Click **Run workflow**
-4. Select branch/tag
-5. Click **Run workflow**
-
-This is useful for:
-- Rebuilding an existing tag
-- Building from a specific branch
-- Testing the CI/CD pipeline
-
 ## Troubleshooting
 
-### Build Fails
+### Build fails
 
-Check the GitHub Actions logs:
-
-```bash
-# View workflow runs
-gh run list --workflow=docker-publish.yml
-
-# View specific run
-gh run view RUN_ID --log
-```
+Read the log with `fj --host dev.a8n.run actions logs <task-number>`.
 
 Common issues:
-- **Authentication fails**: Check GITHUB_TOKEN permissions
-- **Build timeout**: Reduce build complexity or request longer timeout
-- **Platform build fails**: Check platform-specific dependencies
 
-### Tag Already Exists
+- **`docker login` fails**: the `A8N_TOOLS_PRIVATE_PACKAGE_PAT` secret or the `A8N_TOOLS_PRIVATE_PACKAGE_OWNER` variable is missing or expired on the repo. Manage them with `fj --host dev.a8n.run actions secrets` and `fj --host dev.a8n.run actions variables`.
+- **`DIGEST MISMATCH`**: the tag in the registry does not resolve to the digest just pushed. The job fails rather than reporting a green build that did not update the registry; re-run it and check whether another run wrote the same tag.
+- **Build cache errors**: the build exports to `act_runner`'s cache server (`type=gha`) with `ignore-error=true`, so a cache hiccup warns instead of failing. A cache-related hard failure means the runner's `cache.enabled` setting changed.
 
-If you need to recreate a tag:
+### Nothing built after a push to main
 
-```bash
-# Delete local tag
-git tag -d v1.0.0
+`build-oci-image.yml` has a `paths:` filter. A push that touches only documentation does not build an image, by design.
 
-# Delete remote tag
-git push origin :refs/tags/v1.0.0
+### Tag already exists
 
-# Recreate tag
-git tag -a v1.0.0 -m "Release v1.0.0"
-git push origin v1.0.0
-```
-
-**Warning**: Deleting published tags can break dependent systems. Only do this for unreleased or broken tags.
-
-### Package Not Visible
-
-If package doesn't appear:
-
-1. Check workflow completed successfully
-2. Verify package visibility settings (public vs private)
-3. Wait a few minutes for package to propagate
-4. Check package permissions
+`create-release.yml` creates the tag through the releases API, so a leftover tag of the same name makes it fail. Delete the release and its tag in the Forgejo UI, then re-run the workflow, rather than force-pushing a tag.
 
 ## Rollback
 
-To rollback to a previous version:
+Redeploy the previous version by pinning its tag:
+
+```yaml
+services:
+  app:
+    image: dev.a8n.run/a8n-tools/rusty-links:v1.0.0
+```
 
 ```bash
-# Update compose.yml to use old version
 docker compose pull
 docker compose up -d
 ```
 
-Users can always pin to a specific version in their deployments.
+Released `vX.Y.Z` tags are immutable, so an older one is always still there to pin to.
 
 ## Security Considerations
 
-### Build Attestations
+The `docker-container` buildx driver attaches a provenance attestation by default, which is why the pushed reference is an OCI image index rather than a bare manifest. The workflow accounts for that when it verifies the pushed digest.
 
-The workflow generates build attestations for supply chain security:
-
-```bash
-# Verify attestation
-gh attestation verify \
-  oci://dev.a8n.run/a8n-tools/rusty-links:v1.0.0 \
-  --owner a8n-tools
-```
-
-### Signing Images (Future)
-
-Consider implementing image signing with cosign:
-
-```yaml
-- name: Sign image
-  uses: sigstore/cosign-installer@main
-- run: cosign sign ghcr.io/${{ github.repository }}:${{ steps.meta.outputs.version }}
-```
-
-## Automated Releases
-
-For fully automated releases, consider:
-
-1. **Release Please**: Automated changelog and version bumping
-2. **Semantic Release**: Automated versioning based on commits
-3. **Conventional Commits**: Standardized commit messages
-
-Example with Release Please:
-
-```yaml
-- uses: google-github-actions/release-please-action@v3
-  with:
-    release-type: rust
-    package-name: rusty-links
-```
+Nothing signs the image today. Image signing (for example with cosign) is not part of this pipeline.
 
 ## Emergency Hotfix Process
 
 For critical security fixes:
 
-1. Create hotfix branch from tag
-2. Apply minimal fix
-3. Bump patch version
-4. Tag and release immediately
-5. Backport to main if needed
-
 ```bash
-git checkout -b hotfix/v1.0.1 v1.0.0
-# Apply fix
-git commit -m "fix: critical security patch"
-git tag -a v1.0.1 -m "Hotfix v1.0.1"
-git push origin hotfix/v1.0.1
-git push origin v1.0.1
+just create-release hotfix
 ```
 
-## Support
-
-For CI/CD issues:
-- Check GitHub Actions logs
-- Review workflow YAML syntax
-- Verify repository permissions
-- Check GITHUB_TOKEN scope
+Merge the resulting PR the same way as any other release. The patch version is bumped, the tag and release are created, and the image is published under the new `vX.Y.Z`.

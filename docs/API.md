@@ -1666,6 +1666,6 @@ HTTP Status: 403 Forbidden
 ## Support
 
 For API issues or questions:
-- GitHub Issues: Report bugs and request features
+- Issues: Report bugs and request features at <https://dev.a8n.run/a8n-tools/rusty-links/issues>
 - Documentation: Check README.md and other docs
 - Source Code: Review API implementation in `src/api/`

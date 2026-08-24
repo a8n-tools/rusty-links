@@ -334,7 +334,7 @@ If you encounter issues during upgrade:
 
 1. Check the logs: `docker-compose logs -f app`
 2. Review [TROUBLESHOOTING.md](TROUBLESHOOTING.md) (if available)
-3. Check [GitHub Issues](https://dev.a8n.run/a8n-tools/rusty-links/issues)
+3. Check the [issue tracker](https://dev.a8n.run/a8n-tools/rusty-links/issues)
 4. Create a new issue with:
    - Version upgrading from/to
    - Error logs
@@ -390,4 +390,4 @@ After upgrading, verify:
 **Last Updated:** 2025-01-XX
 **Current Version:** 1.0.0
 
-For the latest upgrade information, always refer to the [GitHub Releases](https://dev.a8n.run/a8n-tools/rusty-links/releases) page.
+For the latest upgrade information, always refer to the [releases](https://dev.a8n.run/a8n-tools/rusty-links/releases) page.

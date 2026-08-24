@@ -201,10 +201,10 @@ pub fn masked_database_url(&self) -> String {
 
 ### Dependency Security
 
-✅ **Regular Dependency Audits**
-- CI/CD security audit with cargo-audit
-- Automated vulnerability scanning
-- Dependency updates via Dependabot
+⚠️ **Dependency Audits (manual)**
+- `cargo audit` is run by hand, as a monthly task; see [Security Audit](#security-audit) below
+- Nothing scans dependencies automatically: `.forgejo/workflows/check.yml` has no audit step, and there is no Dependabot or Renovate configuration
+- Automating it is tracked in LINKS-52
 - Minimal dependency footprint
 
 ✅ **Supply Chain Security**
@@ -471,7 +471,7 @@ sudo systemctl reload caddy
 If you discover a security vulnerability in Rusty Links:
 
 #### Do NOT:
-- ❌ Open a public GitHub issue
+- ❌ Open a public issue on the tracker
 - ❌ Discuss publicly on social media
 - ❌ Exploit the vulnerability
 
@@ -503,7 +503,7 @@ If you discover a security vulnerability in Rusty Links:
 
 ### Security Advisories
 
-Security advisories are published on GitHub Security Advisories page after fixes are released.
+Security advisories are published in the release notes at <https://dev.a8n.run/a8n-tools/rusty-links/releases> after fixes are released. There is no GitHub Security Advisories page; this repository is Forgejo-hosted.
 
 ---
 

@@ -58,6 +58,15 @@ jobs:
         # scripts/check-migration-immutability.nu and LINKS-26 / DEV-395.
         run: nu scripts/check-migration-immutability.nu
 
+      - name: Guard the migration history doc
+        # Reject a migration with no row in the docs/DATABASE.md Migration
+        # History table, or a row naming no migration. See
+        # scripts/check-migration-docs.nu and LINKS-46. --self-test first, so a
+        # guard that stopped parsing fails the job rather than passing vacuously.
+        run: |
+          nu scripts/check-migration-docs.nu --self-test
+          nu scripts/check-migration-docs.nu
+
       - name: Guard justfile build flags
         # Reject a justfile `--features` name Cargo.toml does not define or a
         # `--build-arg` no Dockerfile declares. See scripts/check-build-flags.nu

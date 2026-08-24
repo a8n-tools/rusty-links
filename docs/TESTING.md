@@ -37,10 +37,9 @@ Rusty Links uses a multi-layered testing approach to ensure code quality and rel
    - Use test database
    - Test complete workflows
 
-4. **End-to-End Tests** - Test full user flows
-   - Simulated user interactions
-   - Database, API, and UI integration
-   - Catch regression issues
+4. **Smoke Tests** - Exercise a running instance over HTTP
+   - `scripts/integration-test.sh` (`just test-integration [url]`), curl and jq against a deployed URL
+   - Run by hand against a dev or staging instance; no check suite runs it
 
 ### Testing Philosophy
 
@@ -71,8 +70,8 @@ cargo test --features server test_create_link
 # Run tests matching pattern
 cargo test --features server auth
 
-# Run tests in specific file
-cargo test --features server --test integration_tests
+# Run tests in specific file (the target name is the tests/<name>.rs stem)
+cargo test --features server --test db_users
 ```
 
 ### Advanced Options
@@ -543,17 +542,19 @@ async fn test_database_operation() {
 
 ## Test Coverage
 
+No check suite measures coverage: neither `just pre-commit` nor `.forgejo/workflows/check.yml` runs a coverage tool, and no report is published anywhere. The numbers below are targets to aim at when adding tests, and the commands that follow are for running a coverage tool locally. Wiring a coverage job into CI is tracked in LINKS-51.
+
 ### Coverage Goals
 
-| Module | Target Coverage | Current Status |
-|--------|----------------|----------------|
-| Models | 90% | ✅ Good coverage |
-| API Endpoints | 80% | ⚠️ Needs improvement |
-| Authentication | 95% | ✅ Well tested |
-| Scraper | 70% | ⚠️ External dependencies |
-| GitHub Integration | 70% | ⚠️ External API |
-| Scheduler | 80% | ✅ Unit tested |
-| Utilities | 85% | ✅ Well tested |
+| Module | Target Coverage |
+|--------|----------------|
+| Models | 90% |
+| API Endpoints | 80% |
+| Authentication | 95% |
+| Scraper | 70% |
+| GitHub Integration | 70% |
+| Scheduler | 80% |
+| Utilities | 85% |
 
 ### Generating Coverage Reports
 
@@ -593,9 +594,6 @@ cargo llvm-cov --html
 
 # Open report
 open target/llvm-cov/html/index.html
-
-# Generate and upload to codecov
-cargo llvm-cov --codecov --output-path codecov.json
 ```
 
 ### Improving Coverage
@@ -614,12 +612,14 @@ Focus on testing:
 
 ### Forgejo Actions Workflow
 
-Tests run automatically on every push to `main` and every pull request. See `.forgejo/workflows/check.yml` for the complete configuration; the `check` job declares a `postgres:17-alpine` service and exports `DATABASE_URL` for the database-backed legs. The `Doc tests (server)` step needs no database and runs before them.
+Tests run automatically on every push to `main` and every pull request. See `.forgejo/workflows/check.yml` for the complete configuration; the `check` job declares a `postgres:17-alpine` service (matching `compose.dev.yml`, so dev and CI agree) and exports `DATABASE_URL` for the database-backed legs. The `Doc tests (server)` step needs no database and runs before them.
+
+There is one job, on one runner label, against one Postgres version, with the toolchain the runner image ships (nothing in the repo pins one). Before the cargo legs it runs the static guards, which need no compiler: `scripts/check-migration-immutability.nu`, `scripts/check-migration-docs.nu` and `scripts/check-build-flags.nu`.
 
 ### Local Pre-commit Testing
 
 ```bash
-# Run all checks before committing (same legs as .forgejo/workflows/check.yml)
+# Run all checks before committing (every cargo leg .forgejo/workflows/check.yml runs)
 just pre-commit
 
 # Or manually:
@@ -638,6 +638,15 @@ nu scripts/check-db-tests-ran.nu --self-test
 nu scripts/check-db-tests-ran.nu
 ```
 
+`just pre-commit` runs the cargo legs only. The workflow's three static guards are not in it, so run them yourself before pushing (LINKS-49 tracks guarding that divergence):
+
+```bash
+nu scripts/check-migration-immutability.nu
+nu scripts/check-migration-docs.nu --self-test
+nu scripts/check-migration-docs.nu
+nu scripts/check-build-flags.nu
+```
+
 ### Why the test legs are scripts and not a bare `cargo test`
 
 `cargo test` exits 0 when a target has no tests, when every case is filtered out by a name argument, and when every case is `#[ignore]`d. That is how the `tests/` targets sat compiled but unexecuted while every check stayed green (LINKS-44), and how all ten doc examples rotted into compile errors without failing anything (LINKS-48). Each guard runs its leg, parses the harness summary, and fails on a run that proves nothing. `--self-test` runs first in both, so a guard that stopped detecting fails the job instead of passing vacuously.
@@ -646,10 +655,6 @@ nu scripts/check-db-tests-ran.nu
 - `scripts/check-doc-tests-ran.nu` runs `cargo test --features server --doc` and fails when the harness collected nothing, when anything is ignored or filtered out, or when passes fall below the floor. The server leg is the one that runs it: `default = []` cfgs out every module holding an example, so the default-feature leg would collect zero doc tests and still exit 0. An example that must not execute is marked ```` ```no_run ````, which rustdoc compiles and type-checks and reports as a pass; ```` ```ignore ```` is not compiled at all and fails the leg.
 
 The three clippy legs need no such guard, and LINKS-39 checked before deciding rather than adding one for symmetry. `cargo clippy -- --deny warnings` has no green-but-empty state to detect: a feature name Cargo.toml does not define is a cargo error (and `scripts/check-build-flags.nu` rejects it in CI before any cargo runs), and a `--target` the toolchain lacks is a hard `E0463: can't find crate for core`, verified against an uninstalled `wasm32-wasip1` at exit 101. The failure the wasm leg really had was the opposite of vacuity: it ran, it printed its findings, and `cargo check` with no `--deny warnings` exited 0 anyway. The residual risk is one level up, in a later edit that drops `--target` or `--deny warnings` from one of the two copies of the suite; a parity guard over `justfile` and `.forgejo/workflows/check.yml` is tracked in LINKS-49.
-
-### Test Matrix
-
-CI runs one configuration: Rust stable against `postgres:17-alpine`, matching `compose.dev.yml` so dev and CI agree.
 
 ---
 
@@ -843,30 +848,39 @@ cargo test --features server -- --nocapture --test-threads=1
 
 #### Environment Variables Not Set
 
-Check workflow YAML:
+`.forgejo/workflows/check.yml` sets `DATABASE_URL` at job level:
 ```yaml
 env:
-  DATABASE_URL: postgres://postgres:test@localhost/rustylinks_test
+  DATABASE_URL: postgres://rustylinks:rustylinks@postgres:5432/rustylinks
 ```
+
+The host is the service alias `postgres`, not `localhost`. The service declares no published port on purpose: the runner puts the job container and the service on one network, so the alias is the address, while a published port lands in the docker daemon's namespace where the job cannot reach it.
 
 #### Service Container Not Ready
 
-Add health checks:
+The `postgres` service already declares a health check; a job that starts before the database is up means the check changed:
 ```yaml
 services:
   postgres:
     options: >-
-      --health-cmd pg_isready
-      --health-interval 10s
+      --health-cmd="pg_isready --username=rustylinks --dbname=rustylinks"
+      --health-interval=5s
+      --health-timeout=3s
+      --health-retries=10
 ```
 
 #### Build Cache Issues
 
-```bash
-# Clear cache in workflow
-- name: Clean build cache
-  run: cargo clean
+The job caches the Rust build with `Swatinem/rust-cache`, including on failure:
+
+```yaml
+- name: Cache Rust build
+  uses: https://github.com/Swatinem/rust-cache@v2
+  with:
+    cache-on-failure: true
 ```
+
+A stale cache is cleared by bumping the action's cache key or re-running the job with the cache disabled, not by adding a `cargo clean` step, which would defeat the cache on every run.
 
 ---
 
@@ -914,6 +928,6 @@ When contributing tests:
 2. Add tests for new features
 3. Update this documentation
 4. Ensure CI passes
-5. Achieve minimum coverage (80%)
+5. Cover the paths the change touches; see [Test Coverage](#test-coverage) for why no number is enforced
 
 See [CONTRIBUTING.md](../CONTRIBUTING.md) for more details.

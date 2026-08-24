@@ -308,7 +308,7 @@ sqlx migrate run
 
 ### Code Quality
 
-`just pre-commit` runs every leg CI runs, in the dev container, and stops at the first failure.
+`just pre-commit` runs every cargo leg CI runs, in the dev container, and stops at the first failure.
 
 ```bash
 just pre-commit
@@ -328,6 +328,16 @@ cargo test --features server --lib
 nu scripts/check-doc-tests-ran.nu   # the doc examples, with the vacuity guard
 nu scripts/check-db-tests-ran.nu    # the tests/ targets against Postgres, with the skip guard
 ```
+
+`.forgejo/workflows/check.yml` runs those same legs plus three static guards that need no compiler and are not in `just pre-commit`. Run them directly:
+
+```bash
+nu scripts/check-migration-immutability.nu  # no committed migration was edited
+nu scripts/check-migration-docs.nu          # migrations/ and the docs/DATABASE.md table agree
+nu scripts/check-build-flags.nu             # every justfile --features / --build-arg exists downstream
+```
+
+A guard that the justfile and the workflow keep running the same legs is tracked in LINKS-49.
 
 ---
 
