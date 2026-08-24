@@ -21,7 +21,7 @@ Its last two legs run the test targets that `cargo test --lib` never reaches, ea
 IMPORTANT: `default = []`, so a bare `cargo check` / `cargo clippy` / `cargo test` compiles almost none of this crate. Every server module is behind `#[cfg(feature = "server")]`, so any command meant to verify server code must pass `--features server`.
 
 ```bash
-# Run every check CI runs (fmt, clippy, build, unit/doc/Postgres tests under default + server, plus the wasm check)
+# Run every check CI runs (fmt, clippy under default + server + web/wasm, build, unit/doc/Postgres tests under default + server)
 just pre-commit
 
 # Run in development (requires PostgreSQL and .env file)
@@ -33,8 +33,8 @@ cargo check
 # Check server feature only
 cargo check --features server
 
-# Check web/WASM feature only
-cargo check --features web --target wasm32-unknown-unknown
+# Lint the browser build (the only leg that compiles `#[cfg(target_arch = "wasm32")]` code)
+cargo clippy --all-targets --features web --target wasm32-unknown-unknown -- --deny warnings
 
 # Run tests (default features runs only the handful of feature-independent tests)
 cargo test
@@ -69,7 +69,7 @@ The project uses Cargo features to separate server and client code:
 
 Server-only modules (`#[cfg(feature = "server")]`): api, auth, config, error, github, models, scheduler, scraper
 
-Because `default = []`, any check that omits `--features server` compiles none of those modules. `just pre-commit` and `.forgejo/workflows/check.yml` therefore run clippy, build, and test twice: once with default features and once with `--features server`. The `tests/` targets are all `#![cfg(feature = "server")]`, so they only ever run on the server leg, and so does the doc-test leg: every module carrying a doc example is behind `#[cfg(feature = "server")]`, so `cargo test --doc` without it collects zero tests and passes vacuously.
+Because `default = []`, any check that omits `--features server` compiles none of those modules. `just pre-commit` and `.forgejo/workflows/check.yml` therefore run build and test twice, once with default features and once with `--features server`, and clippy three times, adding `--features web --target wasm32-unknown-unknown`. That third leg is the only one that compiles `#[cfg(target_arch = "wasm32")]` code, so a warning there is invisible to the other two; it was a bare `cargo check` with no `--deny warnings` until LINKS-39, which is how five of them accumulated. The `tests/` targets are all `#![cfg(feature = "server")]`, so they only ever run on the server leg, and so does the doc-test leg: every module carrying a doc example is behind `#[cfg(feature = "server")]`, so `cargo test --doc` without it collects zero tests and passes vacuously.
 
 There are no `standalone`/`saas` build features. A single binary and OCI image serves both deployment modes; the mode is resolved at runtime (see Configuration below).
 

@@ -261,7 +261,6 @@ pub fn Links() -> Element {
         // Check if we're typing in input/textarea (except for Escape key)
         #[cfg(target_arch = "wasm32")]
         {
-            use wasm_bindgen::JsCast;
             if let Some(window) = web_sys::window() {
                 if let Some(document) = window.document() {
                     if let Some(active_element) = document.active_element() {
@@ -401,13 +400,13 @@ pub fn Links() -> Element {
                                                         let blob_parts = js_sys::Array::new();
                                                         blob_parts.push(&wasm_bindgen::JsValue::from_str(&data));
 
-                                                        let mut blob_options = web_sys::BlobPropertyBag::new();
-                                                        blob_options.type_("application/json");
+                                                        let blob_options = web_sys::BlobPropertyBag::new();
+                                                        blob_options.set_type("application/json");
 
                                                         if let Ok(blob) = web_sys::Blob::new_with_str_sequence_and_options(&blob_parts, &blob_options) {
                                                             let url = web_sys::Url::create_object_url_with_blob(&blob).unwrap();
 
-                                                            if let Some(link_element) = document.create_element("a").ok() {
+                                                            if let Ok(link_element) = document.create_element("a") {
                                                                 let link = link_element.dyn_into::<web_sys::HtmlAnchorElement>().unwrap();
                                                                 link.set_href(&url);
                                                                 link.set_download("rusty-links-export.json");

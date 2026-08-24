@@ -19,6 +19,8 @@ install-hooks:
 # Covers all three compilation configurations: default features, `server`, and `web` on wasm.
 # `default = []` gates every server module behind `#[cfg(feature = "server")]`, so the
 # default-feature legs alone compile almost none of the crate (LINKS-36).
+# All three configurations lint under `--deny warnings`. The wasm leg was a bare
+# `cargo check`, so five warnings in browser-only code stayed green (LINKS-39).
 # The last two legs cover the test targets no `--lib` run reaches: the doc examples,
 # which nothing in the repo compiled until LINKS-48, and the tests/ targets against
 # the compose `postgres` service, which `cargo test --lib` never ran (LINKS-44).
@@ -30,8 +32,8 @@ pre-commit: ensure-env ensure-css
     ^docker compose --file compose.dev.yml run --rm --no-deps app cargo clippy --all-targets -- --deny warnings
     print "\n[pre-commit] cargo clippy --all-targets --features server -- --deny warnings"
     ^docker compose --file compose.dev.yml run --rm --no-deps app cargo clippy --all-targets --features server -- --deny warnings
-    print "\n[pre-commit] cargo check --features web --target wasm32-unknown-unknown"
-    ^docker compose --file compose.dev.yml run --rm --no-deps app cargo check --features web --target wasm32-unknown-unknown
+    print "\n[pre-commit] cargo clippy --all-targets --features web --target wasm32-unknown-unknown -- --deny warnings"
+    ^docker compose --file compose.dev.yml run --rm --no-deps app cargo clippy --all-targets --features web --target wasm32-unknown-unknown -- --deny warnings
     print "\n[pre-commit] cargo build --all-targets"
     ^docker compose --file compose.dev.yml run --rm --no-deps app cargo build --all-targets
     print "\n[pre-commit] cargo build --all-targets --features server"
@@ -136,9 +138,9 @@ db-prepare:
 # Run all checks (web, clippy, fmt)
 check: check-web check-clippy check-fmt
 
-# Check web/WASM compilation (matches the `Check web/WASM` step in .forgejo/workflows/check.yml)
+# Lint the browser build, the only leg that compiles `#[cfg(target_arch = "wasm32")]` code (matches the `Clippy (web/wasm)` step in .forgejo/workflows/check.yml)
 check-web: ensure-css
-    cargo check --features web --target wasm32-unknown-unknown
+    cargo clippy --all-targets --features web --target wasm32-unknown-unknown -- --deny warnings
 
 # Run clippy lints
 check-clippy:
