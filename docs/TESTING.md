@@ -47,7 +47,7 @@ Rusty Links uses a multi-layered testing approach to ensure code quality and rel
 - **Fast Feedback** - Tests should run quickly
 - **Isolated Tests** - Each test should be independent
 - **Readable Tests** - Tests serve as documentation
-- **Comprehensive Coverage** - Aim for 80%+ code coverage
+- **Cover What You Change** - no coverage percentage is measured; see [Test Coverage](#test-coverage)
 
 ---
 
@@ -543,63 +543,17 @@ async fn test_database_operation() {
 
 ## Test Coverage
 
-No check suite measures coverage: neither `just pre-commit` nor `.forgejo/workflows/check.yml` runs a coverage tool, and no report is published anywhere. The numbers below are targets to aim at when adding tests, and the commands that follow are for running a coverage tool locally. Wiring a coverage job into CI is tracked in LINKS-51.
+Nothing measures coverage, and that is a decision rather than an omission (LINKS-51). No recipe in `justfile` and no step in `.forgejo/workflows/check.yml` runs `cargo llvm-cov`, `cargo tarpaulin` or any other coverage tool, no report is written, and there is no coverage service configured for this environment. There is therefore no percentage to look up and no per-module target to hit.
 
-### Coverage Goals
+The reasoning, so it does not get relitigated from scratch:
 
-| Module | Target Coverage |
-|--------|----------------|
-| Models | 90% |
-| API Endpoints | 80% |
-| Authentication | 95% |
-| Scraper | 70% |
-| GitHub Integration | 70% |
-| Scheduler | 80% |
-| Utilities | 85% |
+- A number with no gate behind it is decoration. Nobody acts on a printed percentage, and a threshold invented without evidence either fails every pull request or is set so low it proves nothing.
+- `cargo llvm-cov` needs `llvm-tools-preview` on both the runner image and the dev image, neither of which this repository builds, and an instrumented rebuild roughly doubles a suite that already compiles the crate in three configurations.
+- What actually goes wrong here is not thin coverage, it is a leg that runs and proves nothing: `cargo test` exits 0 on an empty run, which is how the `tests/` targets sat compiled but unexecuted (LINKS-44) and how all ten doc examples rotted into compile errors (LINKS-48). The guard scripts enforce execution floors against that directly, which is a stronger property than a percentage and is checked on every push.
 
-### Generating Coverage Reports
+If you want a local number for your own purposes, `cargo llvm-cov` and `cargo tarpaulin` both work against this crate with `--features server`; nothing in the repository depends on the result.
 
-#### Install cargo-tarpaulin
-
-```bash
-cargo install cargo-tarpaulin
-```
-
-#### Generate Coverage
-
-```bash
-# HTML report
-cargo tarpaulin --out Html
-
-# Open report
-open tarpaulin-report.html
-
-# XML report (for CI)
-cargo tarpaulin --out Xml
-
-# Console output
-cargo tarpaulin --out Stdout
-
-# Exclude test code from coverage
-cargo tarpaulin --exclude-files tests/* --out Html
-```
-
-#### Coverage with cargo-llvm-cov
-
-```bash
-# Install
-cargo install cargo-llvm-cov
-
-# Generate HTML report
-cargo llvm-cov --html
-
-# Open report
-open target/llvm-cov/html/index.html
-```
-
-### Improving Coverage
-
-Focus on testing:
+### What to prioritise when adding tests
 
 1. **Critical paths** - Authentication, data persistence
 2. **Error handling** - All error branches
@@ -615,7 +569,9 @@ Focus on testing:
 
 Tests run automatically on every push to `main` and every pull request. See `.forgejo/workflows/check.yml` for the complete configuration; the `check` job declares a `postgres:17-alpine` service (matching `compose.dev.yml`, so dev and CI agree) and exports `DATABASE_URL` for the database-backed legs. The `Doc tests (server)` step needs no database and runs before them.
 
-There is one job, on one runner label, against one Postgres version, with the toolchain the runner image ships (nothing in the repo pins one). Before the cargo legs it runs the four static guards, which need no compiler: `scripts/check-suite-parity.nu`, `scripts/check-migration-immutability.nu`, `scripts/check-migration-docs.nu` and `scripts/check-build-flags.nu`.
+There is one job, on one runner label, against one Postgres version, with the toolchain the runner image ships (nothing in the repo pins one). Before the cargo legs it runs the four static guards, which need no compiler: `scripts/check-suite-parity.nu`, `scripts/check-migration-immutability.nu`, `scripts/check-migration-docs.nu` and `scripts/check-build-flags.nu`. The `Dependency audit` step follows them: it needs cargo but no build, since `scripts/check-dependency-audit.nu` reads `Cargo.lock` (LINKS-52).
+
+A second workflow, `.forgejo/workflows/audit.yml`, runs that audit guard on a weekly schedule and nothing else. A push-triggered job only ever audits a lockfile somebody just touched, so the schedule is the only run that sees an advisory published against dependencies that have not changed. [docs/SECURITY.md](SECURITY.md#security-audit) has the failure policy and the exception rules.
 
 ### Local Pre-commit Testing
 
@@ -630,6 +586,8 @@ nu scripts/check-migration-immutability.nu
 nu scripts/check-migration-docs.nu --self-test
 nu scripts/check-migration-docs.nu
 nu scripts/check-build-flags.nu
+nu scripts/check-dependency-audit.nu --self-test
+nu scripts/check-dependency-audit.nu
 cargo fmt --check
 cargo clippy --all-targets -- --deny warnings
 cargo clippy --all-targets --features server -- --deny warnings
@@ -907,7 +865,7 @@ A stale cache is cleared by bumping the action's cache key or re-running the job
 - Clean up test data
 - Run tests before committing
 - Maintain test documentation
-- Aim for high coverage on critical paths
+- Cover the critical paths a change touches
 
 ### Don'ts ❌
 
