@@ -149,7 +149,7 @@ Branch naming conventions:
    cargo fmt
    cargo clippy --all-targets -- --deny warnings
    cargo clippy --all-targets --features server -- --deny warnings
-   cargo check --features web --target wasm32-unknown-unknown
+   cargo clippy --all-targets --features web --target wasm32-unknown-unknown -- --deny warnings
 
    # Guard run by CI: every `--features` name the justfile passes exists in Cargo.toml
    # and every `--build-arg` is declared by a Dockerfile
@@ -219,12 +219,12 @@ test(links): add integration tests for link creation
 Before submitting, ensure:
 
 - [ ] Code follows project coding standards
-- [ ] `just pre-commit` passes (fmt, clippy, build, and tests under both default features and `--features server`, the wasm check, the doc examples, and the Postgres-backed `tests/` targets)
+- [ ] `just pre-commit` passes (fmt, clippy under default features, `--features server` and `--features web` on wasm, build and tests under both feature sets, the doc examples, and the Postgres-backed `tests/` targets)
 - [ ] Server-side tests pass (`cargo test --features server --lib`)
 - [ ] Any new SQL is covered by a `tests/db_*.rs` case, since a query with no database-backed test is only compile-checked
 - [ ] Any new doc example compiles (`just test-doc`); mark one that must not execute ```` ```no_run ````, never ```` ```ignore ````, which is not compiled at all and fails the leg
 - [ ] Code is formatted (`cargo fmt`)
-- [ ] No clippy warnings under either feature set (`cargo clippy --all-targets -- --deny warnings` and the same with `--features server`)
+- [ ] No clippy warnings under any of the three configurations: `cargo clippy --all-targets -- --deny warnings`, the same with `--features server`, and `cargo clippy --all-targets --features web --target wasm32-unknown-unknown -- --deny warnings`
 - [ ] Documentation is updated
 - [ ] Commit messages follow conventions
 - [ ] PR description is clear and complete
@@ -244,7 +244,8 @@ Before submitting, ensure:
 Follow the official [Rust Style Guide](https://doc.rust-lang.org/stable/style-guide/):
 
 - Use `cargo fmt` to format code
-- Run `cargo clippy --all-targets --features server -- --deny warnings` (as well as the default-feature leg) and address warnings
+- Run `cargo clippy --all-targets --features server -- --deny warnings` (as well as the default-feature leg and the web/wasm leg) and address warnings
+- Browser-only code under `#[cfg(target_arch = "wasm32")]` is compiled by the web/wasm leg alone, so lint it with `just check-web`
 - Use meaningful variable and function names
 - Add comments for complex logic
 - Keep functions focused and small

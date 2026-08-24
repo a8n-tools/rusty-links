@@ -320,7 +320,7 @@ The individual legs:
 cargo fmt --check
 cargo clippy --all-targets -- --deny warnings
 cargo clippy --all-targets --features server -- --deny warnings
-cargo check --features web --target wasm32-unknown-unknown
+cargo clippy --all-targets --features web --target wasm32-unknown-unknown -- --deny warnings
 cargo build --all-targets
 cargo build --all-targets --features server
 cargo test --lib

@@ -626,7 +626,7 @@ just pre-commit
 cargo fmt --check
 cargo clippy --all-targets -- --deny warnings
 cargo clippy --all-targets --features server -- --deny warnings
-cargo check --features web --target wasm32-unknown-unknown
+cargo clippy --all-targets --features web --target wasm32-unknown-unknown -- --deny warnings
 cargo build --all-targets
 cargo build --all-targets --features server
 cargo test --lib
@@ -644,6 +644,8 @@ nu scripts/check-db-tests-ran.nu
 
 - `scripts/check-db-tests-ran.nu` runs each `tests/*.rs` target and fails when a `db_*` target is missing, ignored, filtered, or below the floor on database-backed passes.
 - `scripts/check-doc-tests-ran.nu` runs `cargo test --features server --doc` and fails when the harness collected nothing, when anything is ignored or filtered out, or when passes fall below the floor. The server leg is the one that runs it: `default = []` cfgs out every module holding an example, so the default-feature leg would collect zero doc tests and still exit 0. An example that must not execute is marked ```` ```no_run ````, which rustdoc compiles and type-checks and reports as a pass; ```` ```ignore ```` is not compiled at all and fails the leg.
+
+The three clippy legs need no such guard, and LINKS-39 checked before deciding rather than adding one for symmetry. `cargo clippy -- --deny warnings` has no green-but-empty state to detect: a feature name Cargo.toml does not define is a cargo error (and `scripts/check-build-flags.nu` rejects it in CI before any cargo runs), and a `--target` the toolchain lacks is a hard `E0463: can't find crate for core`, verified against an uninstalled `wasm32-wasip1` at exit 101. The failure the wasm leg really had was the opposite of vacuity: it ran, it printed its findings, and `cargo check` with no `--deny warnings` exited 0 anyway. The residual risk is one level up, in a later edit that drops `--target` or `--deny warnings` from one of the two copies of the suite; a parity guard over `justfile` and `.forgejo/workflows/check.yml` is tracked in LINKS-49.
 
 ### Test Matrix
 
