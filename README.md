@@ -125,30 +125,46 @@ Alerts are also suppressed per user by the `users.notify_new_location` opt-out c
 
 #### Sign-in Approval Gate Settings
 
-The gate turns the detection above into a block. With it on, a sign-in that passes the password but comes from a country the account has not been used from before issues no session at all: the user is emailed a single-use link, and the sign-in completes only after they open it, approve, and sign in again. An attempt nobody approves never completes, which is what an alert alone cannot do, because an attacker who reads the mailbox can delete an alert but cannot make an unapproved sign-in succeed. It is notify-and-approve, not a lock: nothing about the account is disabled.
+The gate turns the detection above into a block. With it on, a sign-in that passes the password but does not look familiar issues no session at all: the user is emailed a single-use link, and the sign-in completes only after they open it, approve, and sign in again. An attempt nobody approves never completes, which is what an alert alone cannot do, because an attacker who reads the mailbox can delete an alert but cannot make an unapproved sign-in succeed. It is notify-and-approve, not a lock: nothing about the account is disabled.
 
-| Variable                  | Description                                                     | Default |
-|---------------------------|-----------------------------------------------------------------|---------|
-| `LOGIN_APPROVAL_ENABLED`  | Hold a sign-in from a new country until it is approved           | `false` |
+Two triggers feed the one gate, and either alone holds a sign-in:
 
-It is opt-in, unlike the alert kill switch, because it can stop a real user from signing in. Only the exact value `true` enables it; unset, empty, `TRUE`, `yes`, and `1` all leave behaviour exactly as the alert shipped it. Turn it on per deployment, and only where the geoblock edge and `TRUSTED_PROXY_CIDRS` are configured and SMTP is set up, since with no resolvable country the gate can never fire and with no SMTP the approval link is only written to the log.
+- **a country the account has not used before** (LINKS-35), resolved at the edge from `X-IPCountry`
+- **a device the account has not used before** (LINKS-45), identified by a random id the browser mints once and keeps in `localStorage`, of which only the SHA-256 is stored
 
-Two sign-ins are never gated, by construction, because gating either would lock a real user out:
+A sign-in that trips both is held once and approved once. One switch disables both; there is deliberately no second flag.
 
-- a first-ever sign-in, which has no prior country for the new one to differ from (this is what `POST /api/auth/setup` creates)
-- a sign-in whose country does not resolve, which is any deployment with no geoblock edge or an empty `TRUSTED_PROXY_CIDRS`
+| Variable                  | Description                                                             | Default |
+|---------------------------|-------------------------------------------------------------------------|---------|
+| `LOGIN_APPROVAL_ENABLED`  | Hold a sign-in from a new country or a new device until it is approved   | `false` |
 
-The gate deliberately ignores the per-user `notify_new_location` opt-out. That preference is written from an authenticated session, so honouring it would let anyone holding a session switch the security control off, and an opted-out user would be held with no mail to approve with. It continues to govern the alert alone.
+It is opt-in, unlike the alert kill switch, because it can stop a real user from signing in. Only the exact value `true` enables it; unset, empty, `TRUE`, `yes`, and `1` all leave behaviour exactly as the alert shipped it. Turn it on per deployment, and only where SMTP is set up, since with no SMTP the approval link is only written to the log. The country trigger additionally needs the geoblock edge and `TRUSTED_PROXY_CIDRS`; the device trigger needs neither and works on any deployment.
+
+These sign-ins are never gated, by construction, because gating any of them would lock a real user out:
+
+- a first-ever sign-in, which has no prior country and no recorded device (this is what `POST /api/auth/setup` creates)
+- a sign-in whose country does not resolve, which is any deployment with no geoblock edge or an empty `TRUSTED_PROXY_CIDRS`, on the country trigger
+- an account with no recorded devices, on the device trigger, which is **every existing account on the deploy that adds the feature** (see below)
+- a sign-in that submits no device id, such as an API client or `curl`, on the device trigger
+
+##### Turning it on for the first time: nobody is held
+
+The `known_devices` table is created **empty and is deliberately not backfilled**. Zero known devices is read as an account's baseline, exactly as a NULL `last_login_country` is, and never as "new device". So upgrading to a build that has the device trigger holds nobody, including you: the first sign-in after the upgrade records the browser it came from, and only a different browser after that is held. Reading it the other way would hold every account on the instance at once, with an emailed link as the only way back in.
+
+The device signal is browser recognition, not machine identification. Clearing site data, a private window, a second browser on the same machine and a genuinely new laptop all look identical to it, and each produces one approval mail. That is the accepted cost; what it never does is let an unfamiliar browser through silently. `docs/SECURITY.md` states the full boundary.
+
+The gate deliberately ignores the per-user `notify_new_location` opt-out. That preference is written from an authenticated session, so honouring it would let anyone holding a session switch the security control off, and an opted-out user would be held with no mail to approve with. It continues to govern the alert alone, and it disables neither trigger.
 
 ##### Locked out and cannot receive the email?
 
 Recovery does not depend on email. In order:
 
 1. Set `LOGIN_APPROVAL_ENABLED=false` (or remove it) and restart. The password sign-in works again immediately, with no deploy and no code change.
-2. If the environment cannot be changed but the database can, clear the stored country so the next sign-in is treated as a first-ever one:
+2. If the environment cannot be changed but the database can, clear the stored baselines so the next sign-in is treated as a first-ever one:
 
    ```sql
    UPDATE users SET last_login_country = NULL WHERE email = '<address>';
+   DELETE FROM known_devices WHERE user_id = (SELECT id FROM users WHERE email = '<address>');
    ```
 
 3. If SMTP is in log mode, the approval mail (link included) is in the application log; the app warns about this at startup when the gate is on with no SMTP configured.

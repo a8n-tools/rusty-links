@@ -156,6 +156,9 @@ pub fn Setup() -> Element {
                 email: email_val.clone(),
                 password: password_val.clone(),
                 name: name_val.clone(),
+                // LINKS-45: baselines this browser as the first account's first
+                // known device, so the next sign-in from it is not held.
+                device_id: crate::ui::auth_state::device_id(),
             };
 
             let response = http::post_response("/api/auth/setup", &request).await;

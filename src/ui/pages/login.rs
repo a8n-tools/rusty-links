@@ -108,6 +108,10 @@ pub fn Login() -> Element {
             let request = LoginRequest {
                 email: email_val.clone(),
                 password: password_val.clone(),
+                // LINKS-45: identifies this browser to the approval gate. None
+                // when localStorage is unavailable, which is country-only
+                // behaviour rather than a failure.
+                device_id: crate::ui::auth_state::device_id(),
             };
 
             let response = http::post_response("/api/auth/login", &request).await;

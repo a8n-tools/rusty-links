@@ -18,8 +18,11 @@ use serde::Serialize;
 use sqlx::PgPool;
 
 use crate::auth::jwt::{create_jwt, generate_refresh_token};
+use crate::auth::known_device::{
+    hash_device_id, known_device_state, normalize_device_id, record_submitted_device,
+};
 use crate::auth::location_alert::{resolve_notify_new_location, spawn_new_location_check};
-use crate::auth::login_approval::{approval_country, request_login_approval};
+use crate::auth::login_approval::{approval_hold, request_login_approval};
 use crate::auth::middleware::{AuthenticatedUser, Claims};
 use crate::config::Config;
 use crate::models::{
@@ -53,11 +56,15 @@ pub async fn check_setup_handler(
 ///
 /// Every completion path goes through here, so the LINKS-35 gate has a single
 /// thing to sit in front of and a second implementation cannot drift away from
-/// this one.
+/// this one. It is also the only place a device is recorded from a sign-in
+/// (LINKS-45), which is what makes "recorded only when a sign-in COMPLETES"
+/// structural: a held attempt returns before reaching this function, so it can
+/// never make its device look familiar.
 async fn establish_jwt_session(
     pool: &PgPool,
     config: &Config,
     user: &User,
+    device_id: Option<&str>,
 ) -> Result<AuthResponse, AppError> {
     let token = create_jwt(
         &user.email,
@@ -77,6 +84,8 @@ async fn establish_jwt_session(
         .bind(expires_at)
         .execute(pool)
         .await?;
+
+    record_submitted_device(pool, user.id, device_id).await?;
 
     Ok(AuthResponse {
         token,
@@ -116,12 +125,15 @@ pub async fn setup_handler(
     let user = User::create(&pool, &request.email, &request.password, &request.name).await?;
     tracing::info!(user_id = %user.id, email = %user.email, "First user created");
 
-    // Never gated by the LINKS-35 approval gate: this creates the first user,
-    // so there is no prior country to differ from and holding it would mean the
-    // first user could never sign in.
-    let response = establish_jwt_session(&pool, &config, &user).await?;
+    // Never gated by the LINKS-35 / LINKS-45 approval gate: this creates the
+    // first user, so there is no prior country to differ from and no recorded
+    // device to be new against, and holding it would mean the first user could
+    // never sign in.
+    let device_id = normalize_device_id(request.device_id.as_deref());
+    let response = establish_jwt_session(&pool, &config, &user, device_id.as_deref()).await?;
 
     // Baseline this account's country so the next login from elsewhere alerts.
+    // `establish_jwt_session` baselined its device the same way.
     spawn_new_location_check(&pool, &config.mail, user.id, &headers);
 
     tracing::info!(user_id = %user.id, "Setup completed successfully");
@@ -161,9 +173,11 @@ pub async fn register_handler(
     )
     .await?;
 
-    // Never gated by the LINKS-35 approval gate, for the same reason as setup:
-    // the account is being created, so it has no prior country.
-    let response = establish_jwt_session(&pool, &config, &user).await?;
+    // Never gated by the LINKS-35 / LINKS-45 approval gate, for the same reason
+    // as setup: the account is being created, so it has neither a prior country
+    // nor a recorded device.
+    let device_id = normalize_device_id(request.device_id.as_deref());
+    let response = establish_jwt_session(&pool, &config, &user, device_id.as_deref()).await?;
 
     // Baseline this account's country so the next login from elsewhere alerts.
     spawn_new_location_check(&pool, &config.mail, user.id, &headers);
@@ -227,19 +241,39 @@ pub async fn login_handler(
     // Record successful attempt
     security::record_login_attempt(&pool, &request.email, true).await;
 
-    // LINKS-35: the credential check passed, so this is the point where a
-    // session would be issued and therefore where the gate belongs. With the
-    // gate on and the country new to this account, nothing is issued: the
-    // sign-in is held until the owner approves it from an emailed link. The
-    // LINKS-27 alert is not also fired, because the approval mail reports the
-    // same event and additionally asks for a decision, and `last_login_country`
-    // stays unwritten so an unapproved attempt cannot look familiar next time.
+    let device_id = normalize_device_id(request.device_id.as_deref());
+
+    // LINKS-35 / LINKS-45: the credential check passed, so this is the point
+    // where a session would be issued and therefore where the gate belongs.
+    // With the gate on and either the country or the device new to this
+    // account, nothing is issued: the sign-in is held until the owner approves
+    // it from an emailed link. The LINKS-27 alert is not also fired, because
+    // the approval mail reports the same event and additionally asks for a
+    // decision, and neither `last_login_country` nor `known_devices` is written
+    // so an unapproved attempt cannot look familiar next time.
     if config.mail.login_approval_enabled {
         // The third field is the per-user alert opt-out, deliberately unused: a
         // preference set from a session must not switch a security gate off.
         if let Some((email, previous, _opt_out)) = User::get_login_location(&pool, user.id).await? {
-            if let Some(country) = approval_country(&config.mail, previous.as_deref(), &headers) {
-                request_login_approval(&pool, &config, user.id, &email, &country, &headers).await?;
+            let known = known_device_state(&pool, user.id, device_id.as_deref()).await?;
+            if let Some(hold) = approval_hold(
+                &config.mail,
+                previous.as_deref(),
+                &headers,
+                known,
+                device_id.as_deref(),
+            ) {
+                let device_hash = device_id.as_deref().map(hash_device_id);
+                request_login_approval(
+                    &pool,
+                    &config,
+                    user.id,
+                    &email,
+                    &hold,
+                    device_hash.as_deref(),
+                    &headers,
+                )
+                .await?;
                 return Err(AppError::ApprovalRequired);
             }
         }
@@ -248,7 +282,7 @@ pub async fn login_handler(
     // Alert on a sign-in from a country this account has not used before.
     spawn_new_location_check(&pool, &config.mail, user.id, &headers);
 
-    let response = establish_jwt_session(&pool, &config, &user).await?;
+    let response = establish_jwt_session(&pool, &config, &user, device_id.as_deref()).await?;
 
     tracing::info!(
         user_id = %user.id,
@@ -299,9 +333,13 @@ pub async fn refresh_handler(
         .await?
         .ok_or(AppError::SessionExpired)?;
 
-    // Not gated by LINKS-35: this continues a session an earlier completed
-    // sign-in already issued, it is not a sign-in of its own.
-    Ok(Json(establish_jwt_session(&pool, &config, &user).await?))
+    // Not gated by LINKS-35 / LINKS-45: this continues a session an earlier
+    // completed sign-in already issued, it is not a sign-in of its own. No
+    // device is recorded for the same reason: the sign-in that minted this
+    // refresh token already recorded one.
+    Ok(Json(
+        establish_jwt_session(&pool, &config, &user, None).await?,
+    ))
 }
 
 /// POST /api/auth/logout (standalone)

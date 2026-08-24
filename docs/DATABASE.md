@@ -75,7 +75,8 @@ postgres:
 | Table        | Purpose                 | Rows (typical)  |
 |--------------|-------------------------|-----------------|
 | `users`      | User accounts           | 1-10            |
-| `pending_login_approvals` | Sign-ins held by the LINKS-35 approval gate | 0 (empty unless the gate is on) |
+| `pending_login_approvals` | Sign-ins held by the LINKS-35 / LINKS-45 approval gate | 0 (empty unless the gate is on) |
+| `known_devices` | Devices an account has completed a sign-in from (LINKS-45) | 1-5 per user |
 | `sessions`   | Authentication sessions | 1-5 per user    |
 | `links`      | Bookmarked links        | 100-10,000+     |
 | `categories` | Link categorization     | 10-100          |
@@ -178,19 +179,21 @@ CREATE TABLE users (
 
 ### pending_login_approvals
 
-A sign-in held by the LINKS-35 approval gate, waiting for the account owner to approve it from a single-use emailed link.
+A sign-in held by the LINKS-35 / LINKS-45 approval gate, waiting for the account owner to approve it from a single-use emailed link.
 
 ```sql
 CREATE TABLE pending_login_approvals (
-    id          UUID        PRIMARY KEY DEFAULT gen_random_uuid(),
-    user_id     UUID        NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-    token_hash  BYTEA       NOT NULL UNIQUE,
-    country     VARCHAR(2)  NOT NULL,
-    ip          TEXT        NOT NULL,
-    device      TEXT,
-    created_at  TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-    expires_at  TIMESTAMPTZ NOT NULL,
-    consumed_at TIMESTAMPTZ
+    id             UUID        PRIMARY KEY DEFAULT gen_random_uuid(),
+    user_id        UUID        NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    token_hash     BYTEA       NOT NULL UNIQUE,
+    country        VARCHAR(2),
+    ip             TEXT        NOT NULL,
+    device         TEXT,
+    created_at     TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    expires_at     TIMESTAMPTZ NOT NULL,
+    consumed_at    TIMESTAMPTZ,
+    reason         TEXT        NOT NULL DEFAULT 'new_country',
+    device_id_hash BYTEA
 );
 ```
 
@@ -201,12 +204,14 @@ CREATE TABLE pending_login_approvals (
 | `id`          | UUID        | PRIMARY KEY                | Row identifier                                          |
 | `user_id`     | UUID        | NOT NULL, FK -> users(id)  | Account whose sign-in is held                           |
 | `token_hash`  | BYTEA       | NOT NULL, UNIQUE           | SHA-256 of the emailed token; the token is never stored |
-| `country`     | VARCHAR(2)  | NOT NULL                   | ISO-3166-1 alpha-2 country the sign-in came from        |
+| `country`     | VARCHAR(2)  | NULL                       | ISO-3166-1 alpha-2 country the sign-in came from; NULL on a device-only hold where nothing resolved one |
 | `ip`          | TEXT        | NOT NULL                   | Client IP shown on the approval page                    |
-| `device`      | TEXT        | NULL                       | User-Agent shown on the approval page                   |
+| `device`      | TEXT        | NULL                       | User-Agent shown on the approval page; display only, never the device identity |
 | `created_at`  | TIMESTAMPTZ | NOT NULL, DEFAULT NOW()    | When the sign-in was held                               |
 | `expires_at`  | TIMESTAMPTZ | NOT NULL                   | 15 minutes after `created_at`                           |
 | `consumed_at` | TIMESTAMPTZ | NULL                       | When the link was claimed; NULL means still claimable   |
+| `reason`      | TEXT        | NOT NULL, DEFAULT `'new_country'` | Which trigger held the sign-in: `new_country`, `new_device`, or `new_country_and_device` |
+| `device_id_hash` | BYTEA    | NULL                       | SHA-256 of the device id the held sign-in submitted, promoted into `known_devices` when the link is claimed; NULL when the client sent none |
 
 **Indexes:**
 - `pending_login_approvals_user_id` - rows for one account
@@ -217,6 +222,47 @@ CREATE TABLE pending_login_approvals (
 - Single use is enforced by a conditional `UPDATE ... SET consumed_at = NOW() WHERE token_hash = $1 AND consumed_at IS NULL AND expires_at > NOW()`; the affected-row count decides a race between two concurrent clicks
 - Expired rows are swept opportunistically when the next sign-in is held; a leftover row is inert because every read is guarded on `expires_at` anyway
 - Rows exist only where `LOGIN_APPROVAL_ENABLED=true`; with the gate off the table stays empty
+- `country` became nullable in `20260824000015_create_known_devices.sql`: a device-only hold in the default deployment (no geoblock edge, no `TRUSTED_PROXY_CIDRS`) resolves no country, and a NOT NULL column would fail that insert and turn the hold into a 500
+- At most three live links per account at a time. The dedup collapses a retried sign-in from the same country on the same device into the live link it already has; the cap bounds a client that varies its device id on every attempt. Reaching the cap still holds the sign-in, it only stops another mail
+
+---
+
+### known_devices
+
+A device an account has completed a sign-in from (LINKS-45), which is what the approval gate's second trigger recognises.
+
+```sql
+CREATE TABLE known_devices (
+    id             UUID        PRIMARY KEY DEFAULT gen_random_uuid(),
+    user_id        UUID        NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    device_id_hash BYTEA       NOT NULL,
+    first_seen_at  TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    last_seen_at   TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    UNIQUE (user_id, device_id_hash)
+);
+```
+
+**Columns:**
+
+| Column           | Type        | Constraints                | Description                                             |
+|------------------|-------------|----------------------------|---------------------------------------------------------|
+| `id`             | UUID        | PRIMARY KEY                | Row identifier                                          |
+| `user_id`        | UUID        | NOT NULL, FK -> users(id)  | Account the device belongs to                           |
+| `device_id_hash` | BYTEA       | NOT NULL, UNIQUE with `user_id` | SHA-256 of the browser's device id; the id is never stored |
+| `first_seen_at`  | TIMESTAMPTZ | NOT NULL, DEFAULT NOW()    | When the account first completed a sign-in from it       |
+| `last_seen_at`   | TIMESTAMPTZ | NOT NULL, DEFAULT NOW()    | Touched by every later sign-in from it                   |
+
+**Indexes:**
+- `known_devices_user_id` - rows for one account
+- The `UNIQUE (user_id, device_id_hash)` constraint's implicit index serves the recognition lookup
+
+**Notes:**
+- **No backfill, deliberately.** The table is created empty, so every account that exists on the deploy that adds it has zero known devices. Zero devices is read as the account's baseline and is never treated as "new device", exactly as a NULL `users.last_login_country` is, so nobody is held on deploy day. See [SECURITY.md](SECURITY.md)
+- The device id is minted by the browser and kept in `localStorage`, then sent with the sign-in request as `device_id`. Only its SHA-256 is stored, so a database dump yields nothing that can be replayed as a known device
+- A row is written only when a sign-in COMPLETES or an approval is claimed, never from a held-and-unapproved attempt, so an attempt nobody approves cannot make its device look familiar
+- Recognition is scoped to `user_id`, so a shared browser one account has made known does not make a second account's first sign-in from it look familiar
+- The write is `INSERT ... ON CONFLICT (user_id, device_id_hash) DO UPDATE SET last_seen_at = NOW()`, so repeat sign-ins touch one row rather than growing the table
+- Rows accumulate for the life of the account and are removed with it by `ON DELETE CASCADE`. Letting a user list and revoke their own devices is tracked in LINKS-55
 
 ---
 
@@ -660,6 +706,7 @@ sqlx migrate info
 | 20250101000004 | Add consecutive_failures to links | 2025-01-01 |
 | 20250101000005 | Add scheduler fields (last_checked) to links | 2025-01-01 |
 | 20260821000014 | Add pending_login_approvals for the sign-in approval gate (LINKS-35) | 2026-08-21 |
+| 20260824000015 | Add known_devices for the approval gate's new-device trigger (LINKS-45) | 2026-08-24 |
 
 ### Creating Custom Migrations
 
@@ -723,6 +770,7 @@ Indexes are created for:
 | languages | idx_languages_user_id | user_id | B-tree | Find user's languages |
 | licenses | idx_licenses_user_id | user_id | B-tree | Find user's licenses |
 | tags | idx_tags_user_id | user_id | B-tree | Find user's tags |
+| known_devices | known_devices_user_id | user_id | B-tree | Devices for one account |
 
 ### Partial Indexes
 

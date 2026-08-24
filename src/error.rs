@@ -147,9 +147,12 @@ pub enum AppError {
 
     /// The sign-in is held pending the owner's approval (LINKS-35)
     ///
-    /// Returned instead of a session when a sign-in comes from a country the
-    /// account has not used before and the approval gate is on. Not a lock:
-    /// the emailed link approves it and the next sign-in completes.
+    /// Returned instead of a session when a sign-in comes from a country
+    /// (LINKS-35) or a device (LINKS-45) the account has not used before and
+    /// the approval gate is on. Not a lock: the emailed link approves it and
+    /// the next sign-in completes. The message names neither trigger, because
+    /// the mail explains which one fired and an unauthenticated response is not
+    /// the place to tell a caller which signal it tripped.
     ApprovalRequired,
 
     /// Membership required (SaaS mode)
@@ -357,7 +360,7 @@ impl AppError {
                 "Account is temporarily locked due to too many failed login attempts. Please try again later.".to_string()
             }
             AppError::ApprovalRequired => {
-                "This sign-in is from a new location, so we emailed you a link to approve it. Open the link, then sign in again.".to_string()
+                "We did not recognise this sign-in, so we emailed you a link to approve it. Open the link, then sign in again.".to_string()
             }
             AppError::ExternalService(msg) => {
                 format!("External service error: {}", msg)
