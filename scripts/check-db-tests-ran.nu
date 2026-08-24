@@ -110,9 +110,22 @@ def violations [rows: table, min_db_passed: int]: nothing -> list<string> {
     $found
 }
 
-# Prove the guard still detects a vacuous run. Without this, a broken parser
-# would pass every job silently, which is the same blindness one level up.
+# Prove the guard still detects a vacuous run, and that the parser still reads
+# what the harness actually prints. Without this, a broken parser would pass
+# every job silently, which is the same blindness one level up.
 def run-self-test [min_db_passed: int] {
+    let sample = "
+running 3 tests
+test schema_migrations_apply ... ok
+
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.42s
+"
+    let parsed = (summarize $sample)
+    if ($parsed.summaries != 1) or ($parsed.passed != 3) or ($parsed.failed != 0) or ($parsed.ignored != 0) or ($parsed.filtered != 0) {
+        print --stderr $"[check-db-tests] SELF-TEST FAILED: the parser no longer reads a real summary line: ($parsed)"
+        exit 1
+    }
+
     let vacuous = [
         {target: "db_example", db: true, exit: 0, summaries: 1, passed: 0, failed: 0, ignored: 0, filtered: 7}
         {target: "route_surface", db: false, exit: 0, summaries: 1, passed: 6, failed: 0, ignored: 0, filtered: 0}

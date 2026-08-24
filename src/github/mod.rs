@@ -46,6 +46,8 @@ struct GitHubLicense {
 ///
 /// # Examples
 /// ```
+/// use rusty_links::github::is_github_repo;
+///
 /// assert!(is_github_repo("https://github.com/rust-lang/rust"));
 /// assert!(is_github_repo("https://github.com/rust-lang/rust.git"));
 /// assert!(!is_github_repo("https://gitlab.com/user/project"));
@@ -70,6 +72,8 @@ pub fn is_github_repo(url: &str) -> bool {
 ///
 /// # Examples
 /// ```
+/// use rusty_links::github::parse_repo_from_url;
+///
 /// assert_eq!(
 ///     parse_repo_from_url("https://github.com/rust-lang/rust"),
 ///     Some(("rust-lang".to_string(), "rust".to_string()))
@@ -112,9 +116,17 @@ pub fn parse_repo_from_url(url: &str) -> Option<(String, String)> {
 /// - Authenticated requests (with GITHUB_TOKEN): 5000 requests per hour
 ///
 /// # Example
-/// ```
+/// `no_run`: the call reaches api.github.com, so it is compiled and type-checked
+/// but never executed by the test suite.
+/// ```no_run
+/// use rusty_links::error::AppError;
+/// use rusty_links::github::fetch_repo_metadata;
+///
+/// # async fn example() -> Result<(), AppError> {
 /// let metadata = fetch_repo_metadata("rust-lang", "rust").await?;
 /// println!("Stars: {}", metadata.stars);
+/// # Ok(())
+/// # }
 /// ```
 pub async fn fetch_repo_metadata(owner: &str, repo: &str) -> Result<GitHubRepoMetadata, AppError> {
     let url = format!("https://api.github.com/repos/{}/{}", owner, repo);

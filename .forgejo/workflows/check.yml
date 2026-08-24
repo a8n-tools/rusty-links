@@ -107,6 +107,18 @@ jobs:
       - name: Unit tests (server)
         run: cargo test --features server --lib
 
+      - name: Doc tests (server)
+        shell: nu {0}
+        # The doc examples are the one test target no `--lib` or `--all-targets`
+        # run compiles, so all ten had rotted into compile errors on missing
+        # `use` lines while every check stayed green (LINKS-48). The guard fails
+        # on an empty, ignored or filtered collection, because `cargo test --doc`
+        # exits 0 when it collects nothing, which is what the default-feature leg
+        # would do: `default = []` cfgs out every documented module.
+        run: |
+          nu scripts/check-doc-tests-ran.nu --self-test
+          nu scripts/check-doc-tests-ran.nu
+
       - name: Apply migrations to the test database
         # Creates the sibling `rustylinks_test` database and applies every
         # migration through sqlx::migrate!, so a migration that does not apply

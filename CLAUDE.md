@@ -13,12 +13,15 @@ IMPORTANT: Do NOT modify `./assets/tailwind.css`. All CSS should go in `./tailwi
 
 `just pre-commit` is the authoritative check suite: it runs every leg CI runs, in the dev container, and fails on the first red one. Run it before every commit.
 
-Its last leg runs the `tests/` targets against the compose `postgres` service via `scripts/check-db-tests-ran.nu`. Before LINKS-44 the only test legs were `cargo test --lib`, so every `tests/` target was compiled by `--all-targets` and never executed and no SQL in the repo was covered. New SQL belongs in a `tests/db_*.rs` case; the guard fails the build when a `db_*` target is missing, ignored, filtered out, or below its floor on passes, because `cargo test` exits 0 on an empty run.
+Its last two legs run the test targets that `cargo test --lib` never reaches, each behind a guard script, because `cargo test` exits 0 on an empty run and a suite that runs nothing looks identical to one that passes:
+
+- `scripts/check-doc-tests-ran.nu` runs `cargo test --features server --doc`. Nothing in the repo compiled a doc example before LINKS-48, so all ten had rotted into compile errors on missing `use` lines. The guard fails when the harness collected nothing, when anything is ignored or filtered out, or when passes fall below its floor. An example that must not execute is marked ```` ```no_run ```` (compiled and type-checked, never run) and still counts as a pass; ```` ```ignore ```` is never compiled and fails the leg.
+- `scripts/check-db-tests-ran.nu` runs the `tests/` targets against the compose `postgres` service. Before LINKS-44 every `tests/` target was compiled by `--all-targets` and never executed, so no SQL in the repo was covered. New SQL belongs in a `tests/db_*.rs` case; the guard fails when a `db_*` target is missing, ignored, filtered out, or below its floor on passes.
 
 IMPORTANT: `default = []`, so a bare `cargo check` / `cargo clippy` / `cargo test` compiles almost none of this crate. Every server module is behind `#[cfg(feature = "server")]`, so any command meant to verify server code must pass `--features server`.
 
 ```bash
-# Run every check CI runs (fmt, clippy, build, and tests under default + server, plus the wasm check)
+# Run every check CI runs (fmt, clippy, build, unit/doc/Postgres tests under default + server, plus the wasm check)
 just pre-commit
 
 # Run in development (requires PostgreSQL and .env file)
@@ -42,6 +45,12 @@ cargo test --features server --lib
 # Run a specific test
 cargo test --features server <test_name>
 
+# Run the doc examples with the vacuity guard, the same leg pre-commit and CI run
+just test-doc
+
+# Run the tests/ targets against the compose postgres, with the skip guard
+just test-db
+
 # Code quality (both legs; the default leg alone does not lint server code)
 cargo fmt
 cargo clippy --all-targets -- --deny warnings
@@ -60,7 +69,7 @@ The project uses Cargo features to separate server and client code:
 
 Server-only modules (`#[cfg(feature = "server")]`): api, auth, config, error, github, models, scheduler, scraper
 
-Because `default = []`, any check that omits `--features server` compiles none of those modules. `just pre-commit` and `.forgejo/workflows/check.yml` therefore run clippy, build, and test twice: once with default features and once with `--features server`. The `tests/` targets are all `#![cfg(feature = "server")]`, so they only ever run on the server leg.
+Because `default = []`, any check that omits `--features server` compiles none of those modules. `just pre-commit` and `.forgejo/workflows/check.yml` therefore run clippy, build, and test twice: once with default features and once with `--features server`. The `tests/` targets are all `#![cfg(feature = "server")]`, so they only ever run on the server leg, and so does the doc-test leg: every module carrying a doc example is behind `#[cfg(feature = "server")]`, so `cargo test --doc` without it collects zero tests and passes vacuously.
 
 There are no `standalone`/`saas` build features. A single binary and OCI image serves both deployment modes; the mode is resolved at runtime (see Configuration below).
 

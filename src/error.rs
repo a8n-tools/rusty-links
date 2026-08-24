@@ -47,10 +47,14 @@ pub enum AppError {
     ///
     /// # Example
     /// ```
-    /// AppError::Validation {
+    /// use rusty_links::error::AppError;
+    ///
+    /// let error = AppError::Validation {
     ///     field: "email".to_string(),
-    ///     message: "Email must contain @ symbol".to_string()
-    /// }
+    ///     message: "Email must contain @ symbol".to_string(),
+    /// };
+    /// assert_eq!(error.status_code(), 400);
+    /// assert_eq!(error.to_string(), "email: Email must contain @ symbol");
     /// ```
     Validation {
         /// Name of the field that failed validation
@@ -86,10 +90,14 @@ pub enum AppError {
     ///
     /// # Example
     /// ```
-    /// AppError::NotFound {
+    /// use rusty_links::error::AppError;
+    ///
+    /// let error = AppError::NotFound {
     ///     resource: "link".to_string(),
-    ///     id: "550e8400-e29b-41d4-a716-446655440000".to_string()
-    /// }
+    ///     id: "550e8400-e29b-41d4-a716-446655440000".to_string(),
+    /// };
+    /// assert_eq!(error.status_code(), 404);
+    /// assert_eq!(error.to_string(), "Link not found.");
     /// ```
     NotFound {
         /// Type of resource (e.g., "user", "link", "category")
@@ -105,9 +113,13 @@ pub enum AppError {
     ///
     /// # Example
     /// ```
-    /// AppError::Duplicate {
-    ///     field: "email".to_string()
-    /// }
+    /// use rusty_links::error::AppError;
+    ///
+    /// let error = AppError::Duplicate {
+    ///     field: "email".to_string(),
+    /// };
+    /// assert_eq!(error.status_code(), 409);
+    /// assert_eq!(error.to_string(), "Email already exists.");
     /// ```
     Duplicate {
         /// Name of the field that must be unique
@@ -185,7 +197,11 @@ impl AppError {
     ///
     /// # Example
     /// ```
+    /// use rusty_links::error::AppError;
+    ///
     /// let error = AppError::validation("email", "Email must contain @ symbol");
+    /// assert_eq!(error.error_code(), "VALIDATION_ERROR");
+    /// assert_eq!(error.status_code(), 400);
     /// ```
     pub fn validation(field: &str, message: &str) -> Self {
         AppError::Validation {
@@ -202,7 +218,11 @@ impl AppError {
     ///
     /// # Example
     /// ```
+    /// use rusty_links::error::AppError;
+    ///
     /// let error = AppError::not_found("link", "550e8400-e29b-41d4-a716-446655440000");
+    /// assert_eq!(error.error_code(), "NOT_FOUND");
+    /// assert_eq!(error.status_code(), 404);
     /// ```
     pub fn not_found(resource: &str, id: &str) -> Self {
         AppError::NotFound {
@@ -218,7 +238,11 @@ impl AppError {
     ///
     /// # Example
     /// ```
+    /// use rusty_links::error::AppError;
+    ///
     /// let error = AppError::duplicate("email");
+    /// assert_eq!(error.error_code(), "DUPLICATE_FIELD");
+    /// assert_eq!(error.status_code(), 409);
     /// ```
     pub fn duplicate(field: &str) -> Self {
         AppError::Duplicate {

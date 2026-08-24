@@ -317,12 +317,16 @@ just pre-commit
 The individual legs:
 
 ```bash
-cargo fmt
+cargo fmt --check
 cargo clippy --all-targets -- --deny warnings
 cargo clippy --all-targets --features server -- --deny warnings
-cargo check
-cargo check --features server
 cargo check --features web --target wasm32-unknown-unknown
+cargo build --all-targets
+cargo build --all-targets --features server
+cargo test --lib
+cargo test --features server --lib
+nu scripts/check-doc-tests-ran.nu   # the doc examples, with the vacuity guard
+nu scripts/check-db-tests-ran.nu    # the tests/ targets against Postgres, with the skip guard
 ```
 
 ---
