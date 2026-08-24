@@ -15,9 +15,9 @@ install-hooks:
     ^chmod +x $hook
     print $"Wrote ($hook) -> just pre-commit"
 
-# Run the cargo checks from .forgejo/workflows/check.yml inside the dev compose `app` container.
-# The workflow's three static guards (check-migration-immutability.nu, check-migration-docs.nu,
-# check-build-flags.nu) are not run here; LINKS-49 tracks guarding that divergence.
+# Run every check .forgejo/workflows/check.yml runs: the four static guards on the host, then
+# the cargo legs inside the dev compose `app` container. scripts/check-suite-parity.nu compares
+# this recipe against the workflow and fails when either grows, loses or weakens a leg (LINKS-49).
 # Covers all three compilation configurations: default features, `server`, and `web` on wasm.
 # `default = []` gates every server module behind `#[cfg(feature = "server")]`, so the
 # default-feature legs alone compile almost none of the crate (LINKS-36).
@@ -28,6 +28,13 @@ install-hooks:
 # the compose `postgres` service, which `cargo test --lib` never ran (LINKS-44).
 pre-commit: ensure-env ensure-css
     #!/usr/bin/env nu
+    print "\n[pre-commit] static guards"
+    ^nu scripts/check-suite-parity.nu --self-test
+    ^nu scripts/check-suite-parity.nu
+    ^nu scripts/check-migration-immutability.nu
+    ^nu scripts/check-migration-docs.nu --self-test
+    ^nu scripts/check-migration-docs.nu
+    ^nu scripts/check-build-flags.nu
     print "\n[pre-commit] cargo fmt --check"
     ^docker compose --file compose.dev.yml run --rm --no-deps app cargo fmt --check
     print "\n[pre-commit] cargo clippy --all-targets -- --deny warnings"
@@ -47,6 +54,8 @@ pre-commit: ensure-env ensure-css
     print "\n[pre-commit] doc tests (server)"
     ^nu scripts/check-doc-tests-ran.nu --self-test
     ^nu scripts/check-doc-tests-ran.nu --runner "docker compose --file compose.dev.yml run --rm --no-deps app"
+    print "\n[pre-commit] apply migrations to the test database"
+    ^docker compose --file compose.dev.yml run --rm app cargo test --features server --test db_schema
     print "\n[pre-commit] integration tests against the compose postgres"
     ^nu scripts/check-db-tests-ran.nu --self-test
     ^nu scripts/check-db-tests-ran.nu --runner "docker compose --file compose.dev.yml run --rm app"

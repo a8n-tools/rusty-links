@@ -615,15 +615,21 @@ Focus on testing:
 
 Tests run automatically on every push to `main` and every pull request. See `.forgejo/workflows/check.yml` for the complete configuration; the `check` job declares a `postgres:17-alpine` service (matching `compose.dev.yml`, so dev and CI agree) and exports `DATABASE_URL` for the database-backed legs. The `Doc tests (server)` step needs no database and runs before them.
 
-There is one job, on one runner label, against one Postgres version, with the toolchain the runner image ships (nothing in the repo pins one). Before the cargo legs it runs the static guards, which need no compiler: `scripts/check-migration-immutability.nu`, `scripts/check-migration-docs.nu` and `scripts/check-build-flags.nu`.
+There is one job, on one runner label, against one Postgres version, with the toolchain the runner image ships (nothing in the repo pins one). Before the cargo legs it runs the four static guards, which need no compiler: `scripts/check-suite-parity.nu`, `scripts/check-migration-immutability.nu`, `scripts/check-migration-docs.nu` and `scripts/check-build-flags.nu`.
 
 ### Local Pre-commit Testing
 
 ```bash
-# Run all checks before committing (every cargo leg .forgejo/workflows/check.yml runs)
+# Run all checks before committing (every check .forgejo/workflows/check.yml runs, in the same order)
 just pre-commit
 
 # Or manually:
+nu scripts/check-suite-parity.nu --self-test
+nu scripts/check-suite-parity.nu
+nu scripts/check-migration-immutability.nu
+nu scripts/check-migration-docs.nu --self-test
+nu scripts/check-migration-docs.nu
+nu scripts/check-build-flags.nu
 cargo fmt --check
 cargo clippy --all-targets -- --deny warnings
 cargo clippy --all-targets --features server -- --deny warnings
@@ -639,14 +645,18 @@ nu scripts/check-db-tests-ran.nu --self-test
 nu scripts/check-db-tests-ran.nu
 ```
 
-`just pre-commit` runs the cargo legs only. The workflow's three static guards are not in it, so run them yourself before pushing (LINKS-49 tracks guarding that divergence):
+`just pre-commit` runs that whole list, static guards included, so there is nothing left to run by hand before pushing.
 
-```bash
-nu scripts/check-migration-immutability.nu
-nu scripts/check-migration-docs.nu --self-test
-nu scripts/check-migration-docs.nu
-nu scripts/check-build-flags.nu
-```
+### Why the two copies of the suite are guarded against each other
+
+The `pre-commit` recipe in `justfile` and the steps in `.forgejo/workflows/check.yml` are two hand-maintained copies of one check suite, and until LINKS-49 nothing compared them. `scripts/check-suite-parity.nu` does, as a static guard needing no compiler:
+
+- It reads the cargo invocations out of the `pre-commit` recipe body and out of every `run:` step in the workflow. The justfile's `docker compose ... app` prefix is stripped at the `cargo` token, and lines that are neither a cargo invocation nor a `nu scripts/*.nu` call (`print`, the `CARGO_BUILD_JOBS` export, the stylesheet placeholder) are ignored. Quoted runs stay one token, so a `print "... cargo clippy ..."` line is not mistaken for a leg.
+- It normalises each invocation into a canonical leg: subcommand, a sorted feature set, the target, the remaining flags sorted, and the lint flags behind `--`. `-D warnings` and `--deny warnings` are the same token, as are `--features=web` and `--features web`, so each file keeps its own local style and only a real difference reads as drift. Flag order is not drift either.
+- Guard-script calls compare on the script name and whether `--self-test` was passed. The recipe's `--runner` argument is plumbing (locally cargo runs inside the compose container, in CI on the runner), not part of the leg.
+- The comparison runs in both directions: a leg or guard in the recipe but not the workflow fails, and a leg or guard in the workflow but not the recipe fails.
+- It also enforces two per-file invariants, which are the drift that survives being applied to both copies at once: every clippy leg must pass `--deny warnings`, and the clippy legs together must cover all three compilation configurations (default, `--features server`, and `--features web --target wasm32-unknown-unknown`). That last one is the LINKS-39 hazard: `.cargo/config.toml` pins `[build] target = "x86_64-unknown-linux-gnu"`, so a wasm leg that lost `--target` still runs, still exits 0, and quietly re-lints the host build two other legs already cover.
+- Floors on the parsed counts mean a parser that stopped matching fails rather than comparing an empty set to an empty set, and `--self-test` runs first at both call sites, feeding a synthetic pair through the real parser to prove a dropped `--target`, a dropped `--deny warnings`, a one-sided leg, a one-sided guard and an unparseable file are all still rejected.
 
 ### Why the test legs are scripts and not a bare `cargo test`
 
@@ -655,7 +665,7 @@ nu scripts/check-build-flags.nu
 - `scripts/check-db-tests-ran.nu` runs each `tests/*.rs` target and fails when a `db_*` target is missing, ignored, filtered, or below the floor on database-backed passes.
 - `scripts/check-doc-tests-ran.nu` runs `cargo test --features server --doc` and fails when the harness collected nothing, when anything is ignored or filtered out, or when passes fall below the floor. The server leg is the one that runs it: `default = []` cfgs out every module holding an example, so the default-feature leg would collect zero doc tests and still exit 0. An example that must not execute is marked ```` ```no_run ````, which rustdoc compiles and type-checks and reports as a pass; ```` ```ignore ```` is not compiled at all and fails the leg.
 
-The three clippy legs need no such guard, and LINKS-39 checked before deciding rather than adding one for symmetry. `cargo clippy -- --deny warnings` has no green-but-empty state to detect: a feature name Cargo.toml does not define is a cargo error (and `scripts/check-build-flags.nu` rejects it in CI before any cargo runs), and a `--target` the toolchain lacks is a hard `E0463: can't find crate for core`, verified against an uninstalled `wasm32-wasip1` at exit 101. The failure the wasm leg really had was the opposite of vacuity: it ran, it printed its findings, and `cargo check` with no `--deny warnings` exited 0 anyway. The residual risk is one level up, in a later edit that drops `--target` or `--deny warnings` from one of the two copies of the suite; a parity guard over `justfile` and `.forgejo/workflows/check.yml` is tracked in LINKS-49.
+The three clippy legs need no such guard, and LINKS-39 checked before deciding rather than adding one for symmetry. `cargo clippy -- --deny warnings` has no green-but-empty state to detect: a feature name Cargo.toml does not define is a cargo error (and `scripts/check-build-flags.nu` rejects it in CI before any cargo runs), and a `--target` the toolchain lacks is a hard `E0463: can't find crate for core`, verified against an uninstalled `wasm32-wasip1` at exit 101. The failure the wasm leg really had was the opposite of vacuity: it ran, it printed its findings, and `cargo check` with no `--deny warnings` exited 0 anyway. The residual risk is one level up, in a later edit that drops `--target` or `--deny warnings` from one of the two copies of the suite. `scripts/check-suite-parity.nu` covers that risk instead of a per-leg runtime guard (LINKS-49); see "Why the two copies of the suite are guarded against each other" above.
 
 ---
 
