@@ -1,5 +1,7 @@
 # Rusty Links - Phase 1 Product Specification
 
+> **Historical document.** Written during the initial build and kept for the record, body unchanged. It describes what was planned, not what runs today. For current behaviour see [README.md](../../README.md) and the documents it links.
+
 ## Project Overview
 
 **Project Name:** Rusty Links  

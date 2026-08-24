@@ -436,6 +436,7 @@ sqlx migrate run
 - Migrations here are simple (one `.sql` per version), not reversible: there is no `.down.sql` and `sqlx migrate revert` does not apply
 - Never modify, rename or delete a migration that has merged to `main`; `scripts/check-migration-immutability.nu` fails the PR if you do
 - Add a row for the new migration to the Migration History table in [docs/DATABASE.md](docs/DATABASE.md); `scripts/check-migration-docs.nu` fails the PR if you do not
+- Bring the Tables Reference in the same file in line with what the migration applies; `database_doc_matches_the_migrated_schema` in `tests/db_schema.rs` compares every table and column against a migrated database in both directions and fails the PR if you do not (LINKS-53)
 - Document complex migrations in the file's leading comment
 
 ## Release Process

@@ -32,8 +32,9 @@ services:
       - ./Cargo.lock:/app/Cargo.lock
       - ./Dioxus.toml:/app/Dioxus.toml
       - ./static:/app/static
-      # Persist cargo registry and build artifacts across image rebuilds
-      - cargo_home:/root/.cargo
+      # CARGO_HOME is /usr/local/cargo in the image, not /root/.cargo, so the volume
+      # only caches the registry and installed binaries when mounted there (LINKS-57).
+      - cargo_home:/usr/local/cargo
       - cargo_target:/app/target
     env_file: .env
     environment:
@@ -48,6 +49,8 @@ services:
 
 volumes:
   cargo_home:
+    # Docker seeds this from the image only while it is empty, so run `just dev-clean`
+    # after a base-image bump or the old toolchain shadows the new one (LINKS-57).
     name: rusty-links-cargo-${USER}
   cargo_target:
     name: rusty-links-target-${USER}

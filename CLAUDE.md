@@ -76,7 +76,7 @@ The project uses Cargo features to separate server and client code:
 - `server` - Enables Axum, SQLx, Tokio, and server-side modules
 - `web` - Enables WASM/browser-specific dependencies (gloo-net, web-sys)
 
-Server-only modules (`#[cfg(feature = "server")]`): api, auth, config, error, github, models, scheduler, scraper
+Server-only modules (`#[cfg(feature = "server")]`): api, auth, config, error, github, models, scheduler, scraper, security
 
 Because `default = []`, any check that omits `--features server` compiles none of those modules. `just pre-commit` and `.forgejo/workflows/check.yml` therefore run build and test twice, once with default features and once with `--features server`, and clippy three times, adding `--features web --target wasm32-unknown-unknown`. That third leg is the only one that compiles `#[cfg(target_arch = "wasm32")]` code, so a warning there is invisible to the other two; it was a bare `cargo check` with no `--deny warnings` until LINKS-39, which is how five of them accumulated. The `tests/` targets are all `#![cfg(feature = "server")]`, so they only ever run on the server leg, and so does the doc-test leg: every module carrying a doc example is behind `#[cfg(feature = "server")]`, so `cargo test --doc` without it collects zero tests and passes vacuously.
 
@@ -95,6 +95,7 @@ There are no `standalone`/`saas` build features. A single binary and OCI image s
 - **GitHub**: `src/github/` - GitHub API integration for repo metadata (stars, languages, licenses)
 - **Config**: `src/config.rs` - Environment-based configuration
 - **Errors**: `src/error.rs` - Centralized error handling with `AppError` type
+- **Security**: `src/security.rs` - SSRF guard every scrape target passes through (`validate_url_for_ssrf`), plus the password policy, the login-attempt lockout, and the scheduler's login-attempt and refresh-token cleanups
 
 ## Docker Directory Structure
 
@@ -111,6 +112,7 @@ Migrations are embedded at compile time by `sqlx::migrate!()` and are not copied
 - Migrations in `migrations/` directory, run automatically on startup
 - A committed migration is immutable; fixes go in a NEW migration (`scripts/check-migration-immutability.nu`)
 - A new migration also needs a row in the Migration History table in `docs/DATABASE.md`, or `scripts/check-migration-docs.nu` fails CI. The table had drifted to six of fourteen rows before that guard existed (LINKS-46)
+- A migration that adds or drops a table or column also needs the Tables Reference in `docs/DATABASE.md` updated, or `database_doc_matches_the_migrated_schema` in `tests/db_schema.rs` fails: it compares every documented table and column against a migrated database in both directions. That guard is a test rather than a static script because the applied shape is not readable from the SQL text (`20250101000007` drops and re-adds `links.logo` inside a PL/pgSQL block). The reference had drifted through eleven migrations before it existed (LINKS-53)
 - Connection pool: 5 max connections, 30s timeout, 10min idle timeout
 - Tests get their own database: `tests/common/mod.rs::test_pool` derives `<database>_test` from `DATABASE_URL`, creates it, and migrates it, so a `just pre-commit` run never writes to dev data
 
