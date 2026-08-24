@@ -15,6 +15,7 @@ use lettre::transport::smtp::authentication::Credentials;
 use lettre::transport::smtp::AsyncSmtpTransportBuilder;
 use lettre::{AsyncSmtpTransport, AsyncTransport, Message, Tokio1Executor};
 
+use crate::auth::login_approval::Hold;
 use crate::config::{MailConfig, SmtpTlsMode};
 use crate::error::AppError;
 
@@ -38,7 +39,7 @@ If you do not recognise this sign-in, someone else may have access to your accou
 const LOGIN_APPROVAL_BODY: &str = "\
 Approve the sign-in to your Rusty Links account
 
-A sign-in to your Rusty Links account came from a country you have not used before, so it is being held and no session was issued.
+A sign-in to your Rusty Links account came {reason}, so it is being held and no session was issued.
 
 Country: {country}
 When: {timestamp}
@@ -203,15 +204,21 @@ pub async fn send_new_signin_location_email(
 pub async fn send_login_approval_email(
     mail: &MailConfig,
     email: &str,
-    country: &str,
+    hold: &Hold,
     ip: &str,
     device: Option<&str>,
     approval_url: &str,
     expires_in_minutes: i64,
 ) -> Result<(), AppError> {
-    let subject = format!("Approve the sign-in to your Rusty Links account from {country}");
+    // A device-only hold in a deployment with no geoblock edge resolves no
+    // country, so the subject names one only when there is one to name.
+    let subject = match hold.country.as_deref() {
+        Some(country) => format!("Approve the sign-in to your Rusty Links account from {country}"),
+        None => "Approve the sign-in to your Rusty Links account".to_string(),
+    };
     let body = LOGIN_APPROVAL_BODY
-        .replace("{country}", country)
+        .replace("{reason}", hold.reason.summary())
+        .replace("{country}", hold.country.as_deref().unwrap_or("unknown"))
         .replace("{timestamp}", &Utc::now().to_rfc3339())
         .replace("{ip_address}", ip)
         .replace("{device}", device.unwrap_or("unknown"))
@@ -224,6 +231,7 @@ pub async fn send_login_approval_email(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::auth::login_approval::HoldReason;
 
     // Log mode is the unconfigured default: no SMTP host or sender means the
     // alert is logged, never sent, and never errors a login.
@@ -313,22 +321,47 @@ mod tests {
 
     // The approval mail carries the link and its lifetime, and leaves no
     // placeholder behind: a half-interpolated link is an unapprovable sign-in.
+    // Every hold reason is checked, because a reason with no text of its own
+    // would leave `{reason}` in the body (LINKS-45).
     #[test]
     fn approval_body_interpolates_every_placeholder() {
+        for reason in [
+            HoldReason::NewCountry,
+            HoldReason::NewDevice,
+            HoldReason::NewCountryAndDevice,
+        ] {
+            let body = LOGIN_APPROVAL_BODY
+                .replace("{reason}", reason.summary())
+                .replace("{country}", "DE")
+                .replace("{timestamp}", "2026-08-21T00:00:00Z")
+                .replace("{ip_address}", "203.0.113.7")
+                .replace("{device}", "Firefox")
+                .replace(
+                    "{approval_url}",
+                    "https://links.example.com/auth/approve-login?token=abc",
+                )
+                .replace("{expires_in_minutes}", "15");
+            assert!(body.contains("Country: DE"));
+            assert!(body.contains(reason.summary()), "{reason:?}");
+            assert!(body.contains("https://links.example.com/auth/approve-login?token=abc"));
+            assert!(body.contains("expires in 15 minutes"));
+            assert!(!body.contains('{'), "{reason:?} left a placeholder behind");
+        }
+    }
+
+    // A device-only hold in a deployment that resolves no country still reads
+    // as a complete message: the country line says "unknown" rather than
+    // leaving the placeholder or an empty field.
+    #[test]
+    fn approval_body_names_no_country_as_unknown() {
+        let hold = Hold {
+            reason: HoldReason::NewDevice,
+            country: None,
+        };
         let body = LOGIN_APPROVAL_BODY
-            .replace("{country}", "DE")
-            .replace("{timestamp}", "2026-08-21T00:00:00Z")
-            .replace("{ip_address}", "203.0.113.7")
-            .replace("{device}", "Firefox")
-            .replace(
-                "{approval_url}",
-                "https://links.example.com/auth/approve-login?token=abc",
-            )
-            .replace("{expires_in_minutes}", "15");
-        assert!(body.contains("Country: DE"));
-        assert!(body.contains("https://links.example.com/auth/approve-login?token=abc"));
-        assert!(body.contains("expires in 15 minutes"));
-        assert!(!body.contains('{'));
+            .replace("{reason}", hold.reason.summary())
+            .replace("{country}", hold.country.as_deref().unwrap_or("unknown"));
+        assert!(body.contains("Country: unknown"));
     }
 
     // Log mode never errors, so an unconfigured deployment sees the link in the
@@ -338,7 +371,10 @@ mod tests {
         let result = send_login_approval_email(
             &MailConfig::default(),
             "user@example.com",
-            "DE",
+            &Hold {
+                reason: HoldReason::NewCountry,
+                country: Some("DE".to_string()),
+            },
             "203.0.113.7",
             None,
             "https://links.example.com/auth/approve-login?token=abc",
@@ -346,5 +382,22 @@ mod tests {
         )
         .await;
         assert!(result.is_ok());
+
+        // A device-only hold in a deployment that resolves no country still
+        // sends: the subject simply names no country.
+        let device_only = send_login_approval_email(
+            &MailConfig::default(),
+            "user@example.com",
+            &Hold {
+                reason: HoldReason::NewDevice,
+                country: None,
+            },
+            "203.0.113.7",
+            None,
+            "https://links.example.com/auth/approve-login?token=abc",
+            15,
+        )
+        .await;
+        assert!(device_only.is_ok());
     }
 }

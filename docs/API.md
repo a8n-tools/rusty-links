@@ -118,9 +118,12 @@ Create the first user account during initial application setup.
 ```json
 {
   "email": "admin@example.com",
-  "password": "secure_password"
+  "password": "secure_password",
+  "device_id": "9f2c1b7a4e5d4f0ab3c8d1e2f3a4b5c6"
 }
 ```
+
+`device_id` is optional and behaves exactly as it does on [Login](#login): supplying it baselines this browser as the account's first known device, so the next sign-in from it is not held by the approval gate. Setup itself is never held.
 
 **Response:** 201 Created
 
@@ -163,9 +166,16 @@ Authenticate with email and password.
 ```json
 {
   "email": "user@example.com",
-  "password": "user_password"
+  "password": "user_password",
+  "device_id": "9f2c1b7a4e5d4f0ab3c8d1e2f3a4b5c6"
 }
 ```
+
+| Field       | Required | Description                                                                 |
+|-------------|----------|-----------------------------------------------------------------------------|
+| `email`     | yes      | Account address                                                              |
+| `password`  | yes      | Account password                                                             |
+| `device_id` | no       | An opaque id identifying this browser to the approval gate (LINKS-45). The web UI mints a random one and keeps it in `localStorage`; only its SHA-256 is stored. **Omitting it is always safe:** an absent id means "not submitted", never "new device", so a client that leaves it out gets exactly the country-only behaviour |
 
 **Response:** 200 OK
 
@@ -181,7 +191,7 @@ Sets `session_id` cookie (HTTP-only, secure in production).
 
 **Errors:**
 - 401 Unauthorized - Invalid email or password
-- 403 Forbidden, `APPROVAL_REQUIRED` - the sign-in is held by the approval gate (LINKS-35); see below
+- 403 Forbidden, `APPROVAL_REQUIRED` - the sign-in is held by the approval gate (LINKS-35, LINKS-45); see below
 - 429 Too Many Requests - account temporarily locked after repeated failures
 
 **Example:**
@@ -200,26 +210,35 @@ curl -X POST http://localhost:8080/api/auth/login \
 
 ### Sign-in Approval Gate
 
-Only when `LOGIN_APPROVAL_ENABLED=true` (standalone mode; default off). A sign-in that passes the password but comes from a country the account has not been used from before issues no token at all and answers:
+Only when `LOGIN_APPROVAL_ENABLED=true` (standalone mode; default off). A sign-in that passes the password but does not look familiar issues no token at all and answers:
 
 ```json
 {
-  "error": "This sign-in is from a new location, so we emailed you a link to approve it. Open the link, then sign in again.",
+  "error": "We did not recognise this sign-in, so we emailed you a link to approve it. Open the link, then sign in again.",
   "code": "APPROVAL_REQUIRED",
   "status": 403
 }
 ```
 
-No JWT, no refresh token, and no `last_login_country` write. The user is emailed a single-use link to the approval page, which is served at the server root rather than under `/api` because a human opens it in a browser:
+Two triggers feed the one gate, and either alone holds:
+
+| Trigger | Fires when | Never fires when |
+|---------|------------|------------------|
+| New country (LINKS-35) | The edge resolved a country and the account's `last_login_country` is a different one | The account has no prior country, or the edge resolved none |
+| New device (LINKS-45) | The request carried a `device_id`, the account has at least one row in `known_devices`, and the id matches none of them | The request carried no `device_id`, or the account has no known devices at all |
+
+The response body is identical either way and names neither trigger; the mail says which one fired.
+
+No JWT, no refresh token, no `last_login_country` write, and no `known_devices` write. The user is emailed a single-use link to the approval page, which is served at the server root rather than under `/api` because a human opens it in a browser:
 
 | Endpoint                              | Purpose                                                                 |
 |---------------------------------------|-------------------------------------------------------------------------|
-| `GET /auth/approve-login?token=<t>`   | Shows the country, IP, device, and time. Validates only; never consumes the token, so a link scanner cannot burn it |
-| `POST /auth/approve-login`            | Form post with `token=<t>`. Claims the token, once, and records the country as the account's known one |
+| `GET /auth/approve-login?token=<t>`   | Shows which trigger fired, plus the country, IP, device, and time. Validates only; never consumes the token, so a link scanner cannot burn it |
+| `POST /auth/approve-login`            | Form post with `token=<t>`. Claims the token, once, and records the country as the account's known one and the held sign-in's `device_id` as one of its known devices |
 
-Both answer HTML: 200 for a valid token, 400 for one that is unknown, already used, or past its 15-minute expiry. After approving, sign in again; the country is no longer new, so the sign-in completes.
+Both answer HTML: 200 for a valid token, 400 for one that is unknown, already used, or past its 15-minute expiry. After approving, sign in again from the same browser; neither the country nor the device is new any more, so the sign-in completes. The approval link may be opened anywhere (a phone, a mail client): the device recorded is the one the HELD sign-in submitted, never the one that opened the link.
 
-Two sign-ins are never gated: a first-ever one (no prior country) and one whose country the edge did not resolve. The gate ignores the per-user `notify_new_location` opt-out, which governs the alert only. Recovery when the email cannot be received is in `docs/SECURITY.md` and does not depend on email.
+The gate ignores the per-user `notify_new_location` opt-out, which governs the LINKS-27 alert only and disables neither trigger. What the device signal does and does not detect, and the deploy-day backfill decision, are in `docs/SECURITY.md`, as is recovery when the email cannot be received, which does not depend on email.
 
 ---
 

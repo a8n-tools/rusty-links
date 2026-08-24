@@ -1,8 +1,9 @@
 //! Authentication module for Rusty Links.
 //!
 //! - `jwt`      — HS256 JWT creation/validation (standalone mode)
+//! - `known_device` - device recognition for the approval gate (LINKS-45)
 //! - `location_alert` - new-sign-in-country detection (LINKS-27)
-//! - `login_approval` - approval gate for a sign-in from a new country (LINKS-35)
+//! - `login_approval` - approval gate for a sign-in from a new country or device (LINKS-35, LINKS-45)
 //! - `mailer`   - outbound security notification email
 //! - `middleware` — Axum extractors for authentication
 //! - `oidc_rs`  — OIDC Resource Server token verifier (hosted mode)
@@ -13,6 +14,7 @@
 //! runtime from the configuration (see [`crate::config::Config::hosted`]).
 
 pub mod jwt;
+pub mod known_device;
 pub mod location_alert;
 pub mod login_approval;
 pub mod mailer;

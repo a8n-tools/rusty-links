@@ -67,6 +67,7 @@ Cookie::build((SESSION_COOKIE_NAME, session_id))
 - The country comes from the `X-IPCountry` header injected by the reverse proxy's geoblock plugin; there is no geoip database, and with no such header no country resolves and no alert fires
 - The header is honored only from a trusted-proxy peer (LINKS-31, `TRUSTED_PROXY_CIDRS`), so a client reaching the app directly can neither fake a foreign sign-in nor pin every login to one country and silence the alert
 - A first-ever login and a repeat from the same country are never flagged
+- Country-only: the LINKS-45 device signal feeds the approval gate below and deliberately does not raise an alert of its own
 - Per-user opt-out (`users.notify_new_location`), a global kill switch (`LOGIN_LOCATION_ALERTS_ENABLED`), and a cap of one alert per user per country per day
 - The opt-out is the user's to set (LINKS-33): `GET /api/auth/me` reports it and `PATCH /api/auth/me` changes it, scoped to the session's account, so a request body can never flip another user's setting
 - An absent `notify_new_location` key on the patch means "not submitted" and leaves the stored value alone; an explicit `false` persists and a non-boolean is rejected with 400
@@ -74,35 +75,66 @@ Cookie::build((SESSION_COOKIE_NAME, session_id))
 - Alert mail leaves over an encrypted SMTP connection by default (LINKS-37): `SMTP_TLS` defaults to `starttls` (STARTTLS required, port 587) and `tls` selects implicit TLS (port 465)
 - Plaintext SMTP is reachable only by setting `SMTP_TLS=none` for a trusted loopback or sidecar MTA, and every send logs a warning naming the host, so a plaintext deployment is never silent
 
-✅ **Sign-in Approval Gate** (LINKS-35)
+✅ **Sign-in Approval Gate** (LINKS-35, LINKS-45)
 - Opt-in (`LOGIN_APPROVAL_ENABLED=true`, exact match, OFF by default) because unlike the alert it can stop a real sign-in
-- Turns the LINKS-27 detection into a gate: a sign-in that passes the password but comes from a country the account has not used before issues no JWT, no refresh token, and no session, and answers `403 APPROVAL_REQUIRED`
-- The user is emailed a single-use link; opening it shows the country, IP, device, and time, and a POST behind a button approves it. An attempt nobody approves simply never completes
+- Withholds a session on a sign-in that passes the password but does not look familiar: no JWT, no refresh token, and no session are issued, and the answer is `403 APPROVAL_REQUIRED`
+- **Two triggers, one gate, one switch.** A country the account has not used before (LINKS-35) and a device it has not used before (LINKS-45). Either alone holds. A sign-in that trips both is held once and approved once, not twice. `LOGIN_APPROVAL_ENABLED` disables both; there is deliberately no second flag
+- The user is emailed a single-use link; opening it shows which trigger fired, the country, IP, device, and time, and a POST behind a button approves it. An attempt nobody approves simply never completes
 - Notify-and-approve, not a lock: nothing about the account is disabled, and the owner stays in control
-- NEVER gated, by construction, because gating either would lock a real user out: a first-ever sign-in (no prior country, which is what `POST /api/auth/setup` creates) and a sign-in whose country does not resolve (no geoblock edge, or `TRUSTED_PROXY_CIDRS` empty)
+- NEVER gated, by construction, because gating any of these would lock a real user out:
+  - a first-ever sign-in, which has no prior country and no recorded device (this is what `POST /api/auth/setup` creates)
+  - a sign-in whose country does not resolve (no geoblock edge, or `TRUSTED_PROXY_CIDRS` empty), on the country trigger
+  - an account with **no recorded devices**, on the device trigger, which is every account on the deploy that adds the table (see the backfill note below)
+  - a sign-in that submits no device id at all, on the device trigger
 - The token is 256 bits of randomness and only its SHA-256 is stored, so a database dump cannot mint or replay an approval link
 - Single use: the claim is a conditional `UPDATE ... WHERE consumed_at IS NULL AND expires_at > NOW()`, and the affected-row count decides the race, so two concurrent clicks cannot both succeed. The link expires after 15 minutes
 - The GET deliberately does not consume the token, so a mail gateway or link scanner opening the URL cannot burn the user's only link
-- Ignores the `users.notify_new_location` opt-out on purpose: that preference is written from an authenticated session, so honoring it would let anyone holding a session switch the control off, and an opted-out user would be held with no mail to approve with
-- `last_login_country` is written only when a sign-in completes or an approval is claimed, so an attempt nobody approves cannot make its country look familiar next time
-- Scope: only this service's own credential login. The OIDC callback is not gated, because there the external OP made the authentication decision and that is where a step-up belongs
+- Ignores the `users.notify_new_location` opt-out on purpose: that preference is written from an authenticated session, so honoring it would let anyone holding a session switch the control off, and an opted-out user would be held with no mail to approve with. The opt-out governs the LINKS-27 alert only, and it disables neither trigger
+- `last_login_country` and `known_devices` are written only when a sign-in completes or an approval is claimed, so an attempt nobody approves cannot make its country or its device look familiar next time
+- At most three live links per account at a time, so a client that varies its device id on every attempt cannot mail an unbounded stream of them. The cap still holds the sign-in, it only stops another mail
+- Scope: only this service's own credential login, and the device trigger does not change that. The OIDC callback is not gated, because there the external OP made the authentication decision, owns the credential and owns recovery; a hosted deployment need not configure SMTP, so holding there would convert a control into a lockout with no way back
 - Recovery when the approval email cannot be received is below, and does not depend on email
+
+#### What the device signal is, and what it is not (LINKS-45)
+
+- **The identity is a random id the browser mints once** and keeps in `localStorage`, sent with the sign-in request as `device_id`. Only its SHA-256 reaches the database (`known_devices.device_id_hash`), so a database dump yields nothing that can be replayed as a known device
+- **The User-Agent is deliberately NOT the identity.** It changes on every browser update, so a UA-derived device would hold every user after each browser release. That is a recurring lockout, and worse, it trains people to approve reflexively, which would destroy the value of the country trigger too. The UA is still recorded for the approval page to display, and nothing decides on it
+- **The id travels with the request, not on a response.** That is what makes approving terminate: the hold writes the submitted id's hash onto its pending row and claiming the link promotes it into `known_devices`. A value the server set on the approval response would mark whichever browser opened the email, usually a different one, and leave the held browser challenged forever
+- **The id grants nothing.** Sending one authenticates nobody and forging one gains nothing, because a value the account has no row for is exactly as unrecognised as no value at all
+- **What it detects:** a sign-in from a browser profile that has never completed one for this account
+- **What it does NOT detect, and cannot:** cleared site data, a private window, a second browser on the same machine, and a genuinely new machine are indistinguishable, because none of them carries the stored id. The failure mode is an extra approval mail, never a missed attacker
+- **Not an anti-automation control.** A client that sends no `device_id` is never held on this signal, so an API client or `curl` behaves exactly as it does today. This is hardening for the app's own sign-in form, not a bot gate
+- Recognition is scoped to the account, so a shared browser that one account has made known does not make a second account's first sign-in from it look familiar
+- Known devices are kept for the life of the account and removed with it. Letting a user list and revoke their own devices is tracked in LINKS-55
+
+#### Deploy day: no backfill, and nobody is held
+
+`known_devices` is created **empty and is deliberately not backfilled**. Every account that exists when the migration runs therefore has zero known devices.
+
+**Zero known devices is read as the account's baseline, never as "new device".** It is the exact analogue of a NULL `users.last_login_country`, and it means:
+
+- Nobody is held on the first sign-in after the deploy, including the operator. Reading it the other way would hold the entire user base at once, with an emailed link as the only way back in, on a deployment that may not even have SMTP configured
+- That first completed sign-in **records** the device, which is what establishes the baseline. From then on a different browser is genuinely new and is held
+- A first-ever sign-in is covered by the same rule rather than by a special case: a brand-new account has no recorded device either, so `POST /api/auth/setup` can never hold the first user out of their own instance
+
+The predicate is a single expression (`location_alert::is_new_device`): a device is new only when the account HAS devices AND an id was submitted AND it matches none of them. Every never-held case above is a case where one of those three is false.
 
 #### Recovering from a lost approval email
 
 This gate can lock a user out of their own instance, so the way back in does not depend on email. In order:
 
 1. **Turn the gate off.** Set `LOGIN_APPROVAL_ENABLED=false` (or remove it) and restart the container. The password sign-in works again immediately. No deploy and no code change, which is the whole point of the flag being an environment variable.
-2. **Clear the stored country**, when the environment cannot be changed but the database can:
+2. **Clear the stored baselines**, when the environment cannot be changed but the database can:
 
    ```sql
    UPDATE users SET last_login_country = NULL WHERE email = '<address>';
+   DELETE FROM known_devices WHERE user_id = (SELECT id FROM users WHERE email = '<address>');
    ```
 
-   The next sign-in then has no prior country, so it is treated as a first-ever sign-in and is never gated. The country is re-recorded on that sign-in.
+   The next sign-in then has no prior country and no recorded device, so it is treated as a first-ever sign-in and is never gated on either trigger. Both baselines are re-recorded on that sign-in. Clearing one alone is enough only if that is the trigger that fired; clearing both always works.
 3. **Read the link out of the log**, when SMTP is in log mode. With no `SMTP_HOST`/`SMTP_FROM_EMAIL` the approval mail is logged instead of sent, body and link included, and the app warns about exactly this at startup. Prefer path 1 or 2; a deployment turning the gate on should configure SMTP first.
 
-There is deliberately **no** way to approve a held sign-in from the database: only the SHA-256 of the emailed token is stored.
+There is deliberately **no** way to approve a held sign-in from the database: only the SHA-256 of the emailed token is stored. Recovery path 2 is the database-side way back in, and it clears the baselines rather than approving anything.
 
 ✅ **Trusted Proxy Gate** (LINKS-31)
 - `X-Forwarded-For`, `X-Real-Ip`, and `X-IPCountry` are read only when the socket peer sits in a CIDR listed in `TRUSTED_PROXY_CIDRS`; the peer is the one input a client cannot forge

@@ -17,6 +17,10 @@
 //! The per-user opt-out (`users.notify_new_location`) is the user's to set:
 //! `GET /api/auth/me` reports it and `PATCH /api/auth/me` changes it, always
 //! for the session's own account (LINKS-33).
+//!
+//! [`is_new_device`] lives here too (LINKS-45), beside [`is_new_country`], so
+//! the two halves of "suspicious" stay in one file. Only the LINKS-35 gate
+//! reads it; the alert above is country-only.
 
 use std::sync::OnceLock;
 use std::time::Duration;
@@ -50,6 +54,28 @@ fn alert_dedup() -> &'static moka::future::Cache<String, ()> {
 /// keeps a first-ever login and an unresolved country out of both.
 pub fn is_new_country(previous: Option<&str>, current: Option<&str>) -> bool {
     matches!((previous, current), (Some(prev), Some(curr)) if !prev.eq_ignore_ascii_case(curr))
+}
+
+/// Whether this login is from a device the account has not used before.
+///
+/// The device half of the definition of "suspicious" [`is_new_country`] gives
+/// the country half, in the same shape: both sides must be present, and an
+/// absent side is never new. That is what keeps three sign-ins out of the gate
+/// by construction rather than by a special case.
+///
+/// - `submitted` is the device id the client sent (see
+///   [`crate::auth::known_device`]). `None` means "not submitted", never "new",
+///   so a client that sends nothing degrades to exactly the country-only
+///   behaviour. This is browser hardening, not an anti-automation control.
+/// - `known` is what the account already has. `None` means the account has no
+///   recorded device at all, which is its baseline: a first-ever sign-in and
+///   every account on the deploy that creates `known_devices`. `Some(true)` is
+///   a device the account has completed a sign-in from; `Some(false)` is an
+///   account that has devices and submitted one that is not among them.
+///
+/// The LINKS-27 alert stays country-only: it deliberately does not call this.
+pub fn is_new_device(known: Option<bool>, submitted: Option<&str>) -> bool {
+    matches!((known, submitted), (Some(false), Some(_)))
 }
 
 /// Whether a login warrants a new-location alert.
@@ -246,6 +272,37 @@ mod tests {
                 "expected {bad:?} to be rejected"
             );
         }
+    }
+
+    // An account with recorded devices signing in from one of them is not new.
+    #[test]
+    fn a_recognized_device_is_not_new() {
+        assert!(!is_new_device(Some(true), Some("device-a")));
+    }
+
+    // An account with recorded devices submitting one that matches none of them
+    // is new. This is the only combination that is.
+    #[test]
+    fn an_unrecognized_device_is_new() {
+        assert!(is_new_device(Some(false), Some("device-b")));
+    }
+
+    // The baseline: an account with no recorded device has nothing for this
+    // sign-in to be new against. That covers a first-ever sign-in and every
+    // account on the deploy that creates the table, so neither is flagged.
+    #[test]
+    fn an_account_with_no_recorded_devices_is_never_new() {
+        assert!(!is_new_device(None, Some("device-a")));
+        assert!(!is_new_device(None, None));
+    }
+
+    // A client that submits no device id is never held on the device signal,
+    // whatever the account already knows. That is the fail-open half, and it is
+    // why an API client keeps working exactly as it does today.
+    #[test]
+    fn an_unsubmitted_device_is_never_new() {
+        assert!(!is_new_device(Some(false), None));
+        assert!(!is_new_device(Some(true), None));
     }
 
     // At most one alert per user per country per day; a different country is a

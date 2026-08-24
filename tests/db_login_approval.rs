@@ -1,4 +1,4 @@
-//! LINKS-35 approval-gate lifecycle against a real Postgres (LINKS-44).
+//! LINKS-35 / LINKS-45 approval-gate lifecycle against a real Postgres (LINKS-44).
 //!
 //! Every statement in `src/auth/login_approval.rs` used to be compile-checked
 //! only: the suite ran against a lazy pool pointed at a closed port, so the
@@ -13,6 +13,10 @@
 //! These cases run single-threaded (see scripts/check-db-tests-ran.nu): the
 //! sweep deletes every expired row in the database, so two cases at once would
 //! delete each other's expired fixture.
+//!
+//! The device trigger's own reads and writes live in `db_known_devices.rs`;
+//! what is covered here is the half that runs through a pending row: the hold
+//! carrying the submitted device, and the claim promoting it.
 
 #![cfg(feature = "server")]
 
@@ -21,9 +25,11 @@ mod common;
 use axum::body::Body;
 use axum::http::{HeaderMap, Request, StatusCode};
 use chrono::{DateTime, Duration, Utc};
+use rusty_links::auth::known_device::{hash_device_id, known_device_state};
 use rusty_links::auth::login_approval::{
     consume_login_approval, create_router, get_login_approval, request_login_approval,
-    ApprovalClaim, ApprovalFailure, ApprovalLookup, APPROVAL_PATH, APPROVAL_TTL_MINUTES,
+    ApprovalClaim, ApprovalFailure, ApprovalLookup, Hold, HoldReason, APPROVAL_PATH,
+    APPROVAL_TTL_MINUTES,
 };
 use rusty_links::models::User;
 use sha2::{Digest, Sha256};
@@ -33,16 +39,27 @@ use uuid::Uuid;
 
 #[derive(Debug, sqlx::FromRow)]
 struct ApprovalRow {
-    country: String,
+    country: Option<String>,
     ip: String,
     device: Option<String>,
     expires_at: DateTime<Utc>,
     consumed_at: Option<DateTime<Utc>>,
+    reason: String,
+    device_id_hash: Option<Vec<u8>>,
+}
+
+/// A country hold, the LINKS-35 shape, so the cases that are about the country
+/// read the same as they did before LINKS-45.
+fn country_hold(country: &str) -> Hold {
+    Hold {
+        reason: HoldReason::NewCountry,
+        country: Some(country.to_string()),
+    }
 }
 
 async fn rows_for(pool: &PgPool, user_id: Uuid) -> Vec<ApprovalRow> {
     sqlx::query_as::<_, ApprovalRow>(
-        "SELECT country, ip, device, expires_at, consumed_at
+        "SELECT country, ip, device, expires_at, consumed_at, reason, device_id_hash
          FROM pending_login_approvals WHERE user_id = $1 ORDER BY created_at",
     )
     .bind(user_id)
@@ -54,10 +71,32 @@ async fn rows_for(pool: &PgPool, user_id: Uuid) -> Vec<ApprovalRow> {
 /// Seed a row the test knows the token for. `ttl` may be negative, which is how
 /// an already-expired row is made.
 async fn seed(pool: &PgPool, user_id: Uuid, country: &str, ttl: Duration) -> String {
+    seed_row(
+        pool,
+        user_id,
+        Some(country),
+        ttl,
+        HoldReason::NewCountry,
+        None,
+    )
+    .await
+}
+
+/// The general form: a hold on either trigger, with or without a country and
+/// with or without a submitted device.
+async fn seed_row(
+    pool: &PgPool,
+    user_id: Uuid,
+    country: Option<&str>,
+    ttl: Duration,
+    reason: HoldReason,
+    device_id: Option<&str>,
+) -> String {
     let token = format!("test-token-{}", Uuid::new_v4());
     sqlx::query(
-        "INSERT INTO pending_login_approvals (user_id, token_hash, country, ip, device, expires_at)
-         VALUES ($1, $2, $3, $4, $5, $6)",
+        "INSERT INTO pending_login_approvals
+            (user_id, token_hash, country, ip, device, expires_at, reason, device_id_hash)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8)",
     )
     .bind(user_id)
     .bind(Sha256::digest(token.as_bytes()).to_vec())
@@ -65,6 +104,8 @@ async fn seed(pool: &PgPool, user_id: Uuid, country: &str, ttl: Duration) -> Str
     .bind("203.0.113.7")
     .bind(Some("seeded-agent"))
     .bind(Utc::now() + ttl)
+    .bind(reason.as_str())
+    .bind(device_id.map(hash_device_id))
     .execute(pool)
     .await
     .expect("fixture row must insert");
@@ -76,6 +117,16 @@ fn headers(ip: &str, agent: &str) -> HeaderMap {
     headers.insert("X-Forwarded-For", ip.parse().expect("header value"));
     headers.insert("User-Agent", agent.parse().expect("header value"));
     headers
+}
+
+/// Make a device known to an account, as a completed sign-in would.
+async fn seed_known_device(pool: &PgPool, user_id: Uuid, device_id: &str) {
+    sqlx::query("INSERT INTO known_devices (user_id, device_id_hash) VALUES ($1, $2)")
+        .bind(user_id)
+        .bind(hash_device_id(device_id))
+        .execute(pool)
+        .await
+        .expect("fixture device must insert");
 }
 
 async fn consumed_at(pool: &PgPool, token: &str) -> Option<DateTime<Utc>> {
@@ -103,7 +154,8 @@ async fn holding_a_sign_in_records_one_row() {
         &config,
         user.id,
         &user.email,
-        "DE",
+        &country_hold("DE"),
+        None,
         &headers("203.0.113.7", "curl/8.6.0"),
     )
     .await
@@ -111,7 +163,9 @@ async fn holding_a_sign_in_records_one_row() {
 
     let rows = rows_for(&pool, user.id).await;
     assert_eq!(rows.len(), 1, "exactly one pending row");
-    assert_eq!(rows[0].country, "DE");
+    assert_eq!(rows[0].country.as_deref(), Some("DE"));
+    assert_eq!(rows[0].reason, "new_country");
+    assert_eq!(rows[0].device_id_hash, None, "no device id was submitted");
     assert_eq!(rows[0].ip, "203.0.113.7");
     assert_eq!(rows[0].device.as_deref(), Some("curl/8.6.0"));
     assert!(rows[0].consumed_at.is_none(), "a fresh row is unconsumed");
@@ -136,9 +190,17 @@ async fn a_live_link_suppresses_a_second_one_for_the_same_country() {
     let head = headers("203.0.113.7", "curl/8.6.0");
 
     for _ in 0..2 {
-        request_login_approval(&pool, &config, user.id, &user.email, "DE", &head)
-            .await
-            .expect("the retry must be accepted");
+        request_login_approval(
+            &pool,
+            &config,
+            user.id,
+            &user.email,
+            &country_hold("DE"),
+            None,
+            &head,
+        )
+        .await
+        .expect("the retry must be accepted");
     }
     assert_eq!(
         rows_for(&pool, user.id).await.len(),
@@ -146,15 +208,26 @@ async fn a_live_link_suppresses_a_second_one_for_the_same_country() {
         "the second attempt from DE reuses the live link"
     );
 
-    request_login_approval(&pool, &config, user.id, &user.email, "FR", &head)
-        .await
-        .expect("a different country must be held on its own");
-    let countries: Vec<String> = rows_for(&pool, user.id)
+    request_login_approval(
+        &pool,
+        &config,
+        user.id,
+        &user.email,
+        &country_hold("FR"),
+        None,
+        &head,
+    )
+    .await
+    .expect("a different country must be held on its own");
+    let countries: Vec<Option<String>> = rows_for(&pool, user.id)
         .await
         .into_iter()
         .map(|row| row.country)
         .collect();
-    assert_eq!(countries, vec!["DE".to_string(), "FR".to_string()]);
+    assert_eq!(
+        countries,
+        vec![Some("DE".to_string()), Some("FR".to_string())]
+    );
 
     common::delete_user(&pool, user.id).await;
 }
@@ -178,7 +251,8 @@ async fn a_consumed_link_does_not_suppress_the_next_one() {
         &config,
         user.id,
         &user.email,
-        "DE",
+        &country_hold("DE"),
+        None,
         &headers("203.0.113.7", "curl/8.6.0"),
     )
     .await
@@ -207,7 +281,8 @@ async fn requesting_an_approval_sweeps_expired_rows() {
         &config,
         user.id,
         &user.email,
-        "FR",
+        &country_hold("FR"),
+        None,
         &headers("203.0.113.7", "curl/8.6.0"),
     )
     .await
@@ -215,7 +290,11 @@ async fn requesting_an_approval_sweeps_expired_rows() {
 
     let rows = rows_for(&pool, user.id).await;
     assert_eq!(rows.len(), 1, "the expired row was swept");
-    assert_eq!(rows[0].country, "FR", "only the new row survives");
+    assert_eq!(
+        rows[0].country.as_deref(),
+        Some("FR"),
+        "only the new row survives"
+    );
 
     common::delete_user(&pool, user.id).await;
 }
@@ -232,8 +311,9 @@ async fn reading_an_approval_does_not_consume_it() {
 
     match get_login_approval(&pool, &token).await {
         Ok(ApprovalLookup::Valid(pending)) => {
-            assert_eq!(pending.country, "DE");
+            assert_eq!(pending.country.as_deref(), Some("DE"));
             assert_eq!(pending.ip, "203.0.113.7");
+            assert_eq!(pending.reason, HoldReason::NewCountry);
         }
         _ => panic!("a live token must read as valid"),
     }
@@ -300,9 +380,11 @@ async fn a_link_claims_once_then_never_again() {
     let token = seed(&pool, user.id, "DE", Duration::minutes(15)).await;
 
     match consume_login_approval(&pool, &token).await {
-        Ok(ApprovalClaim::Claimed { user_id, country }) => {
+        Ok(ApprovalClaim::Claimed {
+            user_id, country, ..
+        }) => {
             assert_eq!(user_id, user.id);
-            assert_eq!(country, "DE");
+            assert_eq!(country.as_deref(), Some("DE"));
         }
         _ => panic!("the first claim must win"),
     }
@@ -458,6 +540,313 @@ async fn approving_records_the_country_on_the_user() {
     common::delete_user(&pool, user.id).await;
 }
 
+// ── The device trigger through a pending row (LINKS-45) ──────────────────────
+
+/// A device-only hold carries no country when nothing resolved one, which is
+/// the default deployment, and records which trigger fired so the page and the
+/// mail say "device" rather than naming a country that was never new.
+#[tokio::test]
+async fn a_device_only_hold_records_its_reason_and_no_country() {
+    let pool = common::test_pool().await;
+    let config = common::test_config();
+    let user = common::new_user(&pool).await;
+    let device = hash_device_id("device-b");
+
+    request_login_approval(
+        &pool,
+        &config,
+        user.id,
+        &user.email,
+        &Hold {
+            reason: HoldReason::NewDevice,
+            country: None,
+        },
+        Some(&device),
+        &headers("203.0.113.7", "curl/8.6.0"),
+    )
+    .await
+    .expect("a device-only hold must write its row");
+
+    let rows = rows_for(&pool, user.id).await;
+    assert_eq!(rows.len(), 1);
+    assert_eq!(rows[0].country, None, "no country resolved, so none stored");
+    assert_eq!(rows[0].reason, "new_device");
+    assert_eq!(
+        rows[0].device_id_hash.as_deref(),
+        Some(device.as_slice()),
+        "the submitted device rides on the row so the claim can promote it"
+    );
+
+    common::delete_user(&pool, user.id).await;
+}
+
+/// The dedup key is the attempt, not just the country: retrying from the same
+/// browser reuses the live link, while a different browser is a distinct event
+/// that gets its own link and its own mail.
+#[tokio::test]
+async fn the_dedup_is_per_attempt_not_per_user() {
+    let pool = common::test_pool().await;
+    let config = common::test_config();
+    let user = common::new_user(&pool).await;
+    let head = headers("203.0.113.7", "curl/8.6.0");
+    let hold = Hold {
+        reason: HoldReason::NewDevice,
+        country: None,
+    };
+
+    let first = hash_device_id("device-b");
+    for _ in 0..2 {
+        request_login_approval(
+            &pool,
+            &config,
+            user.id,
+            &user.email,
+            &hold,
+            Some(&first),
+            &head,
+        )
+        .await
+        .expect("the retry must be accepted");
+    }
+    assert_eq!(
+        rows_for(&pool, user.id).await.len(),
+        1,
+        "the same browser retrying reuses the live link"
+    );
+
+    let second = hash_device_id("device-c");
+    request_login_approval(
+        &pool,
+        &config,
+        user.id,
+        &user.email,
+        &hold,
+        Some(&second),
+        &head,
+    )
+    .await
+    .expect("a different device must be held on its own");
+    assert_eq!(
+        rows_for(&pool, user.id).await.len(),
+        2,
+        "a different browser is a distinct attempt and gets its own link"
+    );
+
+    common::delete_user(&pool, user.id).await;
+}
+
+/// A client that varies its device id every attempt cannot mail an unbounded
+/// stream of links. The cap still holds the sign-in; it only stops the mail.
+#[tokio::test]
+async fn live_approval_links_are_capped_per_user() {
+    let pool = common::test_pool().await;
+    let config = common::test_config();
+    let user = common::new_user(&pool).await;
+    let head = headers("203.0.113.7", "curl/8.6.0");
+    let hold = Hold {
+        reason: HoldReason::NewDevice,
+        country: None,
+    };
+
+    for attempt in 0..6 {
+        let device = hash_device_id(&format!("device-{attempt}"));
+        request_login_approval(
+            &pool,
+            &config,
+            user.id,
+            &user.email,
+            &hold,
+            Some(&device),
+            &head,
+        )
+        .await
+        .expect("every attempt is still held, capped or not");
+    }
+
+    assert_eq!(
+        rows_for(&pool, user.id).await.len(),
+        3,
+        "the cap bounds the live links, and so the mail, at three"
+    );
+
+    common::delete_user(&pool, user.id).await;
+}
+
+/// The whole point of the device trigger terminating: approving promotes the
+/// device the HELD sign-in submitted into `known_devices`, so the next sign-in
+/// from that browser is no longer new. Recording it from the request rather
+/// than from a response is what makes this the held browser and not the one
+/// that happened to open the mail.
+#[tokio::test]
+async fn approving_records_the_device_so_the_next_sign_in_is_not_held() {
+    let pool = common::test_pool().await;
+    let user = common::new_user(&pool).await;
+    let other = common::new_user(&pool).await;
+
+    // Give the account a device first, so it has a baseline and "device-b" is
+    // genuinely new rather than the never-held zero-devices case.
+    seed_known_device(&pool, user.id, "device-a").await;
+    assert_eq!(
+        known_device_state(&pool, user.id, Some("device-b"))
+            .await
+            .expect("the lookup must run"),
+        Some(false),
+        "the account has devices and this is not one of them"
+    );
+
+    let token = seed_row(
+        &pool,
+        user.id,
+        None,
+        Duration::minutes(15),
+        HoldReason::NewDevice,
+        Some("device-b"),
+    )
+    .await;
+
+    let response = create_router(pool.clone())
+        .oneshot(
+            Request::builder()
+                .method("POST")
+                .uri(APPROVAL_PATH)
+                .header("Content-Type", "application/x-www-form-urlencoded")
+                .body(Body::from(format!("token={token}")))
+                .expect("request must build"),
+        )
+        .await
+        .expect("router must answer");
+    assert_eq!(response.status(), StatusCode::OK);
+
+    assert_eq!(
+        known_device_state(&pool, user.id, Some("device-b"))
+            .await
+            .expect("the lookup must run"),
+        Some(true),
+        "the approved device is now one the account has signed in from"
+    );
+    assert_eq!(
+        known_device_state(&pool, other.id, Some("device-b"))
+            .await
+            .expect("the lookup must run"),
+        None,
+        "approving for one account records nothing for another"
+    );
+
+    common::delete_user(&pool, user.id).await;
+    common::delete_user(&pool, other.id).await;
+}
+
+/// An attempt nobody approves records nothing, so it cannot make its device
+/// look familiar on the next try. This is the invariant that stops the gate
+/// from being talked out of itself.
+#[tokio::test]
+async fn an_unapproved_hold_never_records_its_device() {
+    let pool = common::test_pool().await;
+    let user = common::new_user(&pool).await;
+    seed_known_device(&pool, user.id, "device-a").await;
+
+    seed_row(
+        &pool,
+        user.id,
+        None,
+        Duration::minutes(15),
+        HoldReason::NewDevice,
+        Some("device-b"),
+    )
+    .await;
+
+    assert_eq!(
+        known_device_state(&pool, user.id, Some("device-b"))
+            .await
+            .expect("the lookup must run"),
+        Some(false),
+        "writing the pending row records no device"
+    );
+
+    common::delete_user(&pool, user.id).await;
+}
+
+/// A sign-in that trips BOTH triggers is held once and approved once: the one
+/// claim records both baselines, so the next sign-in from that browser in that
+/// country is new on neither and the user is never asked twice.
+#[tokio::test]
+async fn approving_a_both_triggers_hold_records_both_baselines() {
+    let pool = common::test_pool().await;
+    let user = common::new_user(&pool).await;
+    seed_known_device(&pool, user.id, "device-a").await;
+
+    let token = seed_row(
+        &pool,
+        user.id,
+        Some("DE"),
+        Duration::minutes(15),
+        HoldReason::NewCountryAndDevice,
+        Some("device-b"),
+    )
+    .await;
+
+    let response = create_router(pool.clone())
+        .oneshot(
+            Request::builder()
+                .method("POST")
+                .uri(APPROVAL_PATH)
+                .header("Content-Type", "application/x-www-form-urlencoded")
+                .body(Body::from(format!("token={token}")))
+                .expect("request must build"),
+        )
+        .await
+        .expect("router must answer");
+    assert_eq!(response.status(), StatusCode::OK);
+
+    let after = User::get_login_location(&pool, user.id)
+        .await
+        .expect("read must succeed")
+        .expect("user must exist");
+    assert_eq!(after.1.as_deref(), Some("DE"), "the country was recorded");
+    assert_eq!(
+        known_device_state(&pool, user.id, Some("device-b"))
+            .await
+            .expect("the lookup must run"),
+        Some(true),
+        "and so was the device, from the same single approval"
+    );
+
+    common::delete_user(&pool, user.id).await;
+}
+
+/// A hold whose client submitted no device id claims cleanly and records no
+/// device, so the country half keeps working for a client that has none.
+#[tokio::test]
+async fn approving_a_hold_with_no_device_records_only_the_country() {
+    let pool = common::test_pool().await;
+    let user = common::new_user(&pool).await;
+    let token = seed(&pool, user.id, "DE", Duration::minutes(15)).await;
+
+    match consume_login_approval(&pool, &token).await {
+        Ok(ApprovalClaim::Claimed {
+            country,
+            device_id_hash,
+            ..
+        }) => {
+            assert_eq!(country.as_deref(), Some("DE"));
+            assert_eq!(device_id_hash, None, "nothing to promote");
+        }
+        _ => panic!("the claim must win"),
+    }
+
+    let devices: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM known_devices WHERE user_id = $1")
+        .bind(user.id)
+        .fetch_one(&pool)
+        .await
+        .expect("the count must run");
+    assert_eq!(
+        devices, 0,
+        "no device id was submitted, so none is recorded"
+    );
+
+    common::delete_user(&pool, user.id).await;
+}
+
 // ── Migration constraints ────────────────────────────────────────────────────
 
 /// `token_hash` is UNIQUE, so a hash collision is rejected by the database
@@ -493,17 +882,25 @@ async fn a_duplicate_token_hash_is_rejected() {
     common::delete_user(&pool, user.id).await;
 }
 
-/// Deleting the account takes its pending links with it, so a deleted user
-/// leaves nothing claimable behind.
+/// Deleting the account takes its pending links and its known devices with it,
+/// so a deleted user leaves nothing claimable and nothing recognisable behind.
 #[tokio::test]
 async fn deleting_a_user_cascades_to_pending_rows() {
     let pool = common::test_pool().await;
     let user = common::new_user(&pool).await;
     let token = seed(&pool, user.id, "DE", Duration::minutes(15)).await;
     seed(&pool, user.id, "FR", Duration::minutes(15)).await;
+    seed_known_device(&pool, user.id, "device-a").await;
     assert_eq!(rows_for(&pool, user.id).await.len(), 2);
 
     common::delete_user(&pool, user.id).await;
+
+    let devices: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM known_devices WHERE user_id = $1")
+        .bind(user.id)
+        .fetch_one(&pool)
+        .await
+        .expect("the count must run");
+    assert_eq!(devices, 0, "ON DELETE CASCADE removed the known devices");
 
     assert!(
         rows_for(&pool, user.id).await.is_empty(),

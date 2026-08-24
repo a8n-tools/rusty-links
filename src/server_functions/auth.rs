@@ -20,6 +20,10 @@ pub struct SetupRequest {
     pub email: String,
     pub password: String,
     pub name: String,
+    /// The browser's device id (LINKS-45), recorded as this account's first
+    /// known device. See [`LoginRequest::device_id`].
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub device_id: Option<String>,
 }
 
 /// Request to login
@@ -27,6 +31,16 @@ pub struct SetupRequest {
 pub struct LoginRequest {
     pub email: String,
     pub password: String,
+    /// A random id the browser mints once and keeps in `localStorage`
+    /// (LINKS-45), used by the approval gate to tell a device this account has
+    /// signed in from before from one it has not. Only its SHA-256 is stored.
+    ///
+    /// Absent means "not submitted", never "new": a client that leaves it out
+    /// gets exactly today's country-only behaviour, so this is hardening for
+    /// the app's own sign-in form rather than a control an API client must
+    /// satisfy.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub device_id: Option<String>,
 }
 
 /// User info response
@@ -183,6 +197,44 @@ mod tests {
             serde_json::to_value(&request).unwrap(),
             serde_json::json!({"notify_new_location": false}),
             "the parsed patch carries the flag and nothing else"
+        );
+    }
+
+    // An older client that sends no device id still parses, and reads as "not
+    // submitted" rather than as a new device, which is what keeps it on
+    // country-only behaviour instead of held (LINKS-45).
+    #[test]
+    fn login_request_without_a_device_id_parses_as_absent() {
+        let request: LoginRequest =
+            serde_json::from_str(r#"{"email": "user@example.com", "password": "hunter2hunter2"}"#)
+                .unwrap();
+        assert_eq!(request.device_id, None);
+
+        let setup: SetupRequest = serde_json::from_str(
+            r#"{"email": "user@example.com", "password": "hunter2hunter2", "name": "User"}"#,
+        )
+        .unwrap();
+        assert_eq!(setup.device_id, None);
+    }
+
+    // A submitted id survives parsing, and an absent one is not serialized, so
+    // the wire shape is unchanged for a client that has none yet.
+    #[test]
+    fn login_request_carries_a_submitted_device_id() {
+        let request: LoginRequest = serde_json::from_str(
+            r#"{"email": "user@example.com", "password": "hunter2hunter2", "device_id": "abc123"}"#,
+        )
+        .unwrap();
+        assert_eq!(request.device_id.as_deref(), Some("abc123"));
+
+        let bare = LoginRequest {
+            email: "user@example.com".to_string(),
+            password: "hunter2hunter2".to_string(),
+            device_id: None,
+        };
+        assert_eq!(
+            serde_json::to_value(&bare).unwrap(),
+            serde_json::json!({"email": "user@example.com", "password": "hunter2hunter2"}),
         );
     }
 
