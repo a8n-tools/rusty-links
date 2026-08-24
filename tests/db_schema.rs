@@ -11,6 +11,7 @@
 
 mod common;
 
+use std::collections::{BTreeMap, BTreeSet};
 use std::path::Path;
 
 /// Every file in `migrations/` is applied, not just the ones a test happened to
@@ -188,4 +189,121 @@ async fn users_carry_the_login_location_columns() {
         nullable, "YES",
         "last_login_country is NULL until the first login records one"
     );
+}
+
+/// Below this the parse, not the schema, is what broke: a doc reshape that
+/// stopped matching must fail loudly rather than pass vacuously (LINKS-53).
+const MIN_DOCUMENTED_TABLES: usize = 10;
+const MIN_DOCUMENTED_COLUMNS: usize = 50;
+
+/// LINKS-53: the `Tables Reference` in `docs/DATABASE.md` against the schema the
+/// migrations actually produce, in both directions.
+///
+/// A static guard beside `scripts/check-migration-docs.nu` could not do this.
+/// The applied shape is not readable from the SQL text: `20250101000007` drops
+/// and re-adds `links.logo` from inside a PL/pgSQL `DO` block, so knowing the
+/// schema means applying it. This target already has a migrated database in
+/// hand, which is why the guard lives here.
+#[tokio::test]
+async fn database_doc_matches_the_migrated_schema() {
+    let pool = common::test_pool().await;
+
+    let documented = documented_tables();
+    let documented_columns: usize = documented.values().map(BTreeSet::len).sum();
+    assert!(
+        documented.len() >= MIN_DOCUMENTED_TABLES && documented_columns >= MIN_DOCUMENTED_COLUMNS,
+        "parsed {} tables and {documented_columns} columns out of the docs/DATABASE.md Tables \
+         Reference, below the {MIN_DOCUMENTED_TABLES}/{MIN_DOCUMENTED_COLUMNS} floor: the parse \
+         stopped matching the document",
+        documented.len()
+    );
+
+    let rows: Vec<(String, String)> = sqlx::query_as(
+        "SELECT table_name::text, column_name::text
+         FROM information_schema.columns
+         WHERE table_schema = 'public' AND table_name <> '_sqlx_migrations'
+         ORDER BY table_name, column_name",
+    )
+    .fetch_all(&pool)
+    .await
+    .expect("the applied schema must be readable");
+
+    let mut applied: BTreeMap<String, BTreeSet<String>> = BTreeMap::new();
+    for (table, column) in rows {
+        applied.entry(table).or_default().insert(column);
+    }
+    assert!(
+        applied.len() >= MIN_DOCUMENTED_TABLES,
+        "the migrated database holds {} tables, so the comparison would pass vacuously",
+        applied.len()
+    );
+
+    let mut drift: Vec<String> = Vec::new();
+    for table in applied.keys() {
+        if !documented.contains_key(table) {
+            drift.push(format!("table {table} is applied and has no section"));
+        }
+    }
+    for table in documented.keys() {
+        if !applied.contains_key(table) {
+            drift.push(format!("table {table} has a section and is not applied"));
+        }
+    }
+    for (table, columns) in &applied {
+        let Some(documented_columns) = documented.get(table) else {
+            continue;
+        };
+        for column in columns.difference(documented_columns) {
+            drift.push(format!("{table}.{column} is applied and undocumented"));
+        }
+        for column in documented_columns.difference(columns) {
+            drift.push(format!("{table}.{column} is documented and not applied"));
+        }
+    }
+
+    assert!(
+        drift.is_empty(),
+        "docs/DATABASE.md is out of line with the migrated schema:\n  {}",
+        drift.join("\n  ")
+    );
+}
+
+/// The `### <table>` sections of the `Tables Reference` chapter and the
+/// `` | `column` | `` rows under each. Scoped to that chapter so the Index List
+/// and the migration table cannot feed it names.
+fn documented_tables() -> BTreeMap<String, BTreeSet<String>> {
+    let path = Path::new(env!("CARGO_MANIFEST_DIR")).join("docs/DATABASE.md");
+    let text = std::fs::read_to_string(&path).expect("docs/DATABASE.md must be readable");
+
+    let mut documented: BTreeMap<String, BTreeSet<String>> = BTreeMap::new();
+    let mut table: Option<String> = None;
+    let mut in_chapter = false;
+
+    for line in text.lines() {
+        if let Some(heading) = line.strip_prefix("## ") {
+            in_chapter = heading.trim() == "Tables Reference";
+            table = None;
+            continue;
+        }
+        if !in_chapter {
+            continue;
+        }
+        if let Some(heading) = line.strip_prefix("### ") {
+            table = Some(heading.trim().to_string());
+            documented.entry(heading.trim().to_string()).or_default();
+            continue;
+        }
+        let (Some(name), Some(row)) = (table.as_ref(), line.strip_prefix('|')) else {
+            continue;
+        };
+        let cell = row.split('|').next().unwrap_or_default().trim();
+        if let Some(column) = cell.strip_prefix('`').and_then(|c| c.strip_suffix('`')) {
+            documented
+                .entry(name.clone())
+                .or_default()
+                .insert(column.to_string());
+        }
+    }
+
+    documented
 }

@@ -1,6 +1,8 @@
 # Rusty Links - UI Implementation Guide
 # Part 7: Complete Web Interface (Steps 33-45)
 
+> **Historical document.** Written during the initial build and kept for the record, body unchanged. It describes what was planned, not what runs today. For current behaviour see [README.md](../../README.md) and the documents it links.
+
 ## Overview
 
 This directory contains comprehensive, step-by-step implementation prompts for building the complete web user interface for Rusty Links using Dioxus. These prompts are designed to be used with code-generation LLMs (Claude, GPT-4, etc.) to implement each feature incrementally and safely.

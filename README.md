@@ -201,6 +201,18 @@ See `.env.standalone` and `.env.saas` for full documentation of all options.
 - [Deployment](docs/DEPLOYMENT.md) - Production deployment guide
 - [Release Process](docs/RELEASE.md) - Versioning and release workflow
 
+### Historical documents
+
+`docs/history/` holds the pre-build design documents. They are kept for the record and are not maintained, so they still name GitHub Container Registry and describe a plan rather than the system: LINKS-38 corrected those claims across the documents above and deliberately left these alone, because rewriting a design document to match what was later built destroys the record of what was intended. Each opens with a banner saying so and its body is unchanged.
+
+- [Phase 1 Product Specification](docs/history/SPECIFICATION.md)
+- [Implementation Guide](docs/history/IMPLEMENTATION_GUIDE.md)
+- [Step 36: Add Link Flow](docs/history/STEP_36_ADD_LINK_FLOW.md)
+- [UI Implementation Guide](docs/history/UI_IMPLEMENTATION_README.md)
+- [Dioxus 0.7 Fullstack Conversion](docs/history/FULLSTACK_CONVERSION.md)
+
+The dated plans and designs under `docs/superpowers/` are unmaintained in the same way; banner-marking them is tracked in LINKS-61.
+
 ---
 
 ## Building from Source
@@ -275,10 +287,10 @@ rusty-links/
 │       ├── app.rs           # Root component and routing
 │       ├── components/      # Reusable UI components
 │       └── pages/           # Page components
-├── migrations/              # Database migrations (8 files)
+├── migrations/              # Database migrations (sqlx, applied on startup)
 ├── assets/                  # Static assets (generated CSS, favicon)
 ├── examples/                # Reverse proxy configs (nginx, Caddy)
-├── docs/                    # Documentation
+├── docs/                    # Documentation (history/ holds the unmaintained design docs)
 ├── Dockerfile               # Multi-stage production build
 ├── compose.yml              # Docker Compose (app + PostgreSQL)
 └── compose.dev.yml          # Development override (hot reloading)

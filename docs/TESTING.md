@@ -151,7 +151,7 @@ rusty-links/
 │   ├── db_account_settings.rs # PATCH/GET /api/auth/me through the column
 │   ├── db_known_devices.rs    # LINKS-45 device recognition, through the login route
 │   ├── db_login_approval.rs   # LINKS-35 / LINKS-45 approval-gate lifecycle
-│   ├── db_schema.rs           # Migrations apply; UNIQUE, CASCADE and nullability shapes
+│   ├── db_schema.rs           # Migrations apply; shapes; DATABASE.md against the schema
 │   ├── db_users.rs            # User creation round trips
 │   └── route_surface.rs       # Per-mode route mounting (no database)
 └── Cargo.toml

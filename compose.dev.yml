@@ -30,6 +30,9 @@ services:
       # integration tests; without it they are silently skipped (LINKS-36).
       - ./tests:/app/tests
       - ./assets:/app/assets
+      # docs/ is mounted so the LINKS-53 schema guard in tests/db_schema.rs can read
+      # docs/DATABASE.md; without it the guard fails on a missing file.
+      - ./docs:/app/docs
       - ./migrations:/app/migrations
       - ./Cargo.toml:/app/Cargo.toml
       - ./Cargo.lock:/app/Cargo.lock
@@ -37,7 +40,9 @@ services:
       - ./build.rs:/app/build.rs
       - ./.git:/app/.git:ro
       - ./static:/app/static
-      - cargo_home:/root/.cargo
+      # CARGO_HOME is /usr/local/cargo in the image, not /root/.cargo, so the volume
+      # only caches the registry and installed binaries when mounted there (LINKS-57).
+      - cargo_home:/usr/local/cargo
       - dx_out:/app/target/dx
       - cargo_target_server:/app/target/server-dev
       - cargo_target_wasm:/app/target/wasm-dev
@@ -73,6 +78,8 @@ services:
 
 volumes:
   cargo_home:
+    # Docker seeds this from the image only while it is empty, so run `just dev-clean`
+    # after a base-image bump or the old toolchain shadows the new one (LINKS-57).
     name: rusty-links-cargo-${USER}
   dx_out:
     name: rusty-links-dx-${USER}

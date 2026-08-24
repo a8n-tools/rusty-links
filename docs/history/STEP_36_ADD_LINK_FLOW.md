@@ -1,5 +1,7 @@
 # Step 36: Add Link Flow - Implementation Prompts
 
+> **Historical document.** Written during the initial build and kept for the record, body unchanged. It describes what was planned, not what runs today. For current behaviour see [README.md](../../README.md) and the documents it links.
+
 ## Overview
 
 This document provides step-by-step implementation prompts for building the complete "Add Link Flow" feature in Rusty Links. The prompts are designed for code-generation LLMs and follow an incremental approach where each step builds on the previous one.

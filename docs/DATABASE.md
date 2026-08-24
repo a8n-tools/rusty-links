@@ -77,7 +77,10 @@ postgres:
 | `users`      | User accounts           | 1-10            |
 | `pending_login_approvals` | Sign-ins held by the LINKS-35 / LINKS-45 approval gate | 0 (empty unless the gate is on) |
 | `known_devices` | Devices an account has completed a sign-in from (LINKS-45) | 1-5 per user |
-| `sessions`   | Authentication sessions | 1-5 per user    |
+| `user_sessions` | BFF sessions, keyed by the hashed `rl_session` cookie value | 1-5 per user |
+| `refresh_tokens` | Refresh tokens issued alongside the access JWT | 1-5 per user |
+| `login_attempts` | Sign-in attempts feeding the account lockout | 0-100 (swept at 30 days) |
+| `rp_sessions` | PKCE state for one in-flight OIDC login | 0 (seconds each) |
 | `links`      | Bookmarked links        | 100-10,000+     |
 | `categories` | Link categorization     | 10-100          |
 | `tags`       | Link tags               | 20-200          |
@@ -100,8 +103,12 @@ postgres:
 ```
 users
   │
-  ├──< sessions (user_id)
-  │     └─ id (session token)
+  ├──< user_sessions (user_id)
+  │     └─ session_token_hash (SHA-256 of the cookie value)
+  │
+  ├──< refresh_tokens (user_id)
+  ├──< pending_login_approvals (user_id)
+  ├──< known_devices (user_id)
   │
   ├──< links (user_id)
   │     │
@@ -117,6 +124,9 @@ users
   ├──< licenses (user_id, nullable for global)
   └──< tags (user_id)
 
+rp_sessions     (no user_id: PKCE state for a login that has resolved no account yet)
+login_attempts  (no user_id: keyed by the email typed at the sign-in form)
+
 Legend:
   ├──<  One-to-many relationship
   >──   Many-to-one relationship
@@ -128,7 +138,9 @@ Legend:
 - **User → Links**: One user can have many links (CASCADE DELETE)
 - **User → Categories**: One user can have many categories (CASCADE DELETE)
 - **User → Tags**: One user can have many tags (CASCADE DELETE)
-- **User → Sessions**: One user can have many sessions (CASCADE DELETE)
+- **User → Sessions**: One user can have many `user_sessions` and `refresh_tokens` (CASCADE DELETE)
+- **User → Holds and devices**: One user can have many `pending_login_approvals` and `known_devices` (CASCADE DELETE)
+- **rp_sessions / login_attempts**: No foreign key. `rp_sessions` exists before a login resolves to an account, and `login_attempts` is keyed by the email typed at the form, which need not match one
 - **Link → Categories**: Many-to-many via `link_categories`
 - **Link → Tags**: Many-to-many via `link_tags` (with ordering)
 - **Link → Languages**: Many-to-many via `link_languages` (with ordering)
@@ -140,6 +152,8 @@ Legend:
 
 ## Tables Reference
 
+Every table and column below is compared against a freshly migrated database by `database_doc_matches_the_migrated_schema` in `tests/db_schema.rs`, in both directions, so a section describing a table that no longer exists (as the `sessions` section did until LINKS-53) or a column added without a section fails the `cargo test --features server --test db_schema` leg. The comparison needs an applied schema rather than the migration text, because `20250101000007_fix_links_schema.sql` drops and re-adds `links.logo` from inside a PL/pgSQL block, which is why this guard is a test and the file-level [Migration History](#migration-history) guard is `scripts/check-migration-docs.nu`.
+
 ### users
 
 User accounts table (single-user application, but supports multiple users).
@@ -150,6 +164,11 @@ CREATE TABLE users (
     email TEXT NOT NULL UNIQUE,
     password_hash TEXT NOT NULL,
     created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW(),
+    name TEXT NOT NULL DEFAULT '',
+    is_admin BOOLEAN NOT NULL DEFAULT FALSE,
+    saas_user_id UUID,
+    suspended_at TIMESTAMP WITH TIME ZONE,
+    session_version INT NOT NULL DEFAULT 0,
     last_login_country VARCHAR(2),
     notify_new_location BOOLEAN NOT NULL DEFAULT TRUE
 );
@@ -163,6 +182,11 @@ CREATE TABLE users (
 | `email`         | TEXT        | NOT NULL, UNIQUE        | User email address         |
 | `password_hash` | TEXT        | NOT NULL                | Argon2id password hash       |
 | `created_at`    | TIMESTAMPTZ | NOT NULL, DEFAULT NOW() | Account creation timestamp |
+| `name`          | TEXT        | NOT NULL, DEFAULT `''`  | Display name, empty until the user sets one through `PATCH /api/auth/me` |
+| `is_admin`      | BOOLEAN     | NOT NULL, DEFAULT FALSE | Admin role; `20250101000008_jwt_auth.sql` promoted the oldest existing account when it added the column |
+| `saas_user_id`  | UUID        | NULL, UNIQUE where NOT NULL | a8n Tools account this local account is linked to in hosted mode; NULL in standalone mode |
+| `suspended_at`  | TIMESTAMPTZ | NULL                    | When the hosted-mode membership check suspended the account; NULL while active |
+| `session_version` | INT       | NOT NULL, DEFAULT 0     | Bumped to invalidate every live `user_sessions` row for the account in one write |
 | `last_login_country` | VARCHAR(2) | NULL | ISO-3166-1 alpha-2 country of the last login (LINKS-27) |
 | `notify_new_location` | BOOLEAN | NOT NULL, DEFAULT TRUE | Per-user opt-out for new-location alerts (LINKS-27), set by the user through `PATCH /api/auth/me` (LINKS-33) |
 
@@ -172,7 +196,7 @@ CREATE TABLE users (
 **Notes:**
 - Passwords are hashed using Argon2id
 - Email must be unique (case-sensitive)
-- Deleting a user cascades to all their data
+- Deleting a user cascades to all their data, including `user_sessions`, `refresh_tokens`, `pending_login_approvals` and `known_devices`
 - `last_login_country` is written when a sign-in completes (or when a held sign-in is approved, LINKS-35) and the edge resolved a country, and is what the next sign-in is compared against. A sign-in held for approval and never approved writes nothing, so it cannot make its country look familiar next time
 
 ---
@@ -266,33 +290,147 @@ CREATE TABLE known_devices (
 
 ---
 
-### sessions
+### user_sessions
 
-Session tokens for authentication.
+Long-lived BFF sessions, keyed by the SHA-256 of the `rl_session` cookie value.
 
 ```sql
-CREATE TABLE sessions (
-    id TEXT PRIMARY KEY,
-    user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-    created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW()
+CREATE TABLE user_sessions (
+    id                 UUID        PRIMARY KEY DEFAULT gen_random_uuid(),
+    session_token_hash BYTEA       NOT NULL UNIQUE,
+    user_id            UUID        NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    session_version    INT         NOT NULL,
+    created_at         TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    expires_at         TIMESTAMPTZ NOT NULL,
+    auth_via_oidc      BOOLEAN     NOT NULL DEFAULT FALSE
 );
 ```
 
 **Columns:**
 
-| Column       | Type        | Constraints              | Description                |
-|--------------|-------------|--------------------------|----------------------------|
-| `id`         | TEXT        | PRIMARY KEY              | Session token (hex string) |
-| `user_id`    | UUID        | NOT NULL, FK → users(id) | Owner of session           |
-| `created_at` | TIMESTAMPTZ | NOT NULL, DEFAULT NOW()  | Session creation time      |
+| Column                | Type        | Constraints               | Description                                             |
+|-----------------------|-------------|---------------------------|---------------------------------------------------------|
+| `id`                  | UUID        | PRIMARY KEY               | Row identifier                                          |
+| `session_token_hash`  | BYTEA       | NOT NULL, UNIQUE          | SHA-256 of the `rl_session` cookie value; the value itself is never stored |
+| `user_id`             | UUID        | NOT NULL, FK → users(id)  | Account the session belongs to                          |
+| `session_version`     | INT         | NOT NULL                  | Snapshot of `users.session_version` when the session was minted |
+| `created_at`          | TIMESTAMPTZ | NOT NULL, DEFAULT NOW()   | When the session was minted                             |
+| `expires_at`          | TIMESTAMPTZ | NOT NULL                  | When the session stops being accepted                   |
+| `auth_via_oidc`       | BOOLEAN     | NOT NULL, DEFAULT FALSE   | Whether an OIDC login minted it, so a sign-out can end the provider session too (`20260427000012`) |
 
 **Indexes:**
-- `idx_sessions_user_id` - Find all sessions for a user
+- `user_sessions_user_id` - sessions for one account
+- `user_sessions_expires` - expiry sweep
 
 **Notes:**
-- Session ID is a secure random token
-- No expiration mechanism (manual cleanup required)
-- Stored in HTTP-only cookie on client
+- Only the hash of the cookie value is stored, so a database dump yields nothing that can be replayed as a session cookie
+- `session_version` is compared against `users.session_version` every time the session is looked up, so incrementing the user's value invalidates every live session for that account in one write
+- Expired rows are swept by the scheduler (`DELETE FROM user_sessions WHERE expires_at < NOW()`), and a sign-out deletes its own row by hash
+
+---
+
+### refresh_tokens
+
+Refresh tokens issued alongside the access JWT, added by `20250101000008_jwt_auth.sql` in place of the `sessions` table this reference used to document.
+
+```sql
+CREATE TABLE refresh_tokens (
+    id         UUID        PRIMARY KEY DEFAULT gen_random_uuid(),
+    user_id    UUID        NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    token      TEXT        NOT NULL UNIQUE,
+    expires_at TIMESTAMPTZ NOT NULL,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+```
+
+**Columns:**
+
+| Column       | Type        | Constraints               | Description                             |
+|--------------|-------------|---------------------------|-----------------------------------------|
+| `id`         | UUID        | PRIMARY KEY               | Row identifier                          |
+| `user_id`    | UUID        | NOT NULL, FK → users(id)  | Account the token belongs to            |
+| `token`      | TEXT        | NOT NULL, UNIQUE          | The refresh token as issued             |
+| `expires_at` | TIMESTAMPTZ | NOT NULL                  | When the token stops being accepted     |
+| `created_at` | TIMESTAMPTZ | NOT NULL, DEFAULT NOW()   | When the token was issued               |
+
+**Indexes:**
+- `idx_refresh_tokens_user_id` - tokens for one account
+- `idx_refresh_tokens_token` - the lookup a refresh performs
+
+**Notes:**
+- A refresh rotates: the presented row is deleted and a new one inserted, so a token cannot be replayed
+- Signing out deletes every row for the account
+- Expired rows are swept by the scheduler through `security::cleanup_expired_refresh_tokens`
+- `token` is stored as issued, unlike `user_sessions.session_token_hash` and `pending_login_approvals.token_hash`, which store only a SHA-256. Hashing it the same way is tracked in LINKS-59
+
+---
+
+### login_attempts
+
+Sign-in attempts, which is what the account lockout in `src/security.rs` counts.
+
+```sql
+CREATE TABLE login_attempts (
+    id           UUID        PRIMARY KEY DEFAULT gen_random_uuid(),
+    email        TEXT        NOT NULL,
+    attempted_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    success      BOOLEAN     NOT NULL DEFAULT FALSE
+);
+```
+
+**Columns:**
+
+| Column         | Type        | Constraints              | Description                                    |
+|----------------|-------------|--------------------------|------------------------------------------------|
+| `id`           | UUID        | PRIMARY KEY              | Row identifier                                 |
+| `email`        | TEXT        | NOT NULL                 | Email typed at the sign-in form                |
+| `attempted_at` | TIMESTAMPTZ | NOT NULL, DEFAULT NOW()  | When the attempt was made                      |
+| `success`      | BOOLEAN     | NOT NULL, DEFAULT FALSE  | Whether the attempt authenticated              |
+
+**Indexes:**
+- `idx_login_attempts_email` - the lockout's count of recent failures for one email
+
+**Notes:**
+- No foreign key to `users`. The row is keyed by the email typed at the form, so an attempt against an address with no account is recorded the same way, and the lockout cannot be used to probe which addresses exist
+- `security::cleanup_old_login_attempts` drops rows older than 30 days on the scheduler
+
+---
+
+### rp_sessions
+
+PKCE state for one in-flight OIDC authorization code flow.
+
+```sql
+CREATE TABLE rp_sessions (
+    id            UUID        PRIMARY KEY DEFAULT gen_random_uuid(),
+    state         TEXT        NOT NULL UNIQUE,
+    nonce         TEXT        NOT NULL,
+    code_verifier TEXT        NOT NULL,
+    return_to     TEXT,
+    created_at    TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    expires_at    TIMESTAMPTZ NOT NULL
+);
+```
+
+**Columns:**
+
+| Column          | Type        | Constraints              | Description                                             |
+|-----------------|-------------|--------------------------|---------------------------------------------------------|
+| `id`            | UUID        | PRIMARY KEY              | Row identifier                                          |
+| `state`         | TEXT        | NOT NULL, UNIQUE         | OAuth `state`, matched on callback to bind the response to this request |
+| `nonce`         | TEXT        | NOT NULL                 | OIDC `nonce`, matched against the ID token claim        |
+| `code_verifier` | TEXT        | NOT NULL                 | PKCE verifier whose challenge went out with the authorization request |
+| `return_to`     | TEXT        | NULL                     | Where to send the browser after the callback; NULL means the default landing page |
+| `created_at`    | TIMESTAMPTZ | NOT NULL, DEFAULT NOW()  | When the flow started                                   |
+| `expires_at`    | TIMESTAMPTZ | NOT NULL                 | When the in-flight flow stops being claimable           |
+
+**Indexes:**
+- `rp_sessions_expires` - expiry sweep
+
+**Notes:**
+- No `user_id`: the row is written before the login has resolved to an account, which is why it is not owned by one
+- A successful callback deletes its own row, so a `state` cannot be replayed; abandoned rows are swept by the scheduler on `expires_at`
+- Rows live for seconds in normal use, so the table is effectively always empty
 
 ---
 
@@ -306,10 +444,10 @@ CREATE TABLE links (
     user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
     url TEXT NOT NULL,
     domain TEXT NOT NULL,
-    path TEXT NOT NULL,
+    path TEXT,
     title TEXT,
     description TEXT,
-    logo BYTEA,
+    logo TEXT,
     source_code_url TEXT,
     documentation_url TEXT,
     notes TEXT,
@@ -318,6 +456,7 @@ CREATE TABLE links (
     github_stars INTEGER,
     github_archived BOOLEAN,
     github_last_commit DATE,
+    is_github_repo BOOLEAN NOT NULL DEFAULT FALSE,
     consecutive_failures INTEGER NOT NULL DEFAULT 0,
     last_checked TIMESTAMP WITH TIME ZONE,
     created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW(),
@@ -335,10 +474,10 @@ CREATE TABLE links (
 | `user_id` | UUID | NOT NULL, FK → users(id) | Owner of link |
 | `url` | TEXT | NOT NULL | Full URL |
 | `domain` | TEXT | NOT NULL | Extracted domain (e.g., "github.com") |
-| `path` | TEXT | NOT NULL | URL path |
+| `path` | TEXT | NULL | URL path; nullable since `20250101000007_fix_links_schema.sql` |
 | `title` | TEXT | NULL | Page title (auto-extracted) |
 | `description` | TEXT | NULL | Page description (auto-extracted) |
-| `logo` | BYTEA | NULL | Site logo/favicon (binary) |
+| `logo` | TEXT | NULL | Site logo/favicon as a URL or base64 data; widened from BYTEA by `20250101000007_fix_links_schema.sql` |
 | `source_code_url` | TEXT | NULL | Link to source code |
 | `documentation_url` | TEXT | NULL | Link to documentation |
 | `notes` | TEXT | NULL | User notes |
@@ -346,6 +485,7 @@ CREATE TABLE links (
 | `github_stars` | INTEGER | NULL | GitHub stars count |
 | `github_archived` | BOOLEAN | NULL | GitHub archived status |
 | `github_last_commit` | DATE | NULL | Last GitHub commit date |
+| `is_github_repo` | BOOLEAN | NOT NULL, DEFAULT FALSE | Whether the URL is a GitHub repository, which is what decides if the GitHub fields are refreshed |
 | `consecutive_failures` | INTEGER | NOT NULL, DEFAULT 0 | Health check failure count |
 | `last_checked` | TIMESTAMPTZ | NULL | Last health check time |
 | `created_at` | TIMESTAMPTZ | NOT NULL, DEFAULT NOW() | Link creation time |
@@ -365,13 +505,14 @@ CREATE TABLE links (
 - `idx_links_created_at` - Sort by creation date
 - `idx_links_last_checked` - Find links needing health checks (partial, WHERE NOT NULL)
 - `idx_links_unchecked` - Find never-checked links (partial, WHERE NULL)
+- `idx_links_is_github` - Find GitHub repositories (partial, WHERE `is_github_repo = true`)
 
 **Unique Constraints:**
 - `uq_links_user_domain_path` - Prevent duplicate URLs per user
 
 **Notes:**
-- Logo is stored as binary data (BYTEA)
-- Domain and path are extracted for deduplication
+- Logo is stored as TEXT, either a URL or base64 data
+- Domain and path are extracted for deduplication. `path` is nullable, and Postgres treats NULLs as distinct in a UNIQUE constraint, so two root-URL links on one domain do not collide
 - GitHub fields are populated for GitHub repository URLs
 - Health check fields track link availability
 
@@ -764,19 +905,34 @@ Indexes are created for:
 | Table | Index Name | Columns | Type | Purpose |
 |-------|------------|---------|------|---------|
 | users | idx_users_email | email | B-tree | Fast email lookup for auth |
-| sessions | idx_sessions_user_id | user_id | B-tree | Find user's sessions |
+| users | users_saas_user_id_unique | saas_user_id | B-tree (unique, partial) | One local account per a8n Tools account (WHERE NOT NULL) |
+| user_sessions | user_sessions_user_id | user_id | B-tree | Sessions for one account |
+| user_sessions | user_sessions_expires | expires_at | B-tree | Expiry sweep |
+| refresh_tokens | idx_refresh_tokens_user_id | user_id | B-tree | Tokens for one account |
+| refresh_tokens | idx_refresh_tokens_token | token | B-tree | The lookup a refresh performs |
+| login_attempts | idx_login_attempts_email | email | B-tree | Recent failures for one email |
+| rp_sessions | rp_sessions_expires | expires_at | B-tree | Expiry sweep |
+| pending_login_approvals | pending_login_approvals_user_id | user_id | B-tree | Holds for one account |
+| pending_login_approvals | pending_login_approvals_expires | expires_at | B-tree | Expiry sweep |
 | links | idx_links_user_id | user_id | B-tree | Find user's links |
 | links | idx_links_domain | domain | B-tree | Filter by domain |
 | links | idx_links_status | status | B-tree | Filter by status |
 | links | idx_links_created_at | created_at | B-tree | Sort by date |
 | links | idx_links_last_checked | last_checked | B-tree (partial) | Scheduler queries (WHERE NOT NULL) |
 | links | idx_links_unchecked | last_checked | B-tree (partial) | Never-checked links (WHERE NULL) |
+| links | idx_links_is_github | is_github_repo | B-tree (partial) | GitHub repositories (WHERE is_github_repo = true) |
 | categories | idx_categories_user_id | user_id | B-tree | Find user's categories |
 | categories | idx_categories_parent_id | parent_id | B-tree | Find child categories |
+| categories | uq_categories_user_name | user_id, lower(name) | B-tree (unique) | Case-insensitive name uniqueness per user |
 | languages | idx_languages_user_id | user_id | B-tree | Find user's languages |
+| languages | uq_languages_user_name | user_id, lower(name) | B-tree (unique) | Case-insensitive name uniqueness per user |
 | licenses | idx_licenses_user_id | user_id | B-tree | Find user's licenses |
+| licenses | uq_licenses_user_name | user_id, lower(name) | B-tree (unique) | Case-insensitive name uniqueness per user |
 | tags | idx_tags_user_id | user_id | B-tree | Find user's tags |
+| tags | uq_tags_user_name | user_id, lower(name) | B-tree (unique) | Case-insensitive name uniqueness per user |
 | known_devices | known_devices_user_id | user_id | B-tree | Devices for one account |
+
+Primary keys and the indexes Postgres creates for a UNIQUE constraint are not listed here; each table's own section names its constraints.
 
 ### Partial Indexes
 
@@ -912,8 +1068,8 @@ docker compose exec postgres pg_dump -U rustylinks -t links -t categories rustyl
 **Exclude Tables:**
 
 ```bash
-# Backup everything except sessions
-docker compose exec postgres pg_dump -U rustylinks -T sessions rustylinks > backup.sql
+# Backup everything except the transient auth tables, which are worthless in a restore
+docker compose exec postgres pg_dump -U rustylinks -T rp_sessions -T login_attempts rustylinks > backup.sql
 ```
 
 ### Data-Only Backup
