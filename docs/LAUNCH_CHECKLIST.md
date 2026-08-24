@@ -273,7 +273,7 @@ Complete checklist for launching Rusty Links v1.0.0 to production.
 ## 💻 Code Quality
 
 ### Testing
-- [ ] `just pre-commit` passes (covers fmt, clippy under default features, `--features server` and `--features web` on wasm, build and tests under both feature sets, the doc examples, and the Postgres-backed `tests/` targets)
+- [ ] `just pre-commit` passes (covers the four static guards, then fmt, clippy under default features, `--features server` and `--features web` on wasm, build and tests under both feature sets, the doc examples, and the Postgres-backed `tests/` targets; `scripts/check-suite-parity.nu` keeps it equal to `.forgejo/workflows/check.yml`)
 - [ ] `cargo test --features server --lib` passes all tests
 - [ ] Unit tests cover critical functions
 - [ ] Integration tests work
