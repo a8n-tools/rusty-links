@@ -69,7 +69,7 @@ Cookie::build((SESSION_COOKIE_NAME, session_id))
 - A first-ever login and a repeat from the same country are never flagged
 - Country-only: the LINKS-45 device signal feeds the approval gate below and deliberately does not raise an alert of its own
 - Per-user opt-out (`users.notify_new_location`), a global kill switch (`LOGIN_LOCATION_ALERTS_ENABLED`), and a cap of one alert per user per country per day
-- The opt-out is the user's to set (LINKS-33): `GET /api/auth/me` reports it and `PATCH /api/auth/me` changes it, scoped to the session's account, so a request body can never flip another user's setting
+- The opt-out is the user's to set (LINKS-33): `GET /api/auth/me` reports it and `PATCH /api/auth/me` changes it, scoped to the session's account, so a request body can never flip another user's setting. The Account page reaches it from a browser (LINKS-43), so silencing an alert no longer needs an API client
 - An absent `notify_new_location` key on the patch means "not submitted" and leaves the stored value alone; an explicit `false` persists and a non-boolean is rejected with 400
 - Runs off the login hot path, so a mail failure can never fail or slow a login
 - Alert mail leaves over an encrypted SMTP connection by default (LINKS-37): `SMTP_TLS` defaults to `starttls` (STARTTLS required, port 587) and `tls` selects implicit TLS (port 465)
@@ -105,7 +105,11 @@ Cookie::build((SESSION_COOKIE_NAME, session_id))
 - **What it does NOT detect, and cannot:** cleared site data, a private window, a second browser on the same machine, and a genuinely new machine are indistinguishable, because none of them carries the stored id. The failure mode is an extra approval mail, never a missed attacker
 - **Not an anti-automation control.** A client that sends no `device_id` is never held on this signal, so an API client or `curl` behaves exactly as it does today. This is hardening for the app's own sign-in form, not a bot gate
 - Recognition is scoped to the account, so a shared browser that one account has made known does not make a second account's first sign-in from it look familiar
-- Known devices are kept for the life of the account and removed with it. Letting a user list and revoke their own devices is tracked in LINKS-55
+- A user lists the devices their account is recognised from, and revokes any of them, from the Account page or with `GET /api/auth/devices` and `DELETE /api/auth/devices/{id}` (LINKS-55). The list never returns `device_id_hash`: the response type has no field for it and the query never selects it, so the "this browser" flag is resolved by comparing hashes inside the query
+- Revocation is scoped by the same rule as the LINKS-33 write: the account is a predicate in the `WHERE` clause, so a row id belonging to another account matches nothing, deletes nothing, and answers the same 404 an unknown id gets
+- Revoking is never a lockout, and cannot be. It issues no session and relaxes nothing for the caller; it can only move the account toward being held more often, or back to the zero-devices baseline. Revoking the LAST device returns the account to exactly the deploy-day state below, where the device trigger holds nobody, and the next sign-in re-establishes the baseline. That is the user-facing equivalent of the operator `DELETE` in the recovery section
+- Revoking the browser you are signed in on does not end the session; the device is not part of the session's identity. Its next sign-in is held, which is the intended effect
+- Deliberately not password-confirmed, unlike the storefront equivalent (SF-131). Revocation grants nothing, so a stolen session gains nothing by disarming the device trigger it cannot sign in past; someone who does hold the password would satisfy the prompt anyway; and an OIDC account's `password_hash` is the sentinel `'!sso:no-password'`, so a prompt would be unsatisfiable in hosted mode. The session is the authority, as it is for `PATCH /api/auth/me`, which silences the alert outright and is not confirmed either
 
 #### Deploy day: no backfill, and nobody is held
 

@@ -200,6 +200,14 @@ fn NavLinks(on_click: EventHandler<MouseEvent>, #[props(default = false)] mobile
             onclick: move |e| on_click.call(e),
             "Tags"
         }
+        a {
+            class: base_class,
+            href: "/account",
+            role: "menuitem",
+            "aria-label": "Account settings",
+            onclick: move |e| on_click.call(e),
+            "Account"
+        }
     }
 }
 

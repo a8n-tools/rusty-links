@@ -9,8 +9,8 @@
 use crate::error::AppError;
 use crate::models::{check_user_exists, User};
 use axum::{
-    extract::{rejection::JsonRejection, State},
-    http::HeaderMap,
+    extract::{rejection::JsonRejection, Path, State},
+    http::{HeaderMap, StatusCode},
     response::IntoResponse,
     Json,
 };
@@ -19,7 +19,8 @@ use sqlx::PgPool;
 
 use crate::auth::jwt::{create_jwt, generate_refresh_token, hash_refresh_token};
 use crate::auth::known_device::{
-    hash_device_id, known_device_state, normalize_device_id, record_submitted_device,
+    delete_for_user, hash_device_id, known_device_state, list_for_user, normalize_device_id,
+    record_submitted_device,
 };
 use crate::auth::location_alert::{resolve_notify_new_location, spawn_new_location_check};
 use crate::auth::login_approval::{approval_hold, request_login_approval};
@@ -455,6 +456,98 @@ pub async fn update_me_handler(
         notify_new_location: desired,
         ..info
     }))
+}
+
+/// Header a client presents its device id in, so the device list can say which
+/// row is "this browser".
+///
+/// A header rather than a query parameter so the id stays out of URLs, access
+/// logs and `Referer`. It is NOT gated like the LINKS-31 forwarded headers,
+/// and does not need to be: those assert network facts a client must not be
+/// able to claim, while this one is a client-owned value by design, sent with
+/// every sign-in already. Forging it can only mislabel a row as "this browser"
+/// in the forger's own view of their own account, and it selects nothing:
+/// revocation takes a row id, never a device id.
+const DEVICE_ID_HEADER: &str = "X-Device-Id";
+
+/// GET /api/auth/devices
+///
+/// The devices this account is recognised from (LINKS-55), so a user can see
+/// which browsers satisfy the LINKS-45 trigger and revoke one that should not.
+///
+/// The account is the session's and appears in the WHERE clause, so the
+/// response can only ever describe the caller. `device_id_hash` is never
+/// returned and never even selected: the "this browser" flag is resolved by
+/// comparing hashes inside the query.
+pub async fn list_devices_handler(
+    State(state): State<crate::api::AppState>,
+    auth_user: AuthenticatedUser,
+    headers: HeaderMap,
+) -> Result<Json<Vec<crate::server_functions::auth::KnownDeviceInfo>>, AppError> {
+    let current = normalize_device_id(
+        headers
+            .get(DEVICE_ID_HEADER)
+            .and_then(|value| value.to_str().ok()),
+    )
+    .map(|id| hash_device_id(&id));
+
+    let devices = list_for_user(&state.pool, auth_user.user_id, current.as_deref()).await?;
+
+    tracing::debug!(
+        user_id = %auth_user.user_id,
+        devices = devices.len(),
+        "Known devices listed"
+    );
+
+    Ok(Json(devices))
+}
+
+/// DELETE /api/auth/devices/{id}
+///
+/// Revoke one device this account is recognised from (LINKS-55).
+///
+/// Deliberately NOT password-confirmed, unlike the storefront equivalent
+/// (SF-131) where `/account` is a password-confirmed zone. Three reasons, in
+/// order of weight:
+///
+/// - Revocation cannot grant anything. It issues no session and relaxes no
+///   check for the caller; it can only move the account toward being held MORE
+///   often, or back to the zero-devices baseline it shipped at.
+/// - The attacker a prompt would stop cannot use what it protects. Someone
+///   holding a stolen session but not the password gains nothing from
+///   disarming the device trigger, because they cannot sign in at all; someone
+///   who does hold the password satisfies the prompt and is not stopped by it.
+/// - It is unimplementable in hosted mode. An OIDC account's `password_hash`
+///   is the sentinel `'!sso:no-password'` (see `auth::oidc_rp::jit`), so no
+///   input could ever verify, and the control would be dead on a deployment
+///   that can still list rows.
+///
+/// A prompt here would also be stricter than `PATCH /api/auth/me`, which
+/// silences the new-location alert outright and is not confirmed either. The
+/// session is the authority for both.
+pub async fn revoke_device_handler(
+    State(state): State<crate::api::AppState>,
+    auth_user: AuthenticatedUser,
+    Path(device_id): Path<uuid::Uuid>,
+) -> Result<StatusCode, AppError> {
+    // Ownership rides in the WHERE clause, so a row belonging to another
+    // account matches nothing and is reported exactly as a row that never
+    // existed. Nothing is read before the delete, so there is no window in
+    // which another account's row is loaded at all.
+    if !delete_for_user(&state.pool, device_id, auth_user.user_id).await? {
+        return Err(AppError::NotFound {
+            resource: "device".to_string(),
+            id: device_id.to_string(),
+        });
+    }
+
+    tracing::info!(
+        user_id = %auth_user.user_id,
+        device_id = %device_id,
+        "Known device revoked"
+    );
+
+    Ok(StatusCode::NO_CONTENT)
 }
 
 #[cfg(test)]

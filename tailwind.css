@@ -1570,6 +1570,117 @@
         padding-left: 4px;
     }
 
+    /* Account page (LINKS-43) */
+    .account-section {
+        padding: 20px;
+        background: var(--color-surface-50);
+        border: 1px solid var(--color-surface-300);
+        border-radius: var(--radius-md);
+        margin-top: 16px;
+    }
+
+    .account-section h2 {
+        font-size: 1.125rem;
+        font-weight: 600;
+        color: var(--color-text-primary);
+        margin-bottom: 12px;
+    }
+
+    .account-toggle {
+        display: flex;
+        align-items: flex-start;
+        gap: 10px;
+        cursor: pointer;
+    }
+
+    .account-toggle input[type="checkbox"] {
+        width: 18px;
+        height: 18px;
+        margin-top: 2px;
+        flex-shrink: 0;
+        cursor: pointer;
+        accent-color: var(--color-primary-500);
+    }
+
+    .account-toggle input[type="checkbox"]:disabled {
+        cursor: not-allowed;
+        opacity: 0.6;
+    }
+
+    .account-toggle-label {
+        color: var(--color-text-primary);
+        font-size: 0.9375rem;
+        line-height: 1.4;
+    }
+
+    .account-hint {
+        color: var(--color-text-secondary);
+        font-size: 0.8125rem;
+        line-height: 1.5;
+        margin-top: 8px;
+    }
+
+    /* Reserves its line so a "Saving..."/"Saved." message cannot reflow the
+       controls under it. */
+    .account-status {
+        min-height: 1.25rem;
+        margin-top: 8px;
+        font-size: 0.8125rem;
+        color: var(--color-text-secondary);
+    }
+
+    /* Recognised devices (LINKS-55) */
+    .device-list {
+        list-style: none;
+        margin: 12px 0 0;
+        padding: 0;
+        display: flex;
+        flex-direction: column;
+        gap: 8px;
+    }
+
+    .device-row {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 12px;
+        padding: 12px;
+        background: var(--color-surface-100);
+        border: 1px solid var(--color-surface-300);
+        border-radius: var(--radius-md);
+        flex-wrap: wrap;
+    }
+
+    .device-facts {
+        min-width: 0;
+    }
+
+    .device-title {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        font-weight: 600;
+        color: var(--color-text-primary);
+        font-size: 0.9375rem;
+    }
+
+    .device-badge {
+        padding: 2px 8px;
+        border-radius: 999px;
+        background: var(--color-primary-100);
+        color: var(--color-primary-800);
+        font-size: 0.6875rem;
+        font-weight: 700;
+        text-transform: uppercase;
+        letter-spacing: 0.03em;
+    }
+
+    .device-dates {
+        color: var(--color-text-secondary);
+        font-size: 0.8125rem;
+        margin-top: 4px;
+    }
+
     /* Modal */
     .modal-overlay {
         position: fixed;

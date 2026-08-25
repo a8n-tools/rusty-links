@@ -49,8 +49,17 @@ impl axum::extract::FromRef<AppState> for Config {
 /// `/me` in both modes: read the session's account, and patch the settings it
 /// owns (LINKS-33). Same pair either side of the mode switch, because the
 /// account settings belong to the user, not to the deployment mode.
+///
+/// The device list and revoke (LINKS-55) are mounted here for the same reason,
+/// and not only in standalone mode. Only a standalone sign-in ever RECORDS a
+/// device, but an account that later linked to OIDC (`auth::oidc_rp::jit`
+/// adopts an existing standalone account) keeps the rows it already had, and a
+/// device it is still recognised from must stay revocable from either mode.
 fn me_routes() -> Router<AppState> {
-    Router::new().route("/me", get(auth::me_handler).patch(auth::update_me_handler))
+    Router::new()
+        .route("/me", get(auth::me_handler).patch(auth::update_me_handler))
+        .route("/devices", get(auth::list_devices_handler))
+        .route("/devices/{id}", delete(auth::revoke_device_handler))
 }
 
 /// Create the main API router with all endpoints.

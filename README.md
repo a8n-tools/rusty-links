@@ -121,7 +121,7 @@ On a successful login the country is read from the `X-IPCountry` header injected
 
 Alert mail is sent over an encrypted connection by default: `SMTP_TLS` defaults to `starttls` (STARTTLS required on port 587), and `tls` selects implicit TLS on port 465. `none` is a plaintext escape hatch for a trusted loopback or sidecar MTA; it must be set explicitly and logs a warning naming the host on every send. Parsing is case-insensitive and an unrecognised value falls back to `starttls`.
 
-Alerts are also suppressed per user by the `users.notify_new_location` opt-out column, and are capped at one email per user per country per day. A signed-in user turns their own alerts off and back on with `PATCH /api/auth/me` (`{"notify_new_location": false}`), and reads the current setting from `GET /api/auth/me`; the write always targets the session's own account (LINKS-33).
+Alerts are also suppressed per user by the `users.notify_new_location` opt-out column, and are capped at one email per user per country per day. A signed-in user turns their own alerts off and back on from the **Account** page in the navbar (LINKS-43), or with `PATCH /api/auth/me` (`{"notify_new_location": false}`) against `GET /api/auth/me`'s current setting; the write always targets the session's own account (LINKS-33).
 
 #### Sign-in Approval Gate Settings
 
@@ -152,6 +152,12 @@ These sign-ins are never gated, by construction, because gating any of them woul
 The `known_devices` table is created **empty and is deliberately not backfilled**. Zero known devices is read as an account's baseline, exactly as a NULL `last_login_country` is, and never as "new device". So upgrading to a build that has the device trigger holds nobody, including you: the first sign-in after the upgrade records the browser it came from, and only a different browser after that is held. Reading it the other way would hold every account on the instance at once, with an emailed link as the only way back in.
 
 The device signal is browser recognition, not machine identification. Clearing site data, a private window, a second browser on the same machine and a genuinely new laptop all look identical to it, and each produces one approval mail. That is the accepted cost; what it never does is let an unfamiliar browser through silently. `docs/SECURITY.md` states the full boundary.
+
+##### Seeing and revoking recognised devices
+
+The **Account** page lists the browsers your account is recognised from, with the dates each was first and last used and a badge on the one you are reading it from, and revokes any of them (LINKS-55). The same pair is available as `GET /api/auth/devices` and `DELETE /api/auth/devices/{id}`. The stored SHA-256 is never returned: the response has no field for it, and which row is "this browser" is worked out server-side.
+
+Revoking is safe to reach for. It never signs a device out and never blocks a sign-in; it only stops that browser being recognised, so its next sign-in is held for approval. Revoking your **last** device is allowed and returns the account to the same zero-devices baseline it started at, where nothing is held on the device trigger. That is the self-service version of the operator `DELETE` in the recovery steps below, and it cannot lock you out.
 
 The gate deliberately ignores the per-user `notify_new_location` opt-out. That preference is written from an authenticated session, so honouring it would let anyone holding a session switch the security control off, and an opted-out user would be held with no mail to approve with. It continues to govern the alert alone, and it disables neither trigger.
 

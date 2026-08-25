@@ -194,6 +194,56 @@ pub async fn get_response(url: &str) -> Result<HttpResponse, String> {
     }
 }
 
+/// GET a URL, presenting this browser's device id in `X-Device-Id`.
+///
+/// Only the LINKS-55 device list needs it, to mark which row is "this browser".
+/// A header rather than a query parameter keeps the id out of URLs, access logs
+/// and `Referer`. Outside the browser `device_id()` is `None`, so the SSR pass
+/// sends a plain GET and simply gets no row marked.
+pub async fn get_with_device_id<T: DeserializeOwned>(url: &str) -> Result<T, String> {
+    #[cfg(target_arch = "wasm32")]
+    {
+        use gloo_net::http::Request;
+
+        let mut request = Request::get(url);
+
+        {
+            use web_sys::RequestCredentials;
+            request = request.credentials(RequestCredentials::Include);
+            if let Some(token) = crate::ui::auth_state::get_token() {
+                request = request.header("Authorization", &format!("Bearer {}", token));
+            }
+            if let Some(device_id) = crate::ui::auth_state::device_id() {
+                request = request.header("X-Device-Id", &device_id);
+            }
+        }
+
+        let response = request
+            .send()
+            .await
+            .map_err(|e| format!("Network error: {}", e))?;
+
+        redirect_if_unauthorized(response.status(), url);
+
+        if !response.ok() {
+            let status = response.status();
+            let error_text = response.text().await.unwrap_or_default();
+            redirect_if_membership_required(status, &error_text);
+            return Err(clean_error(status, &error_text));
+        }
+
+        response
+            .json::<T>()
+            .await
+            .map_err(|e| format!("Parse error: {}", e))
+    }
+
+    #[cfg(not(target_arch = "wasm32"))]
+    {
+        get(url).await
+    }
+}
+
 /// Make a POST request with JSON body and deserialize the JSON response
 pub async fn post<T: DeserializeOwned, B: Serialize>(url: &str, body: &B) -> Result<T, String> {
     #[cfg(target_arch = "wasm32")]
