@@ -121,7 +121,9 @@ Branch naming conventions:
    `default = []` and every server module is behind `#[cfg(feature = "server")]`, so a bare `cargo test` compiles almost none of the crate. Pass `--features server` to exercise the server-side suite.
 
    ```bash
-   # Run the server-side unit tests (the bulk of the suite)
+   # Run the server-side unit tests (the bulk of the suite). `just test` runs exactly
+   # this leg; a bare `cargo test` runs 13 of the 220 library tests and prints ok.
+   just test
    cargo test --features server --lib
 
    # Run the default-feature tests (feature-independent code only)
@@ -141,11 +143,21 @@ Branch naming conventions:
    ```
 
 3. **Check code quality**
+
+   `just pre-commit` is the authoritative suite: every leg `.forgejo/workflows/check.yml` runs, inside the dev container, stopping at the first red one. `just check` is the fast host-side loop: the same three clippy configurations plus `cargo fmt --check`, and none of the build, test, doc-test, database or dependency-audit legs, which need the compose stack. `scripts/check-suite-parity.nu` holds both against the workflow, so a lint leg dropped or weakened in either fails the build (LINKS-49, LINKS-64).
+
    ```bash
    # Run every check CI runs, in the dev container, failing on the first red leg
    just pre-commit
 
+   # Run the lint legs only, on the host: clippy under all three compilation
+   # configurations, then cargo fmt --check
+   just check
+
    # Or run the individual legs
+   just check-web      # clippy on the browser build, the only wasm32 leg
+   just check-clippy   # clippy under default features and --features server
+   just check-fmt
    cargo fmt
    cargo clippy --all-targets -- --deny warnings
    cargo clippy --all-targets --features server -- --deny warnings
@@ -228,7 +240,7 @@ Before submitting, ensure:
 - [ ] Any new SQL is covered by a `tests/db_*.rs` case, since a query with no database-backed test is only compile-checked
 - [ ] Any new doc example compiles (`just test-doc`); mark one that must not execute ```` ```no_run ````, never ```` ```ignore ````, which is not compiled at all and fails the leg
 - [ ] Code is formatted (`cargo fmt`)
-- [ ] No clippy warnings under any of the three configurations: `cargo clippy --all-targets -- --deny warnings`, the same with `--features server`, and `cargo clippy --all-targets --features web --target wasm32-unknown-unknown -- --deny warnings`
+- [ ] No clippy warnings under any of the three configurations, which `just check` runs together with `cargo fmt --check`: `cargo clippy --all-targets -- --deny warnings`, the same with `--features server`, and `cargo clippy --all-targets --features web --target wasm32-unknown-unknown -- --deny warnings`
 - [ ] Documentation is updated
 - [ ] Commit messages follow conventions
 - [ ] PR description is clear and complete

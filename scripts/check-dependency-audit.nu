@@ -39,10 +39,27 @@
 # - 0: no vulnerability, or every one of them is covered by an exception still in date.
 # - 1: a vulnerability with no exception, an expired or stale exception, a
 #      malformed exception row, or a report that could not be read at all.
+#
+# A failure that is not a real advisory has to be diagnosable from the log. The guard
+# used to print only "cargo audit printed something that is not JSON" and throw the
+# stdout away, so a failed cargo-audit bootstrap, an empty stdout and a genuinely
+# malformed report all read identically and the only fix was re-running the whole
+# `docker compose run` by hand (LINKS-62). Now the three are told apart and the stdout
+# is printed, bounded to STDOUT_EXCERPT_LIMIT characters.
 
 # Version requirement for the tool itself, not for the advisory database, which
 # is fetched fresh on every run. Patch releases are taken; a major is not.
 const AUDIT_VERSION_REQ = "^0.22"
+
+# A failed bootstrap exits with this code and prints this marker, so it is reported as
+# itself rather than as the unreadable report it would otherwise produce. Either signal
+# is enough: a runner that rewrites the exit code still passes stderr through.
+const BOOTSTRAP_EXIT = 90
+const BOOTSTRAP_MARKER = "cargo-audit-bootstrap-failed"
+
+# How much of an unreadable stdout to print. A full `cargo audit --json` report against
+# this lockfile is hundreds of kilobytes and would bury the failure it is meant to expose.
+const STDOUT_EXCERPT_LIMIT = 2000
 
 # Advisories accepted for now, one row per advisory id. `issue` is the LINKS
 # issue that tracks removing the row, `review_by` the date the acceptance stops
@@ -65,8 +82,37 @@ const EXCEPTIONS = [
 # pure JSON.
 def audit-argv [prefix: list<string>]: nothing -> list<string> {
     if ($prefix | is-empty) { return ["cargo" "audit" "--json"] }
-    let bootstrap = $"command -v cargo-audit >/dev/null || cargo binstall --no-confirm --locked cargo-audit@($AUDIT_VERSION_REQ) >&2"
+    let install = $"cargo binstall --no-confirm --locked cargo-audit@($AUDIT_VERSION_REQ)"
+    let bootstrap = $"command -v cargo-audit >/dev/null || { ($install) >&2 || { echo ($BOOTSTRAP_MARKER) >&2; exit ($BOOTSTRAP_EXIT); }; }"
     $prefix | append ["sh" "-c" $"($bootstrap); cargo audit --json"]
+}
+
+# What arrived on stdout, bounded, saying so when it was cut. An empty stdout reads as
+# `(empty)` rather than as a blank line, because "nothing arrived" and "something
+# unreadable arrived" are different failures that used to read identically (LINKS-62).
+def excerpt [raw: string]: nothing -> string {
+    if ($raw | str trim | is-empty) { return "(empty)" }
+    let len = ($raw | str length)
+    if $len <= $STDOUT_EXCERPT_LIMIT { return $raw }
+    $"($raw | str substring 0..<$STDOUT_EXCERPT_LIMIT)\n[... truncated: ($len) characters arrived on stdout, showing the first ($STDOUT_EXCERPT_LIMIT)]"
+}
+
+# Tell the three unreadable-report failures apart. `audit-argv` folds the bootstrap and
+# the audit into one `sh -c` when a runner fronts cargo, so a failed `cargo binstall`
+# used to surface as a parse failure with no hint that nothing was ever installed. The
+# bootstrap test runs first on purpose: a real bootstrap failure also leaves stdout
+# empty, so the empty-stdout rule would otherwise swallow it.
+def classify-failure [result: record, parsed: record]: nothing -> record {
+    if ($result.exit_code == $BOOTSTRAP_EXIT) or ($result.stderr | str contains $BOOTSTRAP_MARKER) {
+        return {
+            kind: "bootstrap"
+            reason: $"cargo-audit is not installed and `cargo binstall --no-confirm --locked cargo-audit@($AUDIT_VERSION_REQ)` failed, so the audit never started"
+        }
+    }
+    if ($result.stdout | str trim | is-empty) {
+        return {kind: "empty", reason: "cargo audit printed nothing at all on stdout"}
+    }
+    {kind: "parse", reason: $parsed.reason}
 }
 
 # Run a command through the runner prefix and collect both streams.
@@ -300,8 +346,71 @@ def run-self-test [] {
         print --stderr $"[check-dependency-audit] SELF-TEST FAILED: a fronted run no longer bootstraps and audits in one invocation: ($fronted)"
         exit 1
     }
+    if not (($fronted | str contains $BOOTSTRAP_MARKER) and ($fronted | str contains $"exit ($BOOTSTRAP_EXIT)")) {
+        print --stderr $"[check-dependency-audit] SELF-TEST FAILED: a fronted run no longer marks a failed bootstrap, so a failed install would surface as an unreadable report instead of as itself: ($fronted)"
+        exit 1
+    }
 
-    print "[check-dependency-audit] SELF-TEST OK: an uncovered vulnerability, an expired, stale, untracked, undated or malformed exception and an unreadable report are all rejected; a covered finding and a warning-only report are not."
+    # LINKS-62: the cases above prove an unreadable report is rejected. These prove the
+    # rejection is legible: it says which of the three failures it was and prints what
+    # actually arrived, which is the evidence the guard used to discard.
+    let garbled = '{"database":{"advisory-count":800},"lockfile"'
+    let garbled_failure = (classify-failure {exit_code: 1, stdout: $garbled, stderr: ""} (parse-report $garbled))
+    if $garbled_failure.kind != "parse" {
+        print --stderr $"[check-dependency-audit] SELF-TEST FAILED: a malformed report was classified `($garbled_failure.kind)`, not `parse`."
+        exit 1
+    }
+    if not ((excerpt $garbled) | str contains $garbled) {
+        print --stderr $"[check-dependency-audit] SELF-TEST FAILED: an unparsed stdout is not reported with its content: (excerpt $garbled)"
+        exit 1
+    }
+
+    # An empty stdout is its own failure, and reads as `(empty)` rather than as a blank
+    # line. The fixture carries a non-bootstrap exit code so it reaches this rule.
+    let empty_failure = (classify-failure {exit_code: 101, stdout: "", stderr: "error: no such command: `audit`"} (parse-report ""))
+    if $empty_failure.kind != "empty" {
+        print --stderr $"[check-dependency-audit] SELF-TEST FAILED: an empty stdout was classified `($empty_failure.kind)`, not `empty`."
+        exit 1
+    }
+    for blank in ["" "   " "\n\n"] {
+        if (excerpt $blank) != "(empty)" {
+            print --stderr $"[check-dependency-audit] SELF-TEST FAILED: an empty stdout is not reported as `\(empty)`: (excerpt $blank)"
+            exit 1
+        }
+    }
+
+    # A failed bootstrap is reported as itself, by exit code and by marker separately so
+    # neither signal is carried by the other. Both fixtures leave stdout empty, which is
+    # what a real bootstrap failure leaves, so this also proves the bootstrap rule wins
+    # over the empty-stdout rule rather than being shadowed by it.
+    for fixture in [
+        {exit_code: $BOOTSTRAP_EXIT, stdout: "", stderr: "error: could not download cargo-audit"}
+        {exit_code: 1, stdout: "", stderr: $"error: could not download cargo-audit\n($BOOTSTRAP_MARKER)"}
+    ] {
+        let boot = (classify-failure $fixture (parse-report ""))
+        if $boot.kind != "bootstrap" {
+            print --stderr $"[check-dependency-audit] SELF-TEST FAILED: a bootstrap failure signalled by exit ($fixture.exit_code) was classified `($boot.kind)`, not `bootstrap`."
+            exit 1
+        }
+        if not ($boot.reason | str contains "cargo binstall") {
+            print --stderr $"[check-dependency-audit] SELF-TEST FAILED: a bootstrap failure does not name the install command: ($boot.reason)"
+            exit 1
+        }
+    }
+
+    # A huge report is cut, and says it was cut.
+    let huge = (1..($STDOUT_EXCERPT_LIMIT * 2) | each {|| "x"} | str join)
+    let cut = (excerpt $huge)
+    if not ($cut | str contains "truncated") {
+        print --stderr "[check-dependency-audit] SELF-TEST FAILED: an oversized stdout was not reported as truncated."
+        exit 1
+    }
+    if ($cut | str length) >= ($huge | str length) {
+        print --stderr $"[check-dependency-audit] SELF-TEST FAILED: an oversized stdout was not bounded; ($huge | str length) characters in, ($cut | str length) out."
+        exit 1
+    }
+
+    print "[check-dependency-audit] SELF-TEST OK: an uncovered vulnerability, an expired, stale, untracked, undated or malformed exception and an unreadable report are all rejected; a covered finding and a warning-only report are not; and an unreadable report is reported legibly, with its stdout bounded and truncation stated, an empty stdout named as empty, and a failed cargo-audit bootstrap named as a bootstrap failure rather than a parse failure."
 }
 
 export def main [
@@ -330,7 +439,13 @@ export def main [
 
     let parsed = (parse-report $result.stdout)
     if not $parsed.ok {
-        print --stderr $"[check-dependency-audit] FAILED: ($parsed.reason), and it exited ($result.exit_code). Nothing was audited."
+        let failure = (classify-failure $result $parsed)
+        print --stderr $"[check-dependency-audit] FAILED: ($failure.reason), and it exited ($result.exit_code). Nothing was audited."
+        print --stderr "[check-dependency-audit] stdout, which is what it had to read the report from:"
+        print --stderr (excerpt $result.stdout)
+        if $failure.kind == "bootstrap" {
+            print --stderr "[check-dependency-audit] The audit itself never started, so this is not an advisory. Dockerfile line 41 bakes cargo-audit into the dev image, so a fresh cargo volume that has not been seeded from the image, or an unreachable binstall, produces this. Re-run once the volume is seeded, or rebuild the image."
+        }
         exit 1
     }
 

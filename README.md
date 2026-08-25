@@ -305,7 +305,9 @@ rusty-links/
 `default = []` and every server module is behind `#[cfg(feature = "server")]`, so a bare `cargo test` compiles almost none of the crate.
 
 ```bash
-# Server-side unit tests (the bulk of the suite)
+# Server-side unit tests (the bulk of the suite). `just test` runs exactly this leg;
+# a bare `cargo test` runs 13 of the 220 library tests and prints ok.
+just test
 cargo test --features server --lib
 
 # Default-feature tests
@@ -342,6 +344,12 @@ sqlx migrate run
 just pre-commit
 ```
 
+`just check` is the fast host-side subset: clippy under all three compilation configurations plus `cargo fmt --check`, and none of the build, test, doc-test, database or dependency-audit legs, which need the compose stack.
+
+```bash
+just check
+```
+
 The individual legs:
 
 ```bash
@@ -365,7 +373,7 @@ nu scripts/check-db-tests-ran.nu             # the tests/ targets against Postgr
 
 `.forgejo/workflows/audit.yml` runs the audit leg again weekly, which is the only run that sees an advisory published against a `Cargo.lock` nobody has touched; [docs/SECURITY.md](docs/SECURITY.md#security-audit) has the failure policy and the exception rules.
 
-`.forgejo/workflows/check.yml` runs exactly this list, and `scripts/check-suite-parity.nu` is what holds the two in step: it parses both files and fails when a leg or a guard script is in one and not the other, in either direction, after normalising the flag spellings each file uses locally. Change one copy and CI tells you about the other (LINKS-49).
+`.forgejo/workflows/check.yml` runs exactly this list, and `scripts/check-suite-parity.nu` is what holds the two in step: it parses both files and fails when a leg or a guard script is in one and not the other, in either direction, after normalising the flag spellings each file uses locally. Change one copy and CI tells you about the other (LINKS-49). It holds `just check` to the workflow's lint legs too, one way, so a clippy configuration or the fmt leg dropped from that recipe fails as well (LINKS-64).
 
 ---
 
