@@ -1,5 +1,7 @@
 # Fix: Getting Started Links & Clean Recipe
 
+> **Historical document.** Written during the initial build and kept for the record, body unchanged. It describes what was planned, not what runs today. For current behaviour see [README.md](../../../README.md) and the documents it links.
+
 **Date:** 2026-04-02
 **Branch:** `fix/getting-started`
 **PR:** #26 (merged into main)

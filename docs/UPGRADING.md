@@ -310,8 +310,8 @@ docker-compose -f compose.prod.yml logs app | grep -i migration
 # Verify environment variables
 docker-compose -f compose.prod.yml exec app env | grep -E "DATABASE_URL|APP_PORT|RUST_LOG"
 
-# Compare with .env.standalone for new variables
-diff .env .env.standalone
+# Compare with .env.standalone.example for new variables
+diff .env .env.standalone.example
 ```
 
 #### Performance Degradation After Upgrade

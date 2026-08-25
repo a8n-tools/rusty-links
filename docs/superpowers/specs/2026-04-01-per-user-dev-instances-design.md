@@ -1,5 +1,7 @@
 # Per-User Dev Instances
 
+> **Historical document.** Written during the initial build and kept for the record, body unchanged. It describes what was planned, not what runs today. For current behaviour see [README.md](../../../README.md) and the documents it links.
+
 **Date:** 2026-04-01
 **Status:** Completed
 **PR:** #25 (merged into main)

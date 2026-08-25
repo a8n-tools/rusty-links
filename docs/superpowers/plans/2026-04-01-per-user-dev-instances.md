@@ -1,5 +1,7 @@
 # Per-User Dev Instances Implementation Plan
 
+> **Historical document.** Written during the initial build and kept for the record, body unchanged. It describes what was planned, not what runs today. For current behaviour see [README.md](../../../README.md) and the documents it links.
+
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** Enable developers to spin up isolated rusty-links instances at `{USER}-links.a8n.run` on the shared dev server via Traefik.

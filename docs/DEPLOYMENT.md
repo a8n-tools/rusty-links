@@ -142,7 +142,7 @@ git clone https://dev.a8n.run/a8n-tools/rusty-links.git .
 
 ```bash
 # Copy environment template
-cp .env.standalone .env
+cp .env.standalone.example .env
 
 # Generate strong password
 openssl rand -base64 32

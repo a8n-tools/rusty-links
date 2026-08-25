@@ -1,5 +1,7 @@
 # High Contrast Mode Toggle
 
+> **Historical document.** Written during the initial build and kept for the record, body unchanged. It describes what was planned, not what runs today. For current behaviour see [README.md](../../../README.md) and the documents it links.
+
 ## Summary
 
 Add a manual high contrast mode toggle button to the navbar, placed next to the logout button. The toggle uses an icon-only button (circle-half contrast icon) with a tooltip. The preference persists across sessions via localStorage. This layers on top of the existing `@media (prefers-contrast: high)` media query — OS-level preferences continue to work automatically, and the button gives all users manual control.

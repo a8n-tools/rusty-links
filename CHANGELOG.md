@@ -7,6 +7,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- Corrected the CI/CD, Dependency Security and CI Testing entries under [1.0.0]. Those bullets described `.github/workflows-disabled/test.yml`, which sat in a disabled directory and never ran, and `.github/workflows/docker-publish.yml`, which the move to Forgejo deleted. Removed the cargo-audit, cargo-tarpaulin coverage, outdated/unused dependency-check and multi-platform bullets; renamed GitHub Actions to Forgejo Actions and GitHub Container Registry to the Forgejo Container Registry at `dev.a8n.run`. Every other 1.0.0 entry is unchanged (LINKS-58).
+- Corrected every documented `cp` of an environment template to name `.env.standalone.example` / `.env.saas.example`, the files that exist. The bare `.env.standalone` / `.env.saas` names the 1.0.0 entry records are the pre-rename names, still ignored by `.gitignore`, and are left as written (LINKS-41).
+
 ### Planned for Phase 2
 - Multi-user support with role-based access control
 - Public/private link sharing
@@ -217,19 +222,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Development override (`compose.dev.yml`) with hot reloading
 
 - **CI/CD**
-  - GitHub Actions workflows:
+  - Forgejo Actions workflows (`.forgejo/workflows/`):
     - Automated testing on push/PR
     - Code formatting checks (cargo fmt)
     - Linting with Clippy (cargo clippy)
-    - Security audit (cargo audit)
-    - Code coverage reporting (cargo-tarpaulin)
-    - Dependency checks (outdated, unused)
     - PostgreSQL service container for tests
     - Build caching for faster runs
   - Docker image publishing:
     - Automatic builds on version tags
-    - Multi-platform support (AMD64, ARM64)
-    - GitHub Container Registry (ghcr.io)
+    - Forgejo Container Registry (`dev.a8n.run`)
     - Intelligent tagging (latest, semver patterns)
     - Build provenance attestations
 
@@ -350,8 +351,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Health checks
 
 - **Dependency Security**
-  - Cargo audit integration
-  - Automated vulnerability scanning in CI
   - Regular dependency updates
   - Cargo.lock committed for reproducibility
   - Minimal dependency tree
@@ -384,7 +383,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Migration verification
   - Code formatting checks
   - Linting with Clippy
-  - Security audits
 
 ### Changed
 
