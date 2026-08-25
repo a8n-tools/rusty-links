@@ -34,7 +34,7 @@ A self-hosted bookmark manager built with Rust and Dioxus. Organize, search, and
 
 2. **Configure environment**
    ```bash
-   cp .env.standalone .env
+   cp .env.standalone.example .env
    # Edit .env and set a secure database password
    ```
 
@@ -187,7 +187,7 @@ Setting it is **required behind a reverse proxy**. The peer is then the proxy on
 TRUSTED_PROXY_CIDRS=10.0.0.0/8,172.16.0.0/12,192.168.0.0/16,fd00::/8
 ```
 
-See `.env.standalone` and `.env.saas` for full documentation of all options.
+See `.env.standalone.example` and `.env.saas.example` for full documentation of all options.
 
 ---
 
@@ -211,7 +211,13 @@ See `.env.standalone` and `.env.saas` for full documentation of all options.
 - [UI Implementation Guide](docs/history/UI_IMPLEMENTATION_README.md)
 - [Dioxus 0.7 Fullstack Conversion](docs/history/FULLSTACK_CONVERSION.md)
 
-The dated plans and designs under `docs/superpowers/` are unmaintained in the same way; banner-marking them is tracked in LINKS-61.
+`docs/superpowers/` holds the dated plans and designs the superpowers skill writes. They are unmaintained in the same way, and each opens with the same banner. They stay in place rather than moving under `docs/history/` because that is where the skill writes new ones, so a move would only be undone by the next plan.
+
+- [Per-User Dev Instances (plan)](docs/superpowers/plans/2026-04-01-per-user-dev-instances.md)
+- [High Contrast Mode (plan)](docs/superpowers/plans/2026-04-02-high-contrast-mode.md)
+- [Getting Started Links and Clean Recipe (plan)](docs/superpowers/plans/2026-04-02-fix-getting-started.md)
+- [Per-User Dev Instances (design)](docs/superpowers/specs/2026-04-01-per-user-dev-instances-design.md)
+- [High Contrast Mode (design)](docs/superpowers/specs/2026-04-02-high-contrast-mode-design.md)
 
 ---
 
@@ -238,7 +244,7 @@ The dated plans and designs under `docs/superpowers/` are unmaintained in the sa
 
 3. **Configure environment**
    ```bash
-   cp .env.standalone .env
+   cp .env.standalone.example .env
    # Edit .env with your database URL
    ```
 

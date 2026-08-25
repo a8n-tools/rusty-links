@@ -7,7 +7,7 @@ This guide covers deploying Rusty Links using Docker and Docker Compose for both
 ### 1. Copy Environment Template
 
 ```bash
-cp .env.standalone .env
+cp .env.standalone.example .env
 ```
 
 ### 2. Configure Environment Variables

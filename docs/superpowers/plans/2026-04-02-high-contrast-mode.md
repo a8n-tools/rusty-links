@@ -1,5 +1,7 @@
 # High Contrast Mode Implementation Plan
 
+> **Historical document.** Written during the initial build and kept for the record, body unchanged. It describes what was planned, not what runs today. For current behaviour see [README.md](../../../README.md) and the documents it links.
+
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** Add a manual high contrast mode toggle button to the navbar that persists via localStorage, layering on top of the existing `prefers-contrast: high` media query.
