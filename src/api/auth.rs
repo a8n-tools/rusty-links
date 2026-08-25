@@ -17,7 +17,7 @@ use axum::{
 use serde::Serialize;
 use sqlx::PgPool;
 
-use crate::auth::jwt::{create_jwt, generate_refresh_token};
+use crate::auth::jwt::{create_jwt, generate_refresh_token, hash_refresh_token};
 use crate::auth::known_device::{
     hash_device_id, known_device_state, normalize_device_id, record_submitted_device,
 };
@@ -78,9 +78,11 @@ async fn establish_jwt_session(
     let refresh_token = generate_refresh_token();
     let expires_at = chrono::Utc::now() + chrono::Duration::days(config.refresh_token_expiry_days);
 
-    sqlx::query("INSERT INTO refresh_tokens (user_id, token, expires_at) VALUES ($1, $2, $3)")
+    // Only the digest is stored (LINKS-59); the token itself leaves in the
+    // response body and is never written down.
+    sqlx::query("INSERT INTO refresh_tokens (user_id, token_hash, expires_at) VALUES ($1, $2, $3)")
         .bind(user.id)
-        .bind(&refresh_token)
+        .bind(hash_refresh_token(&refresh_token).as_slice())
         .bind(expires_at)
         .execute(pool)
         .await?;
@@ -296,37 +298,30 @@ pub async fn login_handler(
 /// POST /api/auth/refresh (standalone)
 ///
 /// Rotate refresh token and issue a new JWT.
+///
+/// The row is found by the SHA-256 of what was presented, never by the value
+/// itself (LINKS-59), and the `DELETE ... RETURNING` is what makes the rotation
+/// single-use in the same way the LINKS-35 guarded claim does: two concurrent
+/// refreshes both name the row, only one deletes it, and the loser gets no row
+/// back rather than a second session from one token.
 pub async fn refresh_handler(
     State(pool): State<PgPool>,
     State(config): State<Config>,
     Json(request): Json<RefreshRequest>,
 ) -> Result<impl IntoResponse, AppError> {
-    // Look up the refresh token
-    let row = sqlx::query_as::<_, (uuid::Uuid, uuid::Uuid, chrono::DateTime<chrono::Utc>)>(
-        "SELECT id, user_id, expires_at FROM refresh_tokens WHERE token = $1",
+    let (user_id, expires_at) = sqlx::query_as::<_, (uuid::Uuid, chrono::DateTime<chrono::Utc>)>(
+        "DELETE FROM refresh_tokens WHERE token_hash = $1 RETURNING user_id, expires_at",
     )
-    .bind(&request.refresh_token)
+    .bind(hash_refresh_token(&request.refresh_token).as_slice())
     .fetch_optional(&pool)
     .await?
     .ok_or(AppError::SessionExpired)?;
 
-    let (token_id, user_id, expires_at) = row;
-
-    // Check expiration
+    // An expired row is claimed and dropped rather than left to the sweep, so a
+    // token that has run out cannot be presented twice.
     if expires_at < chrono::Utc::now() {
-        // Delete expired token
-        sqlx::query("DELETE FROM refresh_tokens WHERE id = $1")
-            .bind(token_id)
-            .execute(&pool)
-            .await?;
         return Err(AppError::SessionExpired);
     }
-
-    // Delete old refresh token
-    sqlx::query("DELETE FROM refresh_tokens WHERE id = $1")
-        .bind(token_id)
-        .execute(&pool)
-        .await?;
 
     // Load user
     let user = User::find_by_id(&pool, user_id)

@@ -331,13 +331,13 @@ CREATE TABLE user_sessions (
 
 ### refresh_tokens
 
-Refresh tokens issued alongside the access JWT, added by `20250101000008_jwt_auth.sql` in place of the `sessions` table this reference used to document.
+Refresh tokens issued alongside the access JWT, added by `20250101000008_jwt_auth.sql` in place of the `sessions` table this reference used to document. `20260824000016_hash_refresh_tokens.sql` replaced the plaintext `token` column with its SHA-256 (LINKS-59).
 
 ```sql
 CREATE TABLE refresh_tokens (
     id         UUID        PRIMARY KEY DEFAULT gen_random_uuid(),
     user_id    UUID        NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-    token      TEXT        NOT NULL UNIQUE,
+    token_hash BYTEA       NOT NULL UNIQUE,
     expires_at TIMESTAMPTZ NOT NULL,
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
@@ -349,19 +349,20 @@ CREATE TABLE refresh_tokens (
 |--------------|-------------|---------------------------|-----------------------------------------|
 | `id`         | UUID        | PRIMARY KEY               | Row identifier                          |
 | `user_id`    | UUID        | NOT NULL, FK → users(id)  | Account the token belongs to            |
-| `token`      | TEXT        | NOT NULL, UNIQUE          | The refresh token as issued             |
+| `token_hash` | BYTEA       | NOT NULL, UNIQUE          | SHA-256 of the refresh token as issued  |
 | `expires_at` | TIMESTAMPTZ | NOT NULL                  | When the token stops being accepted     |
 | `created_at` | TIMESTAMPTZ | NOT NULL, DEFAULT NOW()   | When the token was issued               |
 
 **Indexes:**
 - `idx_refresh_tokens_user_id` - tokens for one account
-- `idx_refresh_tokens_token` - the lookup a refresh performs
+- `refresh_tokens_token_hash_key` - the UNIQUE constraint's index, which is the lookup a refresh performs
 
 **Notes:**
-- A refresh rotates: the presented row is deleted and a new one inserted, so a token cannot be replayed
+- Only the hash of the token is stored, so a database dump yields nothing that can be exchanged for a session. This matters more than it looks: a refresh is session continuation rather than a sign-in, so a replayed token never trips the LINKS-35 approval gate and mints a session with no password and no approval mail
+- A refresh looks the row up by `SHA-256(presented)`, computed in Rust by `auth::jwt::hash_refresh_token`, which is the same digest the migration's `sha256(convert_to(token, 'UTF8'))` backfill wrote, so tokens issued before the migration keep working
+- A refresh rotates through one guarded statement, `DELETE ... WHERE token_hash = $1 RETURNING user_id, expires_at`. Two concurrent refreshes of one token both name the row and only one deletes it, so the token yields exactly one new session and never two
 - Signing out deletes every row for the account
-- Expired rows are swept by the scheduler through `security::cleanup_expired_refresh_tokens`
-- `token` is stored as issued, unlike `user_sessions.session_token_hash` and `pending_login_approvals.token_hash`, which store only a SHA-256. Hashing it the same way is tracked in LINKS-59
+- Expired rows are swept by the scheduler through `security::cleanup_expired_refresh_tokens`, and a presented row that has expired is deleted by the refresh itself
 
 ---
 
@@ -431,6 +432,7 @@ CREATE TABLE rp_sessions (
 - No `user_id`: the row is written before the login has resolved to an account, which is why it is not owned by one
 - A successful callback deletes its own row, so a `state` cannot be replayed; abandoned rows are swept by the scheduler on `expires_at`
 - Rows live for seconds in normal use, so the table is effectively always empty
+- The three are stored as generated, and unlike `refresh_tokens.token_hash` (LINKS-59) a digest would not do: `code_verifier` goes to the IdP's token endpoint verbatim and `nonce` is compared against the ID token claim, so the server needs both values back. None of the three is a bearer credential for this app either. Holding a `state` gets nothing without an authorization code the IdP issued and the client secret the exchange needs, neither of which is in the database
 
 ---
 
@@ -848,6 +850,7 @@ These migrations are simple (a single `.sql` per version), not reversible, so th
 | 20260821000013 | Add last_login_country and notify_new_location to users for the new-location alert (LINKS-27) | 2026-08-21 |
 | 20260821000014 | Add pending_login_approvals for the sign-in approval gate (LINKS-35) | 2026-08-21 |
 | 20260824000015 | Add known_devices for the approval gate's new-device trigger (LINKS-45) | 2026-08-24 |
+| 20260824000016 | Replace refresh_tokens.token with its SHA-256 in token_hash, backfilled in place (LINKS-59) | 2026-08-24 |
 
 Every file in `migrations/` has a row here and every row names a file: `scripts/check-migration-docs.nu` compares the two in both directions and runs in `.forgejo/workflows/check.yml`. It fails a migration with no row, a row with no migration, a Date that contradicts the version prefix, and a table it can no longer parse, so a shape change is a red job rather than a silent pass. Before the guard existed the table listed six of the fourteen migrations, the first five plus the most recent, and read as if the schema had stopped changing in January 2025 (LINKS-46). To run it locally:
 
@@ -909,7 +912,7 @@ Indexes are created for:
 | user_sessions | user_sessions_user_id | user_id | B-tree | Sessions for one account |
 | user_sessions | user_sessions_expires | expires_at | B-tree | Expiry sweep |
 | refresh_tokens | idx_refresh_tokens_user_id | user_id | B-tree | Tokens for one account |
-| refresh_tokens | idx_refresh_tokens_token | token | B-tree | The lookup a refresh performs |
+| refresh_tokens | refresh_tokens_token_hash_key | token_hash | B-tree (unique) | The lookup a refresh performs |
 | login_attempts | idx_login_attempts_email | email | B-tree | Recent failures for one email |
 | rp_sessions | rp_sessions_expires | expires_at | B-tree | Expiry sweep |
 | pending_login_approvals | pending_login_approvals_user_id | user_id | B-tree | Holds for one account |
