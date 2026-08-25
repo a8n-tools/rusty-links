@@ -77,7 +77,7 @@ Two compose files are available for development:
 | `compose.dev.yml` | Per-user instances on shared dev server via Traefik (`{USER}-links.a8n.run`) | `just dev` |
 | `compose.yml` | Local-only development with localhost ports | `just dev-local` |
 
-Both mount source code as volumes for hot reloading via `dx serve`, enable debug logging, and persist cargo registry/build artifacts across rebuilds.
+Both mount source code as volumes for hot reloading via `dx serve`, enable debug logging, and persist cargo registry/build artifacts across rebuilds. The registry lives in `rusty-links-cargo-${USER}` at `CARGO_HOME` (`/usr/local/cargo`) and the build artifacts in `rusty-links-target-${USER}` at `/app/target`, which are the paths cargo actually writes: mounted anywhere else the volumes stay empty and every run recompiles from the image (LINKS-57, LINKS-60).
 
 ### Using the Justfile (recommended)
 
@@ -93,8 +93,8 @@ just dev-local saas       # saas mode
 # Stop containers
 just down
 
-# Stop and remove all containers + volumes
-just clean
+# Tear down this repo's dev footprint: containers, its named volumes, target/ and node_modules/
+just dev-clean
 ```
 
 ### Direct Docker Compose
@@ -189,8 +189,8 @@ docker compose logs postgres
 # Stop services
 docker compose down
 
-# Remove database volume
-docker volume rm rusty-links_postgres_data
+# Remove database volume (compose names it after ${USER}; see the `volumes:` block)
+docker volume rm rusty-links-postgres-${USER}
 
 # Start services (will create fresh database)
 docker compose up -d

@@ -43,9 +43,12 @@ services:
       # CARGO_HOME is /usr/local/cargo in the image, not /root/.cargo, so the volume
       # only caches the registry and installed binaries when mounted there (LINKS-57).
       - cargo_home:/usr/local/cargo
+      # Cargo writes target/debug and target/<triple>/, so the build cache has to sit on
+      # /app/target itself. server-dev and wasm-dev are dx profile names, not cargo
+      # directories, so the volumes mounted there cached nothing (LINKS-60).
+      - cargo_target:/app/target
+      # dx serve writes target/dx; nested under cargo_target, mounted after it by depth.
       - dx_out:/app/target/dx
-      - cargo_target_server:/app/target/server-dev
-      - cargo_target_wasm:/app/target/wasm-dev
     env_file: .env
     environment:
       RUST_LOG: debug
@@ -81,12 +84,12 @@ volumes:
     # Docker seeds this from the image only while it is empty, so run `just dev-clean`
     # after a base-image bump or the old toolchain shadows the new one (LINKS-57).
     name: rusty-links-cargo-${USER}
+  cargo_target:
+    # Seeded from the image's dependency prebuild only while empty, same as cargo_home:
+    # run `just dev-clean` after a base-image bump or the stale target/ shadows the new one.
+    name: rusty-links-target-${USER}
   dx_out:
     name: rusty-links-dx-${USER}
-  cargo_target_server:
-    name: rusty-links-target-server-${USER}
-  cargo_target_wasm:
-    name: rusty-links-target-wasm-${USER}
   postgres_data:
     name: rusty-links-postgres-${USER}
 

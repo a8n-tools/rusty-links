@@ -216,7 +216,7 @@ fmt:
 
 # ── Cleanup ──────────────────────────────────────────────────────────────────
 
-# Tear down this repo's dev footprint: bring down the compose stack (both compose.dev.yml and the plain compose.yml stack, dropping their default networks), remove this repo's named volumes (cargo, dx, target, target-server, target-wasm, postgres, all ${USER}-suffixed), and delete the local Rust target/ and node_modules/ build artifacts. Scoped to this repo; safe on a shared host. Replaces the former `clean` recipe.
+# Tear down this repo's dev footprint: bring down the compose stack (both compose.dev.yml and the plain compose.yml stack, dropping their default networks), remove this repo's named volumes (cargo, dx, target, postgres, all ${USER}-suffixed), and delete the local Rust target/ and node_modules/ build artifacts. Scoped to this repo; safe on a shared host. Replaces the former `clean` recipe.
 [group: 'cleanup']
 dev-clean:
     #!/usr/bin/env nu
@@ -227,8 +227,6 @@ dev-clean:
         $"rusty-links-cargo-($suffix)"
         $"rusty-links-dx-($suffix)"
         $"rusty-links-target-($suffix)"
-        $"rusty-links-target-server-($suffix)"
-        $"rusty-links-target-wasm-($suffix)"
         $"rusty-links-postgres-($suffix)"
     ]
     let existing = docker volume ls --quiet | lines
