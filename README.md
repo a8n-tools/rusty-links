@@ -338,7 +338,7 @@ sqlx migrate run
 
 ### Code Quality
 
-`just pre-commit` runs every check `.forgejo/workflows/check.yml` runs and stops at the first failure. The four static guards run on the host first, in well under a second; the dependency audit and then the cargo legs run in the dev container.
+`just pre-commit` runs every check `.forgejo/workflows/check.yml` runs and stops at the first failure. The five static guards run on the host first, in well under a second; the dependency audit and then the cargo legs run in the dev container.
 
 ```bash
 just pre-commit
@@ -357,6 +357,7 @@ nu scripts/check-suite-parity.nu             # the justfile and the workflow sti
 nu scripts/check-migration-immutability.nu   # no committed migration was edited
 nu scripts/check-migration-docs.nu           # migrations/ and the docs/DATABASE.md table agree
 nu scripts/check-build-flags.nu              # every justfile --features / --build-arg exists downstream
+nu scripts/check-dev-clean-volumes.nu        # dev-clean removes exactly the volumes the compose files declare
 nu scripts/check-dependency-audit.nu         # Cargo.lock against the RustSec advisory database
 cargo fmt --check
 cargo clippy --all-targets -- --deny warnings
