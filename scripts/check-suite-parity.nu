@@ -43,11 +43,21 @@ const WORKFLOW = ".forgejo/workflows/check.yml"
 const RECIPE = "pre-commit"
 const CHECK_RECIPE = "check"
 
-# Floors, not targets: nine cargo legs and seven guard scripts run today. They
-# exist so a parser that stopped matching fails instead of comparing [] to [].
-# Raise them as the suite grows rather than lowering after a near miss.
-const MIN_CARGO_LEGS = 7
-const MIN_GUARD_SCRIPTS = 5
+# Floors, set AT the real counts rather than below them: nine cargo legs and
+# eight guard scripts run today. They exist so a parser that stopped matching
+# fails instead of comparing [] to [], and so a leg deleted from BOTH copies at
+# once fails too, which the two-way comparison cannot catch on its own because
+# both sides shrink together. Slack is exactly the size of that hole: at a floor
+# of 7 a both-sided drop to seven guards still passed. Removing a leg on purpose
+# therefore means lowering the number here in the same commit, where a reviewer
+# sees it.
+#
+# Raising them means extending the known-good fixtures first. sample-justfile and
+# sample-workflow are what the self-test proves a matching set against, so a floor
+# above what they enumerate fails the self-test rather than the real files. That
+# coupling, not neglect, is why MIN_GUARD_SCRIPTS sat at 5 while eight guards ran.
+const MIN_CARGO_LEGS = 9
+const MIN_GUARD_SCRIPTS = 8
 
 # `check` resolves to three clippy configurations plus fmt. Same reasoning: a
 # recipe renamed, emptied, or stripped of a dependency has to fail here rather
@@ -427,10 +437,10 @@ def violations [just: record, ci: record, check: record]: nothing -> list<string
         $found = ($found | append $"($WORKFLOW): parsed only ($cc | length) cargo legs and the floor is ($MIN_CARGO_LEGS), so the step shape changed and the comparison would have been vacuous")
     }
     if ($jg_scripts | length) < $MIN_GUARD_SCRIPTS {
-        $found = ($found | append $"($just_label): parsed only ($jg_scripts | length) guard scripts and the floor is ($MIN_GUARD_SCRIPTS)")
+        $found = ($found | append $"($just_label): parsed only ($jg_scripts | length) guard scripts and the floor is ($MIN_GUARD_SCRIPTS), so a guard was dropped from both copies at once or the recipe shape changed")
     }
     if ($cg_scripts | length) < $MIN_GUARD_SCRIPTS {
-        $found = ($found | append $"($WORKFLOW): parsed only ($cg_scripts | length) guard scripts and the floor is ($MIN_GUARD_SCRIPTS)")
+        $found = ($found | append $"($WORKFLOW): parsed only ($cg_scripts | length) guard scripts and the floor is ($MIN_GUARD_SCRIPTS), so a guard was dropped from both copies at once or the step shape changed")
     }
 
     for leg in $jc {
@@ -469,10 +479,14 @@ def sample-justfile []: nothing -> string {
         'pre-commit: ensure-env ensure-css'
         '    #!/usr/bin/env nu'
         '    print "\n[pre-commit] cargo clippy --all-targets --features bogus -- --deny warnings"'
+        '    ^nu scripts/check-suite-parity.nu --self-test'
+        '    ^nu scripts/check-suite-parity.nu'
         '    ^nu scripts/check-migration-immutability.nu'
         '    ^nu scripts/check-migration-docs.nu --self-test'
         '    ^nu scripts/check-migration-docs.nu'
         '    ^nu scripts/check-build-flags.nu'
+        '    ^nu scripts/check-dev-clean-volumes.nu --self-test'
+        '    ^nu scripts/check-dev-clean-volumes.nu'
         '    ^nu scripts/check-dependency-audit.nu --self-test'
         '    ^nu scripts/check-dependency-audit.nu --runner "docker compose --file compose.dev.yml run --rm --no-deps app"'
         '    ^docker compose --file compose.dev.yml run --rm --no-deps app cargo fmt --check'
@@ -531,6 +545,14 @@ def sample-workflow []: nothing -> string {
         '          nu scripts/check-migration-docs.nu'
         '      - name: Guard justfile build flags'
         '        run: nu scripts/check-build-flags.nu'
+        '      - name: Guard the dev-clean volume list'
+        '        run: |'
+        '          nu scripts/check-dev-clean-volumes.nu --self-test'
+        '          nu scripts/check-dev-clean-volumes.nu'
+        '      - name: Guard check-suite parity'
+        '        run: |'
+        '          nu scripts/check-suite-parity.nu --self-test'
+        '          nu scripts/check-suite-parity.nu'
         '      - name: Dependency audit'
         '        run: |'
         '          nu scripts/check-dependency-audit.nu --self-test'
