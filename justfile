@@ -151,16 +151,26 @@ migrate name:
 db-prepare:
     cargo sqlx prepare
 
-# Run all checks (web, clippy, fmt)
+# Mirror the cargo lint legs of .forgejo/workflows/check.yml on the host: clippy under all three
+# compilation configurations, then fmt. `just pre-commit` stays the authoritative suite; it adds
+# the static guards, the dependency audit, and the build and test legs inside the dev container.
+# No build or test leg here on purpose: `cargo test --features server --lib` needs the dev
+# database, which is the compose stack's job.
 check: check-web check-clippy check-fmt
 
 # Lint the browser build, the only leg that compiles `#[cfg(target_arch = "wasm32")]` code (matches the `Clippy (web/wasm)` step in .forgejo/workflows/check.yml)
 check-web: ensure-css
     cargo clippy --all-targets --features web --target wasm32-unknown-unknown -- --deny warnings
 
-# Run clippy lints
-check-clippy:
-    cargo clippy
+# Lint the default and server configurations, matching the `Clippy (default features)` and
+# `Clippy (server)` steps in .forgejo/workflows/check.yml. This was a bare `cargo clippy`: no
+# `--all-targets`, no `--deny warnings`, and no server leg at all, so it exited 0 on its own
+# findings and compiled almost none of the crate, since `default = []` gates every server module
+# behind `#[cfg(feature = "server")]` (LINKS-36, LINKS-42). ensure-css because the server leg
+# compiles src/main.rs, which include_str!s the generated stylesheet.
+check-clippy: ensure-css
+    cargo clippy --all-targets -- --deny warnings
+    cargo clippy --all-targets --features server -- --deny warnings
 
 # Check formatting
 check-fmt:
