@@ -782,3 +782,102 @@ pub fn create_router(
 
     router.with_state(state)
 }
+
+/// Whether a browser page path is behind the hosted-mode session guard.
+///
+/// The server-side half of the protection `ui::app::ProtectedLayout` applies in
+/// the browser. Both halves must list the same pages: the client guard is a
+/// redirect a client controls, so in hosted mode this one is the control that
+/// actually holds. A page added to `ProtectedLayout` and forgotten here is
+/// served to an unauthenticated browser (LINKS-43).
+///
+/// `/login` is included so a signed-in user landing on it is bounced to
+/// `/links` rather than shown a second login. `/setup` and the 404 catch-all
+/// are deliberately absent: the first is a standalone-only flow that hosted
+/// mode never serves, and the second needs no session to say "not found".
+///
+/// Lives here rather than inline in `main.rs` so it can be tested; the binary
+/// is not reachable from the test targets.
+pub fn is_protected_page(path: &str) -> bool {
+    matches!(
+        path,
+        "/" | "/links"
+            | "/categories"
+            | "/tags"
+            | "/languages"
+            | "/licenses"
+            | "/account"
+            | "/login"
+    ) || path.starts_with("/links/")
+}
+
+#[cfg(test)]
+mod tests {
+    use super::is_protected_page;
+
+    /// Every page inside `ui::app::ProtectedLayout` must be gated here too.
+    /// This list is the enum's protected arm, transcribed; when a route is
+    /// added there and not here, this is what fails.
+    #[test]
+    fn every_protected_layout_page_is_gated() {
+        for path in [
+            "/links",
+            "/links/add",
+            "/links/2f1c8d2e-0000-0000-0000-000000000000/edit",
+            "/categories",
+            "/tags",
+            "/languages",
+            "/licenses",
+            "/account",
+        ] {
+            assert!(
+                is_protected_page(path),
+                "{path} is behind ProtectedLayout in the browser and must be gated on the server too"
+            );
+        }
+    }
+
+    /// The account page carries a security setting and the device list, so an
+    /// unauthenticated browser must never be served it.
+    #[test]
+    fn the_account_page_is_gated() {
+        assert!(is_protected_page("/account"));
+    }
+
+    /// `/` and `/login` are gated without being ProtectedLayout routes: the
+    /// first redirects by session state, the second bounces a signed-in user.
+    #[test]
+    fn the_entry_pages_are_gated() {
+        assert!(is_protected_page("/"));
+        assert!(is_protected_page("/login"));
+    }
+
+    /// Gating these would break the flows they belong to, so their absence is
+    /// deliberate rather than an oversight.
+    #[test]
+    fn the_ungated_paths_stay_ungated() {
+        assert!(
+            !is_protected_page("/setup"),
+            "standalone-only first-run flow; hosted mode never serves it"
+        );
+        assert!(
+            !is_protected_page("/nope"),
+            "a 404 needs no session to answer"
+        );
+        assert!(
+            !is_protected_page("/oauth2/callback"),
+            "the OIDC flow authenticates the request that gates the rest"
+        );
+    }
+
+    /// The prefix arm covers the nested link pages, and only those. A path that
+    /// merely starts with the same letters is not one of them.
+    #[test]
+    fn the_link_prefix_does_not_overreach() {
+        assert!(is_protected_page("/links/anything"));
+        assert!(
+            !is_protected_page("/linksomething"),
+            "the arm is the /links/ prefix, not a substring match"
+        );
+    }
+}

@@ -1,3 +1,4 @@
+pub mod account;
 pub mod add_link;
 pub mod categories;
 pub mod edit_link;

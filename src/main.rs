@@ -181,17 +181,7 @@ async fn main() {
                         return next.run(req).await;
                     }
 
-                    let is_protected = matches!(
-                        path,
-                        "/" | "/links"
-                            | "/categories"
-                            | "/tags"
-                            | "/languages"
-                            | "/licenses"
-                            | "/login"
-                    ) || path.starts_with("/links/");
-
-                    if !is_protected {
+                    if !rusty_links::auth::oidc_rp::is_protected_page(path) {
                         return next.run(req).await;
                     }
 

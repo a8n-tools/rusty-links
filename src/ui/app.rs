@@ -5,6 +5,7 @@ use uuid::Uuid;
 use crate::server_functions::auth::check_setup;
 use crate::ui::components::footer::Footer;
 use crate::ui::http;
+use crate::ui::pages::account::AccountPage;
 use crate::ui::pages::add_link::AddLinkPage;
 use crate::ui::pages::categories::CategoriesPage;
 use crate::ui::pages::edit_link::EditLinkPage;
@@ -106,6 +107,8 @@ pub enum Route {
     Languages {},
     #[route("/licenses")]
     Licenses {},
+    #[route("/account")]
+    Account {},
     #[end_layout]
     #[route("/:..route")]
     NotFound { route: Vec<String> },
@@ -353,6 +356,11 @@ fn Languages() -> Element {
 #[component]
 fn Licenses() -> Element {
     rsx! { LicensesPage {} }
+}
+
+#[component]
+fn Account() -> Element {
+    rsx! { AccountPage {} }
 }
 
 #[component]

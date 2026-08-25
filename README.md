@@ -121,7 +121,7 @@ On a successful login the country is read from the `X-IPCountry` header injected
 
 Alert mail is sent over an encrypted connection by default: `SMTP_TLS` defaults to `starttls` (STARTTLS required on port 587), and `tls` selects implicit TLS on port 465. `none` is a plaintext escape hatch for a trusted loopback or sidecar MTA; it must be set explicitly and logs a warning naming the host on every send. Parsing is case-insensitive and an unrecognised value falls back to `starttls`.
 
-Alerts are also suppressed per user by the `users.notify_new_location` opt-out column, and are capped at one email per user per country per day. A signed-in user turns their own alerts off and back on with `PATCH /api/auth/me` (`{"notify_new_location": false}`), and reads the current setting from `GET /api/auth/me`; the write always targets the session's own account (LINKS-33).
+Alerts are also suppressed per user by the `users.notify_new_location` opt-out column, and are capped at one email per user per country per day. A signed-in user turns their own alerts off and back on from the **Account** page in the navbar (LINKS-43), or with `PATCH /api/auth/me` (`{"notify_new_location": false}`) against `GET /api/auth/me`'s current setting; the write always targets the session's own account (LINKS-33).
 
 #### Sign-in Approval Gate Settings
 
