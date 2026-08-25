@@ -1,9 +1,18 @@
 #!/usr/bin/env nu
 
-# Reject drift between the two hand-maintained copies of the check suite: the
-# `pre-commit` recipe in `justfile` and the steps in
-# `.forgejo/workflows/check.yml`. Every cargo leg and every guard script in one
-# must appear in the other, so the comparison runs in both directions.
+# Reject drift between the hand-maintained copies of the check suite: the
+# `pre-commit` and `check` recipes in `justfile` and the steps in
+# `.forgejo/workflows/check.yml`. Every cargo leg and every guard script in
+# `pre-commit` must appear in the workflow and the reverse, so that comparison
+# runs in both directions.
+#
+# `check` is the third copy: the host-side lint pass, which LINKS-42 grew into the
+# same three clippy configurations CI runs. It is compared one way, because it
+# deliberately omits the build, test, doc-test and database legs that need the
+# compose stack: every clippy configuration and the fmt leg the workflow runs must
+# appear in `check`, and nothing demands the reverse. Before LINKS-64 the recipe was
+# outside the guard entirely, so deleting its `--features server` clippy leg left
+# both this guard and scripts/check-build-flags.nu at exit 0.
 #
 # Why this exists: four issues in a row were a leg that ran and proved nothing
 # (LINKS-36, LINKS-44, LINKS-48, LINKS-39). LINKS-39's residual risk is one
@@ -32,12 +41,18 @@
 const JUSTFILE = "justfile"
 const WORKFLOW = ".forgejo/workflows/check.yml"
 const RECIPE = "pre-commit"
+const CHECK_RECIPE = "check"
 
 # Floors, not targets: nine cargo legs and seven guard scripts run today. They
 # exist so a parser that stopped matching fails instead of comparing [] to [].
 # Raise them as the suite grows rather than lowering after a near miss.
 const MIN_CARGO_LEGS = 7
 const MIN_GUARD_SCRIPTS = 5
+
+# `check` resolves to three clippy configurations plus fmt. Same reasoning: a
+# recipe renamed, emptied, or stripped of a dependency has to fail here rather
+# than compare an empty set to the workflow's lint legs (LINKS-64).
+const MIN_CHECK_LEGS = 4
 
 # The three compilation configurations the crate has. `default = []` gates every
 # server module behind `#[cfg(feature = "server")]`, and the wasm leg is the only
@@ -234,32 +249,77 @@ def extract-legs [source: string, cmds: list<string>]: nothing -> record {
     {cargo: $cargo, guards: $guards, problems: $problems}
 }
 
-# The command lines of the `pre-commit` recipe body: every indented line until
-# the recipe ends. A missing recipe is a parse failure, not an empty suite.
-def justfile-legs [text: string]: nothing -> record {
+# The dependency list on a recipe header: everything after the first colon.
+# `(ensure-env mode)` is one dependency carrying an argument, so keep the name and
+# drop the argument.
+def recipe-deps [header: string]: nothing -> list<string> {
+    $header
+    | split row ":"
+    | skip 1
+    | str join ":"
+    | str replace --regex --all '\(\s*([A-Za-z0-9_-]+)[^)]*\)' '$1'
+    | split row --regex '\s+'
+    | each {|d| $d | str trim}
+    | where {|d| $d =~ '^[A-Za-z0-9_-]+$'}
+}
+
+# A recipe's own command lines plus, breadth first, those of the recipes it depends
+# on. `check: check-web check-clippy check-fmt` has an empty body and all of its legs
+# in its dependencies; `just --dry-run check` prints the same expansion. A dependency
+# naming a recipe that does not exist is reported, never skipped: renaming
+# `check-clippy` would otherwise shrink the comparison in silence, which is the whole
+# failure mode LINKS-64 exists to close.
+def recipe-cmds [text: string, recipe: string]: nothing -> record {
     let lines = ($text | lines)
-    let starts = ($lines | enumerate | where {|r| $r.item =~ $'^($RECIPE)\s*:'} | get index)
-    if ($starts | is-empty) {
-        return {
-            cargo: []
-            guards: []
-            problems: [$"($JUSTFILE): found no `($RECIPE):` recipe. It was renamed or removed, so nothing was compared."]
+    mut pending = [$recipe]
+    mut seen = []
+    mut cmds = []
+    mut problems = []
+
+    while ($pending | is-not-empty) {
+        let name = ($pending | first)
+        $pending = ($pending | skip 1)
+        if $name in $seen { continue }
+        $seen = ($seen | append $name)
+
+        # The name must be followed by whitespace or the colon, so `check` does not
+        # match `check-web` and a parameterised header (`ensure-env mode="x":`) does.
+        let starts = ($lines | enumerate | where {|r| $r.item =~ ('^' + $name + '(\s|:)')} | get index)
+        if ($starts | is-empty) {
+            $problems = ($problems | append $"($JUSTFILE): found no `($name):` recipe. It was renamed or removed, so nothing was compared.")
+            continue
         }
+
+        let at = ($starts | first)
+        let after = ($lines | skip ($at + 1))
+        let ends = (
+            $after
+            | enumerate
+            | where {|r| (($r.item | str trim) != "") and (not ($r.item =~ '^\s'))}
+            | get index
+        )
+        let body = if ($ends | is-empty) { $after } else { $after | first ($ends | first) }
+        $cmds = ($cmds | append (
+            $body
+            | each {|l| $l | str trim}
+            | where {|l| ($l != "") and (not ($l | str starts-with "#"))}
+        ))
+        $pending = ($pending | append (recipe-deps ($lines | get $at)))
     }
-    let after = ($lines | skip (($starts | first) + 1))
-    let ends = (
-        $after
-        | enumerate
-        | where {|r| (($r.item | str trim) != "") and (not ($r.item =~ '^\s'))}
-        | get index
-    )
-    let body = if ($ends | is-empty) { $after } else { $after | first ($ends | first) }
-    let cmds = (
-        $body
-        | each {|l| $l | str trim}
-        | where {|l| ($l != "") and (not ($l | str starts-with "#"))}
-    )
-    extract-legs $"($JUSTFILE) `($RECIPE)`" $cmds
+
+    {cmds: $cmds, problems: $problems}
+}
+
+# The command lines a recipe runs, its dependency recipes included. A missing recipe
+# is a parse failure, not an empty suite.
+def justfile-legs [text: string, recipe: string]: nothing -> record {
+    let resolved = (recipe-cmds $text $recipe)
+    let legs = (extract-legs $"($JUSTFILE) `($recipe)`" $resolved.cmds)
+    {
+        cargo: $legs.cargo
+        guards: $legs.guards
+        problems: ($resolved.problems | append $legs.problems)
+    }
 }
 
 # The command lines of every `run:` step in every job. A `run:` block can hold
@@ -322,9 +382,34 @@ def clippy-violations [source: string, legs: list<any>]: nothing -> list<string>
     $found
 }
 
+# `check` is the host-side lint subset of the workflow, so the comparison runs one
+# way: every clippy configuration and the fmt leg the workflow runs must appear in
+# `check`, and nothing demands the reverse. A two-way comparison would demand that
+# `check` grow the build, test, doc-test and database legs it exists to leave out,
+# which need the compose stack. `clippy-violations` is reused unchanged, so `check`
+# is held to the same "every configuration is linted, every clippy leg denies
+# warnings" invariant as the other two copies (LINKS-64).
+def check-violations [check: record, ci: record]: nothing -> list<string> {
+    let label = $"($JUSTFILE) `($CHECK_RECIPE)`"
+    mut found = $check.problems
+
+    let legs = (canon-set $check.cargo)
+    if ($legs | length) < $MIN_CHECK_LEGS {
+        $found = ($found | append $"($label): parsed only ($legs | length) cargo legs and the floor is ($MIN_CHECK_LEGS) \(three clippy configurations plus fmt), so the recipe or one of its dependency recipes changed shape and the comparison would have been vacuous")
+    }
+
+    for leg in (canon-set ($ci.cargo | where {|l| $l.subcommand in ["clippy" "fmt"]})) {
+        if $leg not-in $legs {
+            $found = ($found | append $"`($leg)` runs in ($WORKFLOW) but not in ($label), so `just ($CHECK_RECIPE)` no longer lints what CI lints")
+        }
+    }
+
+    $found | append (clippy-violations $label $check.cargo)
+}
+
 # Compare both directions, plus the per-file invariants that survive a drift
-# applied to both copies at once.
-def violations [just: record, ci: record]: nothing -> list<string> {
+# applied to both copies at once, plus the one-way `check` comparison.
+def violations [just: record, ci: record, check: record]: nothing -> list<string> {
     mut found = ($just.problems | append $ci.problems)
 
     let jc = (canon-set $just.cargo)
@@ -372,6 +457,7 @@ def violations [just: record, ci: record]: nothing -> list<string> {
     $found
     | append (clippy-violations $just_label $just.cargo)
     | append (clippy-violations $WORKFLOW $ci.cargo)
+    | append (check-violations $check $ci)
 }
 
 # A miniature of the real suite: the justfile spellings on one side, the
@@ -402,6 +488,27 @@ def sample-justfile []: nothing -> string {
         '    ^nu scripts/check-doc-tests-ran.nu --runner "docker compose --file compose.dev.yml run --rm --no-deps app"'
         '    ^nu scripts/check-db-tests-ran.nu --self-test'
         '    ^nu scripts/check-db-tests-ran.nu --runner "docker compose --file compose.dev.yml run --rm app"'
+        ''
+        '[private]'
+        'ensure-env mode="standalone":'
+        '    @test -f .env || cp .env.{{ mode }}.example .env'
+        ''
+        '[private]'
+        'ensure-css:'
+        '    @test -f assets/tailwind.css || touch assets/tailwind.css'
+        ''
+        '# The host-side lint pass, compared one way against the workflow (LINKS-64).'
+        'check: check-web check-clippy check-fmt'
+        ''
+        'check-web: ensure-css'
+        '    cargo clippy --all-targets --features web --target wasm32-unknown-unknown -- --deny warnings'
+        ''
+        'check-clippy: ensure-css'
+        '    cargo clippy --all-targets -- --deny warnings'
+        '    cargo clippy --all-targets --features server -- --deny warnings'
+        ''
+        'check-fmt:'
+        '    cargo fmt --check'
         ''
         'unrelated-recipe:'
         '    cargo doc --open'
@@ -459,9 +566,20 @@ def sample-workflow []: nothing -> string {
     ] | str join "\n"
 }
 
-def expect-rejected [label: string, just: record, ci: record] {
-    if (violations $just $ci | is-empty) {
+def expect-rejected [label: string, found: list<string>] {
+    if ($found | is-empty) {
         print --stderr $"[check-suite-parity] SELF-TEST FAILED: ($label) was accepted."
+        exit 1
+    }
+}
+
+# Reject, and reject by the rule the fixture is aimed at. A fixture that trips some
+# other comparison first leaves its own invariant unreached while the self-test still
+# passes, which is how a guard grows a rule nothing ever exercises.
+def expect-rejected-by [label: string, needle: string, found: list<string>] {
+    expect-rejected $label $found
+    if ($found | where {|f| $f | str contains $needle} | is-empty) {
+        print --stderr $"[check-suite-parity] SELF-TEST FAILED: ($label) was rejected, but by no rule whose message contains `($needle)`, so the invariant the fixture aims at was never reached. Got: ($found | str join '; ')"
         exit 1
     }
 }
@@ -470,15 +588,22 @@ def expect-rejected [label: string, just: record, ci: record] {
 # rejected. Without it a drifted parser passes every job silently, which is the
 # same blindness one level up that this guard exists to remove.
 def run-self-test [] {
-    let just = (justfile-legs (sample-justfile))
+    let just = (justfile-legs (sample-justfile) $RECIPE)
     let ci = (workflow-legs (sample-workflow))
+    let check = (justfile-legs (sample-justfile) $CHECK_RECIPE)
 
-    if ($just.problems | is-not-empty) or ($ci.problems | is-not-empty) {
-        print --stderr $"[check-suite-parity] SELF-TEST FAILED: the parser rejected a well-formed pair: (($just.problems | append $ci.problems) | str join '; ')"
+    if ($just.problems | is-not-empty) or ($ci.problems | is-not-empty) or ($check.problems | is-not-empty) {
+        print --stderr $"[check-suite-parity] SELF-TEST FAILED: the parser rejected a well-formed set: (($just.problems | append $ci.problems | append $check.problems) | str join '; ')"
         exit 1
     }
     if ($just.cargo | length) != 9 or ($ci.cargo | length) != 9 {
         print --stderr $"[check-suite-parity] SELF-TEST FAILED: the parser no longer reads the real shape; it found ($just.cargo | length) justfile legs and ($ci.cargo | length) workflow legs, expected 9 each. A `print` line or the `docker compose` prefix is probably being counted."
+        exit 1
+    }
+    # `check` has an empty body: every one of its legs comes from a dependency recipe,
+    # so a resolver that stopped following dependencies reads it as running nothing.
+    if ($check.cargo | length) != 4 {
+        print --stderr $"[check-suite-parity] SELF-TEST FAILED: `($CHECK_RECIPE)` resolved to ($check.cargo | length) cargo legs, expected 4 \(three clippy configurations plus fmt). Its dependency recipes are not being followed."
         exit 1
     }
     let wasm = ($just.cargo | where {|l| $l.target == "wasm32-unknown-unknown"})
@@ -489,52 +614,100 @@ def run-self-test [] {
 
     # `-D warnings` vs `--deny warnings` and `--features=server` vs
     # `--features server` are the same leg, so the matching pair must pass.
-    let accepted = (violations $just $ci)
+    let accepted = (violations $just $ci $check)
     if ($accepted | is-not-empty) {
-        print --stderr $"[check-suite-parity] SELF-TEST FAILED: a matching pair was rejected: ($accepted | str join '; ')"
+        print --stderr $"[check-suite-parity] SELF-TEST FAILED: a matching set was rejected: ($accepted | str join '; ')"
         exit 1
     }
 
     # The LINKS-39 scenario: --target dropped from one copy re-lints the host build.
-    let no_target = (justfile-legs (sample-justfile | str replace " --target wasm32-unknown-unknown" ""))
-    expect-rejected "a justfile clippy leg with --target dropped" $no_target $ci
+    let no_target = (justfile-legs (sample-justfile | str replace " --target wasm32-unknown-unknown" "") $RECIPE)
+    expect-rejected "a justfile clippy leg with --target dropped" (violations $no_target $ci $check)
     let ci_no_target = (workflow-legs (sample-workflow | str replace " --target=wasm32-unknown-unknown" ""))
-    expect-rejected "a workflow clippy leg with --target dropped" $just $ci_no_target
+    expect-rejected "a workflow clippy leg with --target dropped" (violations $just $ci_no_target $check)
 
-    # --deny warnings dropped from one copy: the leg runs and exits 0 anyway.
+    # --deny warnings dropped from one copy: the leg runs and exits 0 anyway. The needle
+    # keeps this on the rule it is aimed at, now that a mutated workflow also moves the
+    # one-way `check` comparison.
     let no_deny = (workflow-legs (sample-workflow | str replace " -- -D warnings" "" --all))
-    expect-rejected "workflow clippy legs with no --deny warnings" $just $no_deny
+    expect-rejected-by "workflow clippy legs with no --deny warnings" "passes no `--deny warnings`" (violations $just $no_deny $check)
 
     # A leg present in one file only, in either direction.
     let extra_ci = (workflow-legs (sample-workflow | str replace "      - name: Check formatting" "      - name: Extra\n        run: cargo test --features server --test route_surface\n      - name: Check formatting"))
-    expect-rejected "a leg in the workflow but not the justfile" $just $extra_ci
-    let fewer_just = (justfile-legs (sample-justfile | str replace --regex '(?m)^.*cargo test --features server --lib.*\n' ''))
-    expect-rejected "a leg in the workflow but missing from the justfile" $fewer_just $ci
+    expect-rejected "a leg in the workflow but not the justfile" (violations $just $extra_ci $check)
+    let fewer_just = (justfile-legs (sample-justfile | str replace --regex '(?m)^.*cargo test --features server --lib.*\n' '') $RECIPE)
+    expect-rejected "a leg in the workflow but missing from the justfile" (violations $fewer_just $ci $check)
 
     # A guard script invoked in one file only.
-    let no_guard = (justfile-legs (sample-justfile | str replace --regex '(?m)^.*check-build-flags\.nu.*\n' ''))
-    expect-rejected "a guard script the justfile stopped running" $no_guard $ci
+    let no_guard = (justfile-legs (sample-justfile | str replace --regex '(?m)^.*check-build-flags\.nu.*\n' '') $RECIPE)
+    expect-rejected "a guard script the justfile stopped running" (violations $no_guard $ci $check)
 
     # A flag change that is a real difference rather than a synonym.
-    let all_features = (justfile-legs (sample-justfile | str replace "cargo build --all-targets --features server" "cargo build --all-targets --all-features"))
-    expect-rejected "a justfile leg whose flags genuinely differ" $all_features $ci
+    let all_features = (justfile-legs (sample-justfile | str replace "cargo build --all-targets --features server" "cargo build --all-targets --all-features") $RECIPE)
+    expect-rejected "a justfile leg whose flags genuinely differ" (violations $all_features $ci $check)
 
     # Nothing parsed must fail rather than compare [] to [].
-    let renamed = (justfile-legs (sample-justfile | str replace "pre-commit: ensure-env ensure-css" "precommit: ensure-env ensure-css"))
+    let renamed = (justfile-legs (sample-justfile | str replace "pre-commit: ensure-env ensure-css" "precommit: ensure-env ensure-css") $RECIPE)
     if ($renamed.problems | is-empty) {
         print --stderr "[check-suite-parity] SELF-TEST FAILED: a renamed recipe was accepted instead of failing loudly."
         exit 1
     }
-    expect-rejected "a justfile with no pre-commit recipe" $renamed $ci
+    expect-rejected "a justfile with no pre-commit recipe" (violations $renamed $ci $check)
     let no_jobs = (workflow-legs "name: Check\non:\n  push:\n    branches: [main]\n")
     if ($no_jobs.problems | is-empty) {
         print --stderr "[check-suite-parity] SELF-TEST FAILED: a workflow with no jobs was accepted instead of failing loudly."
         exit 1
     }
-    expect-rejected "a workflow with no jobs" $just $no_jobs
-    expect-rejected "two empty sides" $no_jobs $no_jobs
+    expect-rejected "a workflow with no jobs" (violations $just $no_jobs $check)
+    expect-rejected "two empty sides" (violations $no_jobs $no_jobs $check)
 
-    print "[check-suite-parity] SELF-TEST OK: a dropped --target, a dropped --deny warnings, a one-sided leg, a one-sided guard, a genuinely different flag and an empty parse are all rejected; a matching pair written in each file's own flag spellings is not."
+    # LINKS-64. Deleting the server clippy leg from `check-clippy` left this guard and
+    # scripts/check-build-flags.nu both at exit 0 before this change. Each case asserts
+    # the rule it aims at actually fired, so a fixture caught by some other comparison
+    # first cannot leave the new invariant unreached.
+    let check_no_server = (justfile-legs (sample-justfile | str replace "\n    cargo clippy --all-targets --features server -- --deny warnings" "") $CHECK_RECIPE)
+    expect-rejected-by "a `check` that lost its --features server clippy leg" "no clippy leg covers `--all-targets --features server`" (violations $just $ci $check_no_server)
+
+    let check_no_deny = (justfile-legs (sample-justfile | str replace "\n    cargo clippy --all-targets --features server -- --deny warnings" "\n    cargo clippy --all-targets --features server") $CHECK_RECIPE)
+    expect-rejected-by "a `check` clippy leg with no --deny warnings" "passes no `--deny warnings`" (violations $just $ci $check_no_deny)
+
+    let check_no_fmt = (justfile-legs (sample-justfile | str replace "check: check-web check-clippy check-fmt" "check: check-web check-clippy") $CHECK_RECIPE)
+    expect-rejected-by "a `check` that stopped running cargo fmt" "`cargo fmt --check` runs in" (violations $just $ci $check_no_fmt)
+
+    # A dependency recipe renamed away: `check` still resolves, just to fewer legs.
+    let check_dep_gone = (justfile-legs (sample-justfile | str replace "check-clippy: ensure-css" "check-lints: ensure-css") $CHECK_RECIPE)
+    if ($check_dep_gone.problems | is-empty) {
+        print --stderr "[check-suite-parity] SELF-TEST FAILED: a `check` dependency recipe that no longer exists was accepted instead of failing loudly."
+        exit 1
+    }
+    expect-rejected-by "a `check` dependency recipe renamed away" "found no `check-clippy:` recipe" (violations $just $ci $check_dep_gone)
+
+    # `check` itself renamed away must fail loudly AND trip the floor, rather than
+    # comparing an empty set to the workflow's lint legs.
+    let check_gone = (justfile-legs (sample-justfile | str replace "check: check-web check-clippy check-fmt" "lint: check-web check-clippy check-fmt") $CHECK_RECIPE)
+    if ($check_gone.problems | is-empty) {
+        print --stderr "[check-suite-parity] SELF-TEST FAILED: a justfile with no `check` recipe was accepted instead of failing loudly."
+        exit 1
+    }
+    let check_gone_found = (violations $just $ci $check_gone)
+    expect-rejected-by "a justfile with no `check` recipe" "found no `check:` recipe" $check_gone_found
+    expect-rejected-by "a `check` recipe that parsed nothing" "cargo legs and the floor is" $check_gone_found
+
+    # `check` deliberately omits the workflow's build, test, doc-test and database legs,
+    # which need the compose stack. Prove the sample workflow actually runs some, so
+    # `check` not being asked for them is a property rather than an empty statement.
+    let excluded = (canon-set ($ci.cargo | where {|l| $l.subcommand not-in ["clippy" "fmt"]}))
+    if ($excluded | length) < 3 {
+        print --stderr $"[check-suite-parity] SELF-TEST FAILED: the sample workflow runs ($excluded | length) non-lint cargo legs, so `($CHECK_RECIPE)` not being asked for them proves nothing."
+        exit 1
+    }
+    let asked = (check-violations $check $ci)
+    if ($asked | is-not-empty) {
+        print --stderr $"[check-suite-parity] SELF-TEST FAILED: `($CHECK_RECIPE)` matches every lint leg of the workflow but was rejected: ($asked | str join '; ')"
+        exit 1
+    }
+
+    print $"[check-suite-parity] SELF-TEST OK: a dropped --target, a dropped --deny warnings, a one-sided leg, a one-sided guard, a genuinely different flag and an empty parse are all rejected; in `($CHECK_RECIPE)` a lost --features server clippy leg, a lost --deny warnings, a lost fmt leg, a renamed dependency recipe and a renamed recipe are all rejected, each by the rule it is aimed at; a matching set written in each file's own flag spellings, and a `($CHECK_RECIPE)` that omits the workflow's ($excluded | length) non-lint legs, are not."
 }
 
 export def main [
@@ -556,9 +729,10 @@ export def main [
         }
     }
 
-    let just = (justfile-legs (open --raw $JUSTFILE))
+    let just = (justfile-legs (open --raw $JUSTFILE) $RECIPE)
     let ci = (workflow-legs (open --raw $WORKFLOW))
-    let found = (violations $just $ci)
+    let check = (justfile-legs (open --raw $JUSTFILE) $CHECK_RECIPE)
+    let found = (violations $just $ci $check)
 
     if ($found | is-not-empty) {
         print --stderr "[check-suite-parity] FAILED:"
@@ -566,12 +740,13 @@ export def main [
             print --stderr $"  - ($problem)"
         }
         print --stderr ""
-        print --stderr $"The `($RECIPE)` recipe in ($JUSTFILE) and the steps in ($WORKFLOW) are two copies of one check suite. Every cargo leg and every guard script in one must appear in the other, so `just ($RECIPE)` runs what CI runs. Fix whichever copy is wrong, or change both together."
+        print --stderr $"The `($RECIPE)` recipe in ($JUSTFILE) and the steps in ($WORKFLOW) are two copies of one check suite, and the `($CHECK_RECIPE)` recipe is a third copy of its lint legs. Every cargo leg and every guard script in `($RECIPE)` must appear in ($WORKFLOW) and the reverse, so `just ($RECIPE)` runs what CI runs; every clippy configuration and the fmt leg ($WORKFLOW) runs must appear in `($CHECK_RECIPE)`, so `just ($CHECK_RECIPE)` lints what CI lints. Fix whichever copy is wrong, or change them together."
         exit 1
     }
 
     let legs = (canon-set $just.cargo)
     let scripts = ($just.guards | get script | uniq)
+    let check_legs = (canon-set $check.cargo)
     print ($legs | wrap leg)
-    print $"[check-suite-parity] OK: ($legs | length) cargo legs and ($scripts | length) guard scripts run in both ($JUSTFILE) `($RECIPE)` and ($WORKFLOW)."
+    print $"[check-suite-parity] OK: ($legs | length) cargo legs and ($scripts | length) guard scripts run in both ($JUSTFILE) `($RECIPE)` and ($WORKFLOW), and ($JUSTFILE) `($CHECK_RECIPE)` runs the ($check_legs | length) lint legs of ($WORKFLOW)."
 }

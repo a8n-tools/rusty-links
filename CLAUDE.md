@@ -13,7 +13,7 @@ IMPORTANT: Do NOT modify `./assets/tailwind.css`. All CSS should go in `./tailwi
 
 `just pre-commit` is the authoritative check suite: it runs every check `.forgejo/workflows/check.yml` runs, and fails on the first red one. Run it before every commit. It starts with the four static guards that need no compiler (`scripts/check-suite-parity.nu`, `scripts/check-migration-immutability.nu`, `scripts/check-migration-docs.nu`, `scripts/check-build-flags.nu`), which run on the host in well under a second, then the dependency audit, then the cargo legs in the dev container.
 
-`scripts/check-suite-parity.nu` is what keeps that claim true. The recipe and the workflow are two hand-maintained copies of one suite, so it parses the cargo invocations and guard-script calls out of both and fails when either side has a leg the other lacks, in either direction. It normalises the spellings each file uses locally (`-D warnings` in the workflow, `--deny warnings` in the recipe; `--features=web` and `--features web`; flag order), so only a real difference is drift. It also fails when a clippy leg carries no `--deny warnings`, and when no clippy leg covers one of the three compilation configurations, which is the drift that survives being applied to both copies at once: `.cargo/config.toml` pins `[build] target = "x86_64-unknown-linux-gnu"`, so a wasm leg that lost `--target` silently re-lints the host build instead of failing (LINKS-39, LINKS-49).
+`scripts/check-suite-parity.nu` is what keeps that claim true. The recipe and the workflow are two hand-maintained copies of one suite, so it parses the cargo invocations and guard-script calls out of both and fails when either side has a leg the other lacks, in either direction. The `check` recipe is a third copy, of the lint legs only, and is compared one way: every clippy configuration and the fmt leg the workflow runs must appear in `check`, resolved through its dependency recipes, while the build, test, doc-test and database legs it deliberately omits are not demanded of it. Until LINKS-64 `check` was outside the guard entirely, so deleting its `--features server` clippy leg left both this guard and `scripts/check-build-flags.nu` at exit 0. It normalises the spellings each file uses locally (`-D warnings` in the workflow, `--deny warnings` in the recipe; `--features=web` and `--features web`; flag order), so only a real difference is drift. It also fails when a clippy leg carries no `--deny warnings`, and when no clippy leg covers one of the three compilation configurations, which is the drift that survives being applied to every copy at once: `.cargo/config.toml` pins `[build] target = "x86_64-unknown-linux-gnu"`, so a wasm leg that lost `--target` silently re-lints the host build instead of failing (LINKS-39, LINKS-49).
 
 Its last two legs run the test targets that `cargo test --lib` never reaches, each behind a guard script, because `cargo test` exits 0 on an empty run and a suite that runs nothing looks identical to one that passes:
 
@@ -45,7 +45,9 @@ cargo clippy --all-targets --features web --target wasm32-unknown-unknown -- --d
 # Run tests (default features runs only the handful of feature-independent tests)
 cargo test
 
-# Run the server-side test suite
+# Run the server-side library suite (`just test` runs exactly this; a bare `cargo test`
+# runs 13 of the 220 library tests and prints ok, because `default = []`)
+just test
 cargo test --features server --lib
 
 # Run a specific test
@@ -60,7 +62,12 @@ just test-db
 # Audit Cargo.lock against the RustSec advisory database, the same leg pre-commit and CI run
 just audit
 
-# Code quality (both legs; the default leg alone does not lint server code)
+# Lint on the host: clippy under all three compilation configurations, then fmt.
+# `just pre-commit` stays the authoritative suite; `just check` is the fast loop and
+# leaves out the build, test, doc-test, database and audit legs, which need the compose stack.
+just check
+
+# Or the individual legs (the default leg alone does not lint server code)
 cargo fmt
 cargo clippy --all-targets -- --deny warnings
 cargo clippy --all-targets --features server -- --deny warnings

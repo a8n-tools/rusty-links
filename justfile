@@ -181,17 +181,28 @@ check-fmt:
 check-docker:
     docker buildx build --tag rusty-links:check -f oci-build/Dockerfile .
 
-# Build release binary
-build:
-    cargo build --release
+# Build the release binary in the configuration the project ships, matching
+# `cargo build --release --features server` in oci-build/Dockerfile. Under default
+# features `default = []` cfgs out every server module and src/main.rs links its
+# `#[cfg(not(feature = "server"))]` main instead, so the artifact launches a client
+# with no server, no database and no API (LINKS-36, LINKS-66). `just pre-commit` and
+# CI still build both configurations, so nothing is lost by this one picking the
+# useful artifact. ensure-css because src/main.rs include_str!s the stylesheet.
+build: ensure-css
+    cargo build --release --features server
 
 # Build Docker image. Mode-agnostic, same as check-docker.
 build-docker:
     docker buildx build --tag rusty-links:local -f oci-build/Dockerfile .
 
-# Run tests
+# Run the library suite in the server configuration, matching the `Unit tests (server)`
+# step in .forgejo/workflows/check.yml. A bare `cargo test` ran 13 of the crate's 220
+# library tests and printed ok, because `default = []` cfgs out every server module
+# (LINKS-36, LINKS-66). `--lib` on purpose: the tests/ targets need the compose Postgres
+# and have `just test-db`, the doc examples have `just test-doc`, and `just pre-commit`
+# runs every leg under both feature sets.
 test:
-    cargo test
+    cargo test --features server --lib
 
 # Run the doc tests, the same leg `just pre-commit` and CI run. Fails if the
 # harness collected nothing, since `cargo test --doc` exits 0 on an empty run.
