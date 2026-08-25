@@ -15,7 +15,7 @@ install-hooks:
     ^chmod +x $hook
     print $"Wrote ($hook) -> just pre-commit"
 
-# Run every check .forgejo/workflows/check.yml runs: the four static guards on the host, then
+# Run every check .forgejo/workflows/check.yml runs: the five static guards on the host, then
 # the cargo legs inside the dev compose `app` container. scripts/check-suite-parity.nu compares
 # this recipe against the workflow and fails when either grows, loses or weakens a leg (LINKS-49).
 # The dependency audit runs next, before anything compiles: it reads Cargo.lock rather than the
@@ -37,6 +37,8 @@ pre-commit: ensure-env ensure-css
     ^nu scripts/check-migration-docs.nu --self-test
     ^nu scripts/check-migration-docs.nu
     ^nu scripts/check-build-flags.nu
+    ^nu scripts/check-dev-clean-volumes.nu --self-test
+    ^nu scripts/check-dev-clean-volumes.nu
     print "\n[pre-commit] dependency audit"
     ^nu scripts/check-dependency-audit.nu --self-test
     ^nu scripts/check-dependency-audit.nu --runner "docker compose --file compose.dev.yml run --rm --no-deps --env RUST_LOG=warn app"

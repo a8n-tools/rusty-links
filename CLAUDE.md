@@ -11,7 +11,7 @@ IMPORTANT: Do NOT modify `./assets/tailwind.css`. All CSS should go in `./tailwi
 
 ## Build & Development Commands
 
-`just pre-commit` is the authoritative check suite: it runs every check `.forgejo/workflows/check.yml` runs, and fails on the first red one. Run it before every commit. It starts with the four static guards that need no compiler (`scripts/check-suite-parity.nu`, `scripts/check-migration-immutability.nu`, `scripts/check-migration-docs.nu`, `scripts/check-build-flags.nu`), which run on the host in well under a second, then the dependency audit, then the cargo legs in the dev container.
+`just pre-commit` is the authoritative check suite: it runs every check `.forgejo/workflows/check.yml` runs, and fails on the first red one. Run it before every commit. It starts with the five static guards that need no compiler (`scripts/check-suite-parity.nu`, `scripts/check-migration-immutability.nu`, `scripts/check-migration-docs.nu`, `scripts/check-build-flags.nu`, `scripts/check-dev-clean-volumes.nu`), which run on the host in well under a second, then the dependency audit, then the cargo legs in the dev container.
 
 `scripts/check-suite-parity.nu` is what keeps that claim true. The recipe and the workflow are two hand-maintained copies of one suite, so it parses the cargo invocations and guard-script calls out of both and fails when either side has a leg the other lacks, in either direction. The `check` recipe is a third copy, of the lint legs only, and is compared one way: every clippy configuration and the fmt leg the workflow runs must appear in `check`, resolved through its dependency recipes, while the build, test, doc-test and database legs it deliberately omits are not demanded of it. Until LINKS-64 `check` was outside the guard entirely, so deleting its `--features server` clippy leg left both this guard and `scripts/check-build-flags.nu` at exit 0. It normalises the spellings each file uses locally (`-D warnings` in the workflow, `--deny warnings` in the recipe; `--features=web` and `--features web`; flag order), so only a real difference is drift. It also fails when a clippy leg carries no `--deny warnings`, and when no clippy leg covers one of the three compilation configurations, which is the drift that survives being applied to every copy at once: `.cargo/config.toml` pins `[build] target = "x86_64-unknown-linux-gnu"`, so a wasm leg that lost `--target` silently re-lints the host build instead of failing (LINKS-39, LINKS-49).
 
@@ -27,7 +27,7 @@ Nothing measures test coverage and that is deliberate, so do not add a percentag
 IMPORTANT: `default = []`, so a bare `cargo check` / `cargo clippy` / `cargo test` compiles almost none of this crate. Every server module is behind `#[cfg(feature = "server")]`, so any command meant to verify server code must pass `--features server`.
 
 ```bash
-# Run every check CI runs (the four static guards, the dependency audit, then fmt, clippy under default + server + web/wasm, build, unit/doc/Postgres tests under default + server)
+# Run every check CI runs (the five static guards, the dependency audit, then fmt, clippy under default + server + web/wasm, build, unit/doc/Postgres tests under default + server)
 just pre-commit
 
 # Run in development (requires PostgreSQL and .env file)

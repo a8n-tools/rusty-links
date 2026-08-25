@@ -570,7 +570,7 @@ If you want a local number for your own purposes, `cargo llvm-cov` and `cargo ta
 
 Tests run automatically on every push to `main` and every pull request. See `.forgejo/workflows/check.yml` for the complete configuration; the `check` job declares a `postgres:17-alpine` service (matching `compose.dev.yml`, so dev and CI agree) and exports `DATABASE_URL` for the database-backed legs. The `Doc tests (server)` step needs no database and runs before them.
 
-There is one job, on one runner label, against one Postgres version, with the toolchain the runner image ships (nothing in the repo pins one). Before the cargo legs it runs the four static guards, which need no compiler: `scripts/check-suite-parity.nu`, `scripts/check-migration-immutability.nu`, `scripts/check-migration-docs.nu` and `scripts/check-build-flags.nu`. The `Dependency audit` step follows them: it needs cargo but no build, since `scripts/check-dependency-audit.nu` reads `Cargo.lock` (LINKS-52).
+There is one job, on one runner label, against one Postgres version, with the toolchain the runner image ships (nothing in the repo pins one). Before the cargo legs it runs the five static guards, which need no compiler: `scripts/check-suite-parity.nu`, `scripts/check-migration-immutability.nu`, `scripts/check-migration-docs.nu`, `scripts/check-build-flags.nu` and `scripts/check-dev-clean-volumes.nu`. The `Dependency audit` step follows them: it needs cargo but no build, since `scripts/check-dependency-audit.nu` reads `Cargo.lock` (LINKS-52).
 
 A second workflow, `.forgejo/workflows/audit.yml`, runs that audit guard on a weekly schedule and nothing else. A push-triggered job only ever audits a lockfile somebody just touched, so the schedule is the only run that sees an advisory published against dependencies that have not changed. [docs/SECURITY.md](SECURITY.md#security-audit) has the failure policy and the exception rules.
 
@@ -587,6 +587,8 @@ nu scripts/check-migration-immutability.nu
 nu scripts/check-migration-docs.nu --self-test
 nu scripts/check-migration-docs.nu
 nu scripts/check-build-flags.nu
+nu scripts/check-dev-clean-volumes.nu --self-test
+nu scripts/check-dev-clean-volumes.nu
 nu scripts/check-dependency-audit.nu --self-test
 nu scripts/check-dependency-audit.nu
 cargo fmt --check

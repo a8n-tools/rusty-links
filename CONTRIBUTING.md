@@ -167,6 +167,10 @@ Branch naming conventions:
    # and every `--build-arg` is declared by a Dockerfile
    nu scripts/check-build-flags.nu
 
+   # Guard run by CI: the volumes `just dev-clean` removes are exactly the ones
+   # compose.dev.yml and compose.yml declare, in both directions
+   nu scripts/check-dev-clean-volumes.nu
+
    # Guard run by CI: Cargo.lock against the RustSec advisory database. Fails on a
    # vulnerability no dated exception covers; see docs/SECURITY.md for the policy
    just audit
@@ -235,7 +239,7 @@ test(links): add integration tests for link creation
 Before submitting, ensure:
 
 - [ ] Code follows project coding standards
-- [ ] `just pre-commit` passes (the four static guards, the dependency audit, then fmt, clippy under default features, `--features server` and `--features web` on wasm, build and tests under both feature sets, the doc examples, and the Postgres-backed `tests/` targets). It runs everything `.forgejo/workflows/check.yml` runs, and `scripts/check-suite-parity.nu` fails the build if the two ever stop matching.
+- [ ] `just pre-commit` passes (the five static guards, the dependency audit, then fmt, clippy under default features, `--features server` and `--features web` on wasm, build and tests under both feature sets, the doc examples, and the Postgres-backed `tests/` targets). It runs everything `.forgejo/workflows/check.yml` runs, and `scripts/check-suite-parity.nu` fails the build if the two ever stop matching.
 - [ ] Server-side tests pass (`cargo test --features server --lib`)
 - [ ] Any new SQL is covered by a `tests/db_*.rs` case, since a query with no database-backed test is only compile-checked
 - [ ] Any new doc example compiles (`just test-doc`); mark one that must not execute ```` ```no_run ````, never ```` ```ignore ````, which is not compiled at all and fails the leg
