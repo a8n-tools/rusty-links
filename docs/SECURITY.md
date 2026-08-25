@@ -197,7 +197,8 @@ sqlx::query("SELECT * FROM users WHERE email = $1")
 
 ✅ **JWT Token Security**
 - Access tokens with configurable expiry
-- Refresh tokens for session renewal
+- Refresh tokens for session renewal, stored only as their SHA-256 (`refresh_tokens.token_hash`, LINKS-59), so a database dump or a backup yields nothing exchangeable for a session. That matters more than it looks: a refresh is session continuation rather than a sign-in, so a replayed token never trips the approval gate below
+- A refresh rotates through one guarded `DELETE ... RETURNING`, so a captured token buys one session at most and two concurrent uses of it never both succeed
 - Account lockout after failed login attempts
 
 ✅ **No Sensitive Data Logging**

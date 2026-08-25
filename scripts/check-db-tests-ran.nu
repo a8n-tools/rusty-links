@@ -34,8 +34,9 @@ const DB_PREFIX = "db_"
 # Floor, not a target: enough that an empty or filtered run cannot clear it,
 # low enough that deleting one obsolete case does not fail the build. Raise it
 # as the suites grow rather than lowering it after a near miss. Last raised for
-# the LINKS-45 device trigger, which took the suites from 26 passes to 49.
-const MIN_DB_PASSED = 42
+# the LINKS-59 refresh-token hashing, which took the suites from 51 passes to 59
+# across a sixth target.
+const MIN_DB_PASSED = 52
 
 # Fold a target's harness output into counts. A target that printed no summary
 # line at all reports zero summaries, which is itself a violation.

@@ -49,6 +49,25 @@ pub fn generate_refresh_token() -> String {
     base64::Engine::encode(&base64::engine::general_purpose::URL_SAFE_NO_PAD, bytes)
 }
 
+/// SHA-256 of a refresh token, as stored in `refresh_tokens.token_hash`
+/// (LINKS-59).
+///
+/// Matches how `user_sessions.session_token_hash` and
+/// `pending_login_approvals.token_hash` are stored, so a database dump yields
+/// nothing that can be exchanged for a session. The same 32 bytes the
+/// migration's `sha256(convert_to(token, 'UTF8'))` backfill produces, which is
+/// what lets a token issued before the migration keep working.
+///
+/// The match itself is an indexed equality inside Postgres and is not
+/// constant-time, which is the same trade every sibling column makes and costs
+/// nothing here: what is compared is a digest of a 256-bit random token, so a
+/// timing oracle leaks about the digest, and turning a digest back into the
+/// token it came from is a preimage attack.
+pub fn hash_refresh_token(token: &str) -> Vec<u8> {
+    use sha2::{Digest, Sha256};
+    Sha256::digest(token.as_bytes()).to_vec()
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -123,6 +142,17 @@ mod tests {
             "Token should be valid base64url: {}",
             token
         );
+    }
+
+    // Only the digest is ever stored, and it is not the token (LINKS-59).
+    #[test]
+    fn the_stored_hash_is_not_the_refresh_token() {
+        let token = generate_refresh_token();
+        let hash = hash_refresh_token(&token);
+        assert_eq!(hash.len(), 32);
+        assert_ne!(hash, token.as_bytes());
+        assert_eq!(hash, hash_refresh_token(&token));
+        assert_ne!(hash, hash_refresh_token(&generate_refresh_token()));
     }
 
     #[test]

@@ -61,6 +61,53 @@ async fn pending_login_approvals_token_hash_is_unique() {
     );
 }
 
+/// LINKS-59: `20260824000016` must leave `token_hash BYTEA NOT NULL UNIQUE` and
+/// no `token` column at all. A column left behind, or a UNIQUE that moved off
+/// the hash, is a plaintext token at rest or a token that can mint two sessions.
+#[tokio::test]
+async fn refresh_tokens_hold_only_a_hash() {
+    let pool = common::test_pool().await;
+
+    let columns: Vec<(String, String, bool)> = sqlx::query_as(
+        "SELECT a.attname::text, format_type(a.atttypid, a.atttypmod), a.attnotnull
+         FROM pg_attribute a
+         JOIN pg_class t ON t.oid = a.attrelid
+         WHERE t.relname = 'refresh_tokens' AND a.attnum > 0 AND NOT a.attisdropped
+         ORDER BY a.attnum",
+    )
+    .fetch_all(&pool)
+    .await
+    .expect("columns must be readable");
+
+    assert!(
+        !columns.iter().any(|(name, _, _)| name == "token"),
+        "the plaintext token column must be gone, found {columns:?}"
+    );
+    assert!(
+        columns
+            .iter()
+            .any(|(name, kind, not_null)| name == "token_hash" && kind == "bytea" && *not_null),
+        "token_hash must be BYTEA NOT NULL, found {columns:?}"
+    );
+
+    let unique: Vec<String> = sqlx::query_scalar(
+        "SELECT a.attname::text
+         FROM pg_constraint c
+         JOIN pg_class t ON t.oid = c.conrelid
+         JOIN pg_attribute a ON a.attrelid = t.oid AND a.attnum = ANY(c.conkey)
+         WHERE t.relname = 'refresh_tokens' AND c.contype = 'u'",
+    )
+    .fetch_all(&pool)
+    .await
+    .expect("unique constraints must be readable");
+
+    assert_eq!(
+        unique,
+        vec!["token_hash".to_string()],
+        "token_hash carries the only UNIQUE constraint on refresh_tokens"
+    );
+}
+
 /// LINKS-45: `UNIQUE (user_id, device_id_hash)`. That pair is what makes the
 /// recording upsert an upsert, so one device can never match two rows.
 #[tokio::test]
