@@ -1,5 +1,6 @@
 use dioxus::prelude::*;
 use serde::{Deserialize, Serialize};
+use uuid::Uuid;
 
 #[cfg(feature = "server")]
 use sqlx::PgPool;
@@ -80,6 +81,27 @@ pub struct UpdateMeRequest {
     /// Whether new-location sign-in alerts stay on for this account.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub notify_new_location: Option<bool>,
+}
+
+/// One device an account is recognised from (LINKS-55), as a client sees it.
+///
+/// The type deliberately has NO field for `known_devices.device_id_hash`. The
+/// hash is the credential-shaped half of the device identity and a client has
+/// no use for it, so rather than hiding it at the serializer, where it would
+/// sit one forgotten attribute away from the wire, there is simply nowhere to
+/// put it. `is_current` is resolved server-side by comparing hashes in SQL, so
+/// no hash is ever materialised outside the query that reads it.
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
+pub struct KnownDeviceInfo {
+    /// Opaque row id, the handle `DELETE /api/auth/devices/{id}` takes.
+    pub id: Uuid,
+    /// When this account first completed a sign-in from the device.
+    pub first_seen_at: chrono::DateTime<chrono::Utc>,
+    /// Touched by every later sign-in from it.
+    pub last_seen_at: chrono::DateTime<chrono::Utc>,
+    /// Whether the request listing them came from this device, so the UI can
+    /// say which row is "this browser" and what removing it costs.
+    pub is_current: bool,
 }
 
 /// Authentication response with JWT tokens (standalone mode)

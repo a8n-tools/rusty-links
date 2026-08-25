@@ -17,6 +17,7 @@ use axum::http::{Request, StatusCode};
 use rusty_links::auth::known_device::{
     generate_device_id, hash_device_id, known_device_state, record_device, record_submitted_device,
 };
+use serde_json::Value;
 use sqlx::PgPool;
 use tower::ServiceExt; // for `oneshot`
 use uuid::Uuid;
@@ -413,6 +414,336 @@ async fn approving_a_held_device_lets_the_next_sign_in_through() {
     );
 
     common::delete_user(&pool, user.id).await;
+}
+
+// ── Listing and revoking (LINKS-55) ──────────────────────────────────────────
+
+/// The list describes the caller's account and nothing else. Ownership is in
+/// the WHERE clause, so another account's rows are not filtered out after the
+/// read; they are never read.
+#[tokio::test]
+async fn the_device_list_is_scoped_to_the_caller() {
+    let pool = common::test_pool().await;
+    let config = common::test_config();
+    let alice = common::new_user(&pool).await;
+    let bob = common::new_user(&pool).await;
+
+    record_device(&pool, alice.id, &hash_device_id("alice-1"))
+        .await
+        .expect("the record must run");
+    record_device(&pool, alice.id, &hash_device_id("alice-2"))
+        .await
+        .expect("the record must run");
+    record_device(&pool, bob.id, &hash_device_id("bob-1"))
+        .await
+        .expect("the record must run");
+
+    let (status, body) = list_devices(&pool, &config, &alice, None).await;
+    assert_eq!(status, StatusCode::OK, "{body}");
+    let listed: Vec<Value> = serde_json::from_str(&body).expect("the list must parse");
+    assert_eq!(listed.len(), 2, "alice sees her two devices only: {body}");
+
+    let (status, body) = list_devices(&pool, &config, &bob, None).await;
+    assert_eq!(status, StatusCode::OK, "{body}");
+    let listed: Vec<Value> = serde_json::from_str(&body).expect("the list must parse");
+    assert_eq!(listed.len(), 1, "bob sees his one device only: {body}");
+
+    common::delete_user(&pool, alice.id).await;
+    common::delete_user(&pool, bob.id).await;
+}
+
+/// The hash is the credential-shaped half of the device identity and must never
+/// leave the server, in any encoding or under any key name.
+#[tokio::test]
+async fn the_device_list_never_returns_a_hash() {
+    let pool = common::test_pool().await;
+    let config = common::test_config();
+    let user = common::new_user(&pool).await;
+    let device = generate_device_id();
+    let hash = hash_device_id(&device);
+
+    record_device(&pool, user.id, &hash)
+        .await
+        .expect("the record must run");
+
+    let (status, body) = list_devices(&pool, &config, &user, Some(&device)).await;
+    assert_eq!(status, StatusCode::OK, "{body}");
+
+    let listed: Vec<Value> = serde_json::from_str(&body).expect("the list must parse");
+    let keys: Vec<&str> = listed[0]
+        .as_object()
+        .expect("a row is an object")
+        .keys()
+        .map(String::as_str)
+        .collect();
+    assert_eq!(
+        keys,
+        vec!["first_seen_at", "id", "is_current", "last_seen_at"],
+        "the row carries exactly these fields and no hash: {body}"
+    );
+
+    // Belt and braces: not present under any other key, in hex, or as the raw
+    // byte sequence rendered as a JSON array.
+    let hex: String = hash.iter().map(|byte| format!("{byte:02x}")).collect();
+    assert!(!body.contains(&hex), "the hash leaked as hex: {body}");
+    assert!(!body.to_lowercase().contains("hash"), "{body}");
+    let as_array = format!(
+        "[{}]",
+        hash.iter()
+            .map(|byte| byte.to_string())
+            .collect::<Vec<_>>()
+            .join(",")
+    );
+    assert!(
+        !body.contains(&as_array),
+        "the hash leaked as a byte array: {body}"
+    );
+    assert!(
+        !body.contains(&device),
+        "the device id itself leaked: {body}"
+    );
+
+    common::delete_user(&pool, user.id).await;
+}
+
+/// The caller's own browser is marked, and only it. A request that presents no
+/// device id marks nothing rather than guessing.
+#[tokio::test]
+async fn the_device_list_marks_the_current_browser() {
+    let pool = common::test_pool().await;
+    let config = common::test_config();
+    let user = common::new_user(&pool).await;
+
+    record_device(&pool, user.id, &hash_device_id("device-a"))
+        .await
+        .expect("the record must run");
+    record_device(&pool, user.id, &hash_device_id("device-b"))
+        .await
+        .expect("the record must run");
+
+    let (_, body) = list_devices(&pool, &config, &user, Some("device-a")).await;
+    let listed: Vec<Value> = serde_json::from_str(&body).expect("the list must parse");
+    let current: Vec<&Value> = listed
+        .iter()
+        .filter(|row| row["is_current"] == Value::Bool(true))
+        .collect();
+    assert_eq!(current.len(), 1, "exactly one row is this browser: {body}");
+
+    let (_, body) = list_devices(&pool, &config, &user, None).await;
+    let listed: Vec<Value> = serde_json::from_str(&body).expect("the list must parse");
+    assert!(
+        listed
+            .iter()
+            .all(|row| row["is_current"] == Value::Bool(false)),
+        "a request presenting no device id marks nothing: {body}"
+    );
+
+    common::delete_user(&pool, user.id).await;
+}
+
+/// A row id belonging to another account matches nothing, so the answer is the
+/// same 404 an unknown id gets and the other account keeps its device. This is
+/// the case that would be a cross-account delete if ownership were checked
+/// after the read instead of inside it.
+#[tokio::test]
+async fn a_device_from_another_account_is_not_removable() {
+    let pool = common::test_pool().await;
+    let config = common::test_config();
+    let alice = common::new_user(&pool).await;
+    let bob = common::new_user(&pool).await;
+
+    record_device(&pool, alice.id, &hash_device_id("alice-1"))
+        .await
+        .expect("the record must run");
+    record_device(&pool, bob.id, &hash_device_id("bob-1"))
+        .await
+        .expect("the record must run");
+
+    let alices_row = row_id(&pool, alice.id).await;
+
+    let (status, body) = revoke_device(&pool, &config, &bob, alices_row).await;
+    assert_eq!(
+        status,
+        StatusCode::NOT_FOUND,
+        "another account's row is reported as absent, not forbidden: {body}"
+    );
+    assert_eq!(
+        device_count(&pool, alice.id).await,
+        1,
+        "and alice still has her device"
+    );
+
+    // An id that exists nowhere answers identically, so the 404 leaks nothing
+    // about whether the row exists on some other account.
+    let (status, _) = revoke_device(&pool, &config, &bob, Uuid::new_v4()).await;
+    assert_eq!(status, StatusCode::NOT_FOUND);
+
+    common::delete_user(&pool, alice.id).await;
+    common::delete_user(&pool, bob.id).await;
+}
+
+/// Revoking the browser you are sitting at does not sign you out, and it does
+/// take effect: the next sign-in from it is held, because the account still has
+/// another device and this one is no longer among them.
+#[tokio::test]
+async fn revoking_the_current_device_keeps_the_session_and_holds_the_next_sign_in() {
+    let pool = common::test_pool().await;
+    let config = common::test_config();
+    let user = common::new_user(&pool).await;
+
+    login(&pool, &config, &user.email, Some("device-a")).await;
+    record_device(&pool, user.id, &hash_device_id("device-b"))
+        .await
+        .expect("the record must run");
+
+    let (_, body) = list_devices(&pool, &config, &user, Some("device-a")).await;
+    let listed: Vec<Value> = serde_json::from_str(&body).expect("the list must parse");
+    let current = listed
+        .iter()
+        .find(|row| row["is_current"] == Value::Bool(true))
+        .expect("device-a is this browser");
+    let current_id: Uuid = current["id"].as_str().unwrap().parse().unwrap();
+
+    let (status, body) = revoke_device(&pool, &config, &user, current_id).await;
+    assert_eq!(status, StatusCode::NO_CONTENT, "{body}");
+
+    // The session that issued the revoke still works: revoking a device is not
+    // a logout, and nothing about the JWT depends on the device.
+    let response = common::api_router(pool.clone(), config.clone())
+        .oneshot(
+            Request::builder()
+                .method("GET")
+                .uri("/auth/me")
+                .header("Authorization", common::bearer(&config, &user))
+                .body(Body::empty())
+                .expect("request must build"),
+        )
+        .await
+        .expect("router must answer");
+    assert_eq!(
+        response.status(),
+        StatusCode::OK,
+        "revoking a device must not end the session"
+    );
+
+    let (status, body) = login(&pool, &config, &user.email, Some("device-a")).await;
+    assert_eq!(status, StatusCode::FORBIDDEN, "{body}");
+    assert!(body.contains("APPROVAL_REQUIRED"), "{body}");
+
+    common::delete_user(&pool, user.id).await;
+}
+
+/// THE anti-lockout case. Revoking the last device is allowed and returns the
+/// account to the zero-devices baseline, which is where every account already
+/// sat on the deploy that created the table. `is_new_device` never holds there,
+/// so the next sign-in completes from ANY browser and re-establishes the
+/// baseline. A security control must never be able to make an account
+/// unreachable, and this is the proof that this one cannot.
+#[tokio::test]
+async fn revoking_the_last_device_returns_the_account_to_the_never_held_baseline() {
+    let pool = common::test_pool().await;
+    let config = common::test_config();
+    assert!(
+        config.mail.login_approval_enabled,
+        "this case is only meaningful with the gate on"
+    );
+    let user = common::new_user(&pool).await;
+
+    login(&pool, &config, &user.email, Some("device-a")).await;
+    assert_eq!(device_count(&pool, user.id).await, 1);
+
+    let only_row = row_id(&pool, user.id).await;
+    let (status, body) = revoke_device(&pool, &config, &user, only_row).await;
+    assert_eq!(status, StatusCode::NO_CONTENT, "{body}");
+    assert_eq!(device_count(&pool, user.id).await, 0, "the table is empty");
+
+    assert_eq!(
+        known_device_state(&pool, user.id, Some("device-z"))
+            .await
+            .expect("the lookup must run"),
+        None,
+        "zero devices is the baseline, not 'new device'"
+    );
+
+    // A browser the account has NEVER used signs in without being held, which
+    // is exactly the deploy-day behaviour.
+    let (status, body) = login(&pool, &config, &user.email, Some("device-z")).await;
+    assert_eq!(
+        status,
+        StatusCode::OK,
+        "revoking the last device must not lock the account out: {body}"
+    );
+    assert!(!body.contains("APPROVAL_REQUIRED"), "{body}");
+    assert_eq!(
+        device_count(&pool, user.id).await,
+        1,
+        "and that sign-in re-establishes the baseline"
+    );
+
+    common::delete_user(&pool, user.id).await;
+}
+
+/// The one row id an account has, read straight from the table.
+async fn row_id(pool: &PgPool, user_id: Uuid) -> Uuid {
+    sqlx::query_scalar("SELECT id FROM known_devices WHERE user_id = $1 ORDER BY id LIMIT 1")
+        .bind(user_id)
+        .fetch_one(pool)
+        .await
+        .expect("the row must exist")
+}
+
+/// `GET /auth/devices` as the signed-in user, optionally presenting a device id
+/// the way the browser does.
+async fn list_devices(
+    pool: &PgPool,
+    config: &rusty_links::config::Config,
+    user: &rusty_links::models::User,
+    device_id: Option<&str>,
+) -> (StatusCode, String) {
+    let mut builder = Request::builder()
+        .method("GET")
+        .uri("/auth/devices")
+        .header("Authorization", common::bearer(config, user));
+    if let Some(device_id) = device_id {
+        builder = builder.header("X-Device-Id", device_id);
+    }
+
+    let response = common::api_router(pool.clone(), config.clone())
+        .oneshot(builder.body(Body::empty()).expect("request must build"))
+        .await
+        .expect("router must answer");
+
+    let status = response.status();
+    let bytes = axum::body::to_bytes(response.into_body(), 64 * 1024)
+        .await
+        .expect("body must read");
+    (status, String::from_utf8_lossy(&bytes).to_string())
+}
+
+/// `DELETE /auth/devices/{id}` as the signed-in user.
+async fn revoke_device(
+    pool: &PgPool,
+    config: &rusty_links::config::Config,
+    user: &rusty_links::models::User,
+    device_row: Uuid,
+) -> (StatusCode, String) {
+    let response = common::api_router(pool.clone(), config.clone())
+        .oneshot(
+            Request::builder()
+                .method("DELETE")
+                .uri(format!("/auth/devices/{device_row}"))
+                .header("Authorization", common::bearer(config, user))
+                .body(Body::empty())
+                .expect("request must build"),
+        )
+        .await
+        .expect("router must answer");
+
+    let status = response.status();
+    let bytes = axum::body::to_bytes(response.into_body(), 64 * 1024)
+        .await
+        .expect("body must read");
+    (status, String::from_utf8_lossy(&bytes).to_string())
 }
 
 /// Sign in through the router `main.rs` mounts, with or without a device id.

@@ -286,7 +286,9 @@ CREATE TABLE known_devices (
 - A row is written only when a sign-in COMPLETES or an approval is claimed, never from a held-and-unapproved attempt, so an attempt nobody approves cannot make its device look familiar
 - Recognition is scoped to `user_id`, so a shared browser one account has made known does not make a second account's first sign-in from it look familiar
 - The write is `INSERT ... ON CONFLICT (user_id, device_id_hash) DO UPDATE SET last_seen_at = NOW()`, so repeat sign-ins touch one row rather than growing the table
-- Rows accumulate for the life of the account and are removed with it by `ON DELETE CASCADE`. Letting a user list and revoke their own devices is tracked in LINKS-55
+- Rows are removed with the account by `ON DELETE CASCADE`, and a user removes one themselves from the Account page or `DELETE /api/auth/devices/{id}` (LINKS-55). The delete carries `user_id` in its `WHERE` clause, so a row id from another account matches nothing
+- `GET /api/auth/devices` reads `id`, `first_seen_at` and `last_seen_at` for one account. It never selects `device_id_hash`; the "this browser" flag is computed as `device_id_hash IS NOT DISTINCT FROM $2::bytea` inside the query, so no hash is materialised outside it
+- Removing the last row returns the account to the zero-devices baseline described above, which is never read as "new device", so revocation cannot lock an account out
 
 ---
 

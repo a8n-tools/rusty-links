@@ -153,6 +153,12 @@ The `known_devices` table is created **empty and is deliberately not backfilled*
 
 The device signal is browser recognition, not machine identification. Clearing site data, a private window, a second browser on the same machine and a genuinely new laptop all look identical to it, and each produces one approval mail. That is the accepted cost; what it never does is let an unfamiliar browser through silently. `docs/SECURITY.md` states the full boundary.
 
+##### Seeing and revoking recognised devices
+
+The **Account** page lists the browsers your account is recognised from, with the dates each was first and last used and a badge on the one you are reading it from, and revokes any of them (LINKS-55). The same pair is available as `GET /api/auth/devices` and `DELETE /api/auth/devices/{id}`. The stored SHA-256 is never returned: the response has no field for it, and which row is "this browser" is worked out server-side.
+
+Revoking is safe to reach for. It never signs a device out and never blocks a sign-in; it only stops that browser being recognised, so its next sign-in is held for approval. Revoking your **last** device is allowed and returns the account to the same zero-devices baseline it started at, where nothing is held on the device trigger. That is the self-service version of the operator `DELETE` in the recovery steps below, and it cannot lock you out.
+
 The gate deliberately ignores the per-user `notify_new_location` opt-out. That preference is written from an authenticated session, so honouring it would let anyone holding a session switch the security control off, and an opted-out user would be held with no mail to approve with. It continues to govern the alert alone, and it disables neither trigger.
 
 ##### Locked out and cannot receive the email?

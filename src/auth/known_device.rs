@@ -38,11 +38,13 @@
 //! the migration records a device rather than being held. Reading it the other
 //! way would hold every account at once on deploy day.
 
+use chrono::{DateTime, Utc};
 use sha2::{Digest, Sha256};
 use sqlx::PgPool;
 use uuid::Uuid;
 
 use crate::error::AppError;
+use crate::server_functions::auth::KnownDeviceInfo;
 
 /// Longest device id accepted from a client. The browser mints a 32-character
 /// hex UUID; anything far longer is a client bug or someone probing, and it is
@@ -135,6 +137,69 @@ pub async fn record_submitted_device(
         return Ok(());
     };
     record_device(pool, user_id, &hash_device_id(device_id)).await
+}
+
+/// The devices an account is recognised from, newest use first (LINKS-55).
+///
+/// `current_hash` is the hash of the device id the listing request presented,
+/// and the `is_current` flag is computed by comparing it IN THE QUERY. That is
+/// deliberate: no `device_id_hash` is ever selected, so none is materialised in
+/// a struct, a log line, or a response, and the rule that a hash never leaves
+/// the server holds structurally rather than by remembering to omit a field.
+///
+/// Scoped to `user_id`, so this can only ever describe the calling account.
+pub async fn list_for_user(
+    pool: &PgPool,
+    user_id: Uuid,
+    current_hash: Option<&[u8]>,
+) -> Result<Vec<KnownDeviceInfo>, AppError> {
+    let rows = sqlx::query_as::<_, (Uuid, DateTime<Utc>, DateTime<Utc>, bool)>(
+        "SELECT id, first_seen_at, last_seen_at, device_id_hash IS NOT DISTINCT FROM $2::bytea
+         FROM known_devices
+         WHERE user_id = $1
+         ORDER BY last_seen_at DESC, id",
+    )
+    .bind(user_id)
+    .bind(current_hash)
+    .fetch_all(pool)
+    .await?;
+
+    Ok(rows
+        .into_iter()
+        .map(
+            |(id, first_seen_at, last_seen_at, is_current)| KnownDeviceInfo {
+                id,
+                first_seen_at,
+                last_seen_at,
+                is_current,
+            },
+        )
+        .collect())
+}
+
+/// Revoke one device, returning whether a row was removed (LINKS-55).
+///
+/// The account is part of the WHERE clause rather than something checked after
+/// the read, so an id belonging to another account matches nothing, deletes
+/// nothing, and is indistinguishable from an id that does not exist. Ownership
+/// as a predicate is what keeps a 404 honest: there is no path where a row is
+/// found first and the caller is compared to it second.
+///
+/// Removing the LAST device is allowed and is not a lockout. It returns the
+/// account to the zero-devices baseline, where
+/// [`crate::auth::location_alert::is_new_device`] never holds, which is where
+/// every account already sat on the deploy that created the table. A security
+/// control must never be able to make an account unreachable, and revocation
+/// can only ever move an account toward being held MORE, or back to baseline.
+pub async fn delete_for_user(pool: &PgPool, id: Uuid, user_id: Uuid) -> Result<bool, AppError> {
+    let removed = sqlx::query("DELETE FROM known_devices WHERE id = $1 AND user_id = $2")
+        .bind(id)
+        .bind(user_id)
+        .execute(pool)
+        .await?
+        .rows_affected();
+
+    Ok(removed > 0)
 }
 
 /// A fresh device id, in the shape the browser mints.

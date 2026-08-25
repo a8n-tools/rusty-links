@@ -149,7 +149,7 @@ rusty-links/
 │   ├── common/
 │   │   └── mod.rs             # Pool, fixtures, router and session helpers
 │   ├── db_account_settings.rs # PATCH/GET /api/auth/me through the column
-│   ├── db_known_devices.rs    # LINKS-45 device recognition, through the login route
+│   ├── db_known_devices.rs    # LINKS-45 device recognition through the login route, LINKS-55 list and revoke
 │   ├── db_login_approval.rs   # LINKS-35 / LINKS-45 approval-gate lifecycle
 │   ├── db_refresh_tokens.rs   # LINKS-59 refresh tokens stored and resolved by hash
 │   ├── db_schema.rs           # Migrations apply; shapes; DATABASE.md against the schema

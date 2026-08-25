@@ -331,6 +331,82 @@ curl -X PATCH http://localhost:8080/api/auth/me \
 
 ---
 
+### List Recognised Devices
+
+The devices this account has completed a sign-in from (LINKS-55), which are the ones the [sign-in approval gate](#sign-in-approval-gate) does not hold. Served in both deployment modes.
+
+**Endpoint:** `GET /api/auth/devices`
+
+**Authentication:** Required
+
+**Request Headers:**
+
+| Header        | Required | Description                                                                                  |
+|---------------|----------|----------------------------------------------------------------------------------------------|
+| `X-Device-Id` | No       | This browser's device id, so the matching row is flagged `is_current`. Absent flags no row |
+
+**Response:** 200 OK
+
+```json
+[
+  {
+    "id": "9f1d8c7b-0000-4000-8000-1a2b3c4d5e6f",
+    "first_seen_at": "2026-08-20T09:14:02.117Z",
+    "last_seen_at": "2026-08-24T18:02:55.401Z",
+    "is_current": true
+  }
+]
+```
+
+`device_id_hash` is never returned. The response type has no field for it and the query never selects it; `is_current` is resolved by comparing hashes inside the query, so no hash exists outside it. `id` is an opaque row id and is the handle the revoke endpoint takes; it is not the device id, which never leaves the browser.
+
+The list is scoped to the session's account by a `WHERE` clause, so it can only ever describe the caller. An account with no recorded devices answers `[]`, which is the baseline state, not an error.
+
+**Errors:**
+- 401 Unauthorized - No valid session
+
+**Example:**
+
+```bash
+curl http://localhost:8080/api/auth/devices \
+  -H "X-Device-Id: 4f9a2c1e8b7d4a6f9e0c3b5a7d1f2e40" \
+  -b cookies.txt
+```
+
+---
+
+### Revoke a Recognised Device
+
+Stop recognising one device (LINKS-55), so the next sign-in from it is held for email approval.
+
+**Endpoint:** `DELETE /api/auth/devices/{id}`
+
+**Authentication:** Required
+
+`{id}` is the opaque `id` from the list above. The session's account is part of the `WHERE` clause, so an id belonging to another account matches nothing, deletes nothing, and answers the same 404 an unknown id gets.
+
+Not password-confirmed. Revocation issues no session and relaxes no check; it can only cause more sign-ins to be held, or return the account to its baseline.
+
+**Response:** 204 No Content
+
+**Behaviour worth knowing before calling it:**
+
+- Revoking the device you are currently on does **not** end your session. The next sign-in from it is held.
+- Revoking the **last** device returns the account to the zero-devices baseline, where no sign-in is held on the device trigger. This is the same state every account was in when `known_devices` was created, and the next sign-in re-establishes the baseline. It cannot lock the account out.
+
+**Errors:**
+- 401 Unauthorized - No valid session
+- 404 Not Found - No such device on this account
+
+**Example:**
+
+```bash
+curl -X DELETE http://localhost:8080/api/auth/devices/9f1d8c7b-0000-4000-8000-1a2b3c4d5e6f \
+  -b cookies.txt
+```
+
+---
+
 ### Logout
 
 End the current session and clear the session cookie.
