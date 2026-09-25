@@ -180,3 +180,11 @@ jobs:
         run: |
           nu scripts/check-db-tests-ran.nu --self-test
           nu scripts/check-db-tests-ran.nu
+
+  secrets:
+    # Secrets scan (kingfisher, trufflehog, noseyparker), one required check each
+    # under `Check / `. The caller must set `runs-on`: this Forgejo instance does
+    # not expand a cross-repo reusable `uses:` otherwise.
+    uses: psa-systems/common/.forgejo/workflows/check-secrets.yml@main
+    runs-on: ${{ vars.RUNS_ON_OPENSUSE_BASE_MEDIUM }}
+    secrets: inherit
