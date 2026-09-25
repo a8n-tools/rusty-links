@@ -377,11 +377,13 @@ pub fn AddLinkPage(initial_url: Option<String>) -> Element {
             Key::Escape => {
                 nav.push("/links");
             }
-            Key::Enter if evt.modifiers().ctrl() || evt.modifiers().meta() => {
+            Key::Enter
+                if (evt.modifiers().ctrl() || evt.modifiers().meta())
+                    && preview().is_some()
+                    && !creating() =>
+            {
                 // Ctrl/Cmd + Enter: Save link (when preview is shown)
-                if preview().is_some() && !creating() {
-                    handle_save(());
-                }
+                handle_save(());
             }
             _ => {}
         }
