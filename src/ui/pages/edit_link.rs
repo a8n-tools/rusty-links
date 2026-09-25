@@ -293,11 +293,13 @@ pub fn EditLinkPage(link_id: Uuid) -> Element {
                     nav.push("/links");
                 }
             }
-            Key::Enter if evt.modifiers().ctrl() || evt.modifiers().meta() => {
+            Key::Enter
+                if (evt.modifiers().ctrl() || evt.modifiers().meta())
+                    && has_changes()
+                    && !saving() =>
+            {
                 // Ctrl/Cmd + Enter: Save
-                if has_changes() && !saving() {
-                    do_save();
-                }
+                do_save();
             }
             _ => {}
         }
