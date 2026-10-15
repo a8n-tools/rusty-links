@@ -1,7 +1,7 @@
 <!--
 Release notes template for Rusty Links.
 
-`.forgejo/workflows/create-release.yml` generates the release body from `git log` since the previous tag. Use this template when a release warrants more than that generated list: fill it in and paste it over the generated body on the release page.
+`.forgejo/workflows/create-release.yml` calls psa-systems/common's reusable release workflow, which generates the release body as a changelog grouped by change type (one line per merged pull request) since the previous tag. Use this template when a release warrants more than that generated list: fill it in and paste it over the generated body on the release page.
 
 Instructions:
 1. Update the version number in the title
