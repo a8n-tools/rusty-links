@@ -370,7 +370,7 @@ Complete checklist for launching Rusty Links v1.0.0 to production.
 ### Release
 - [ ] `CHANGELOG.md` updated for v1.0.0
 - [ ] Forgejo release created by `create-release.yml` from the merged `release/v*` PR
-- [ ] Release notes read correctly (the workflow generates them from `git log` since the previous tag)
+- [ ] Release notes read correctly (psa-systems/common's reusable workflow generates them as a changelog grouped by change type since the previous tag)
 
 ### Optional
 - [ ] Demo instance running (live demo)

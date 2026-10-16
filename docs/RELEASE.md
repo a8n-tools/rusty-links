@@ -39,7 +39,7 @@ Merging is the trigger for everything that follows. Two workflows fire off the m
 
 | Workflow | Trigger | What it does |
 |----------|---------|--------------|
-| `.forgejo/workflows/create-release.yml` | a merged PR whose head branch starts with `release/v` | Builds a changelog from `git log` since the previous tag and POSTs it to the Forgejo releases API, which creates both the tag and the release |
+| `.forgejo/workflows/create-release.yml` | a merged PR whose head branch starts with `release/v` | Calls psa-systems/common's reusable release workflow, which builds a changelog grouped by change type (one line per merged pull request) since the previous tag and POSTs it to the Forgejo releases API, which creates both the tag and the release |
 | `.forgejo/workflows/build-oci-image.yml` | the `v*` tag push that the release creates, and separately the push to `main` | Builds `oci-build/Dockerfile` with `docker buildx` and pushes one image tag to `dev.a8n.run/<owner>/rusty-links` |
 
 ### 3. Watch the run
