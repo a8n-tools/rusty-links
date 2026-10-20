@@ -18,7 +18,7 @@ jobs:
     name: cargo audit
     # Dev label: the guard needs cargo and nu, and installs cargo-audit when the
     # image does not already carry it. Nothing here compiles the crate.
-    runs-on: ${{ vars.RUNS_ON_OPENSUSE_DEV_LATEST }}
+    runs-on: ${{ vars.RUNS_ON_OPENSUSE_BASE_HEAVY }}
 
     steps:
       - name: Clone the repository
