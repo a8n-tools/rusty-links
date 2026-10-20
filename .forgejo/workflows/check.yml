@@ -17,7 +17,7 @@ jobs:
     # Dev label: this job compiles and links Rust on the runner (build scripts and
     # the host-target build/test need cc/ld plus glibc and OpenSSL headers, which
     # only the dev image carries).
-    runs-on: ${{ vars.RUNS_ON_OPENSUSE_DEV_LATEST }}
+    runs-on: ${{ vars.RUNS_ON_OPENSUSE_BASE_HEAVY }}
 
     # Postgres for the tests/ targets (LINKS-44). Without it the only test legs
     # were `cargo test --lib`, so every query in src/models/ and src/auth/ was
