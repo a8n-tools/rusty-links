@@ -16,7 +16,7 @@ jobs:
     if: >-
       github.event.pull_request.merged == true
       && startsWith(github.event.pull_request.head.ref, 'release/v')
-    uses: psa-systems/common/.forgejo/workflows/create-release.yml@main
+    uses: https://dev.a8n.run/psa-systems/common/.forgejo/workflows/create-release.yml@main
     # The caller must set `runs-on` itself: this Forgejo instance does not
     # expand a cross-repo reusable `uses:` otherwise (see check.yml).
     runs-on: ${{ vars.RUNS_ON_OPENSUSE_BASE_MEDIUM }}
