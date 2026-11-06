@@ -9,6 +9,8 @@ IMPORTANT: Do NOT modify `./assets/tailwind.css`. All CSS should go in `./tailwi
 
 `./assets/tailwind.css` is gitignored, but `src/main.rs` `include_str!`s it, so a plain `cargo build --features server` fails on a fresh checkout until the file exists. `just pre-commit` and `.forgejo/workflows/check.yml` each create an empty placeholder first; `dx build` overwrites it with the real stylesheet.
 
+This repo consumes `common` as a git submodule (`common/`, imported into the root `justfile`); `common/docs/standards.md` governs it. @common/docs/standards.md
+
 ## Build & Development Commands
 
 `just pre-commit` is the authoritative check suite: it runs every check `.forgejo/workflows/check.yml` runs, and fails on the first red one. Run it before every commit. It starts with the five static guards that need no compiler (`scripts/check-suite-parity.nu`, `scripts/check-migration-immutability.nu`, `scripts/check-migration-docs.nu`, `scripts/check-build-flags.nu`, `scripts/check-dev-clean-volumes.nu`), which run on the host in well under a second, then the dependency audit, then the cargo legs in the dev container.

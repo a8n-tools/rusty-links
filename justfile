@@ -1,5 +1,14 @@
 # Rusty Links - Task Runner
 
+# SPEC-1.5, SPEC-3.1: app set before the import; any other overridden variable would go here too.
+app := "rusty-links"
+
+# SPEC-1.5, SPEC-3.1: import after the variables above it.
+set allow-duplicate-recipes := true
+
+import 'common/common.just'
+
+# SPEC-1.6, SPEC-3.2: default MUST be first and MUST be redefined here, not inherited.
 # List available recipes
 default:
     @just --list
