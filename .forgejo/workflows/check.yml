@@ -189,18 +189,23 @@ jobs:
     runs-on: ${{ vars.RUNS_ON_OPENSUSE_BASE_MEDIUM }}
     secrets: inherit
     with:
-      # Skip paths that only hold placeholders, test fixtures and example env
-      # files: docs/, tests/, scripts/, .env.*.example, test_config.sh, plus
+      # Kingfisher's working-tree pass honours these path excludes; its
+      # `--git-history full` pass scans blobs without a current filesystem
+      # path, so history matches need `kingfisher_skip_regex` below. Includes
       # the `common` submodule (common's own CI already suppresses its
-      # intentional POSTGRES.1 placeholder). A real production credential
-      # outside these paths is still scanned.
+      # intentional POSTGRES.1 placeholder).
       kingfisher_excludes: "common docs tests scripts .env.saas.example .env.standalone.example test_config.sh"
-      # The src/ findings are inside #[cfg(test)] blocks: dev-only credential
-      # shapes the suite needs to exercise masking, verification and the
-      # new-location gate. Suppress only these exact strings so a real
-      # production credential elsewhere is still caught. The HTTP Bearer match
-      # in src/ui/http.rs is a module-doc comment, not a token.
-      kingfisher_skip_regex: "user:password@localhost|user:pass@127\\.0\\.0\\.1|my_secure_password_123|same_password|SecurePassword123!|AnotherPassword123!|TEST_PASSWORD|changeme_secure_password_here|Authorization: Bearer header from localStorage"
+      # Pattern-based suppressions for kingfisher. All of these are documented
+      # placeholders and test fixtures: known-benign Postgres URIs built from
+      # the `rusty_links` / `rustylinks` / `user` test accounts against the
+      # local / in-cluster / loopback hosts, the specific dev-only password
+      # strings the suite exercises for masking, hashing, verification and
+      # the new-location gate, and the HTTP Bearer header reference in
+      # src/ui/http.rs which is a module-doc comment. A real production
+      # credential outside this set still fails the scan because it would
+      # neither carry one of these usernames against a dev host nor match one
+      # of the fixture password strings exactly.
+      kingfisher_skip_regex: "postgres(?:ql)?://(?:rusty_links|rustylinks|user):(?:password|pass|rustylinks|changeme_secure_password_here|\\*{4})@|SecurePassword123!|SecurePass123!|StrongPassword123!|TestPassword123!|AnotherPassword123!|hunter2hunter2|my_secure_password_123|same_password|secure_password|password123|user_password|TEST_PASSWORD|changeme_secure_password_here|Authorization: Bearer header from localStorage"
       # Noseyparker finding ids for the same placeholders. A finding id is
       # derived from the rule + matched text, so it suppresses one known-benign
       # secret-shape wherever it appears and in history, and leaves the rule
