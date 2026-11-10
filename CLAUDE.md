@@ -7,13 +7,13 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 Rusty Links is a full-stack Rust web application using Dioxus 0.7 (fullstack mode) for the frontend. It uses PostgreSQL for data storage with SQLx for database access. Tailwind CSS v4 is used for the styling.
 IMPORTANT: Do NOT modify `./assets/tailwind.css`. All CSS should go in `./tailwind.css` and `dx` will automatically run the `tailwindcss` cli to generate `./assets/tailwind.css`.
 
-`./assets/tailwind.css` is gitignored, but `src/main.rs` `include_str!`s it, so a plain `cargo build --features server` fails on a fresh checkout until the file exists. `just pre-commit` and `.forgejo/workflows/check.yml` each create an empty placeholder first; `dx build` overwrites it with the real stylesheet.
+`./assets/tailwind.css` is gitignored, but `src/main.rs` `include_str!`s it, so a plain `cargo build --features server` fails on a fresh checkout until the file exists. `just check-ci` and `.forgejo/workflows/check.yml` each create an empty placeholder first; `dx build` overwrites it with the real stylesheet.
 
 This repo consumes `common` as a git submodule (`common/`, imported into the root `justfile`); `common/docs/standards.md` governs it. @common/docs/standards.md
 
 ## Build & Development Commands
 
-`just pre-commit` is the authoritative check suite: it runs every check `.forgejo/workflows/check.yml` runs, and fails on the first red one. Run it before every commit. It starts with the five static guards that need no compiler (`scripts/check-suite-parity.nu`, `scripts/check-migration-immutability.nu`, `scripts/check-migration-docs.nu`, `scripts/check-build-flags.nu`, `scripts/check-dev-clean-volumes.nu`), which run on the host in well under a second, then the dependency audit, then the cargo legs in the dev container.
+`just check-ci` is the authoritative check suite: it runs every check `.forgejo/workflows/check.yml` runs, and fails on the first red one. Run it before every push you want to be confident about (common's `pre-push` hook only runs fmt + em-dash + dprint; STD-4.2 and STD-4.3 forbid the hook from compiling). It starts with the five static guards that need no compiler (`scripts/check-suite-parity.nu`, `scripts/check-migration-immutability.nu`, `scripts/check-migration-docs.nu`, `scripts/check-build-flags.nu`, `scripts/check-dev-clean-volumes.nu`), which run on the host in well under a second, then the dependency audit, then the cargo legs in the dev container. CI runs the same suite in `.forgejo/workflows/check.yml`.
 
 `scripts/check-suite-parity.nu` is what keeps that claim true. The recipe and the workflow are two hand-maintained copies of one suite, so it parses the cargo invocations and guard-script calls out of both and fails when either side has a leg the other lacks, in either direction. The `check` recipe is a third copy, of the lint legs only, and is compared one way: every clippy configuration and the fmt leg the workflow runs must appear in `check`, resolved through its dependency recipes, while the build, test, doc-test and database legs it deliberately omits are not demanded of it. Until LINKS-64 `check` was outside the guard entirely, so deleting its `--features server` clippy leg left both this guard and `scripts/check-build-flags.nu` at exit 0. It normalises the spellings each file uses locally (`-D warnings` in the workflow, `--deny warnings` in the recipe; `--features=web` and `--features web`; flag order), so only a real difference is drift. It also fails when a clippy leg carries no `--deny warnings`, and when no clippy leg covers one of the three compilation configurations, which is the drift that survives being applied to every copy at once: `.cargo/config.toml` pins `[build] target = "x86_64-unknown-linux-gnu"`, so a wasm leg that lost `--target` silently re-lints the host build instead of failing (LINKS-39, LINKS-49).
 
@@ -30,7 +30,7 @@ IMPORTANT: `default = []`, so a bare `cargo check` / `cargo clippy` / `cargo tes
 
 ```bash
 # Run every check CI runs (the five static guards, the dependency audit, then fmt, clippy under default + server + web/wasm, build, unit/doc/Postgres tests under default + server)
-just pre-commit
+just check-ci
 
 # Run in development (requires PostgreSQL and .env file)
 dx serve
@@ -55,17 +55,17 @@ cargo test --features server --lib
 # Run a specific test
 cargo test --features server <test_name>
 
-# Run the doc examples with the vacuity guard, the same leg pre-commit and CI run
+# Run the doc examples with the vacuity guard, the same leg check-ci and CI run
 just test-doc
 
 # Run the tests/ targets against the compose postgres, with the skip guard
 just test-db
 
-# Audit Cargo.lock against the RustSec advisory database, the same leg pre-commit and CI run
+# Audit Cargo.lock against the RustSec advisory database, the same leg check-ci and CI run
 just audit
 
 # Lint on the host: clippy under all three compilation configurations, then fmt.
-# `just pre-commit` stays the authoritative suite; `just check` is the fast loop and
+# `just check-ci` stays the authoritative suite; `just check` is the fast loop and
 # leaves out the build, test, doc-test, database and audit legs, which need the compose stack.
 just check
 
@@ -87,7 +87,7 @@ The project uses Cargo features to separate server and client code:
 
 Server-only modules (`#[cfg(feature = "server")]`): api, auth, config, error, github, models, scheduler, scraper, security
 
-Because `default = []`, any check that omits `--features server` compiles none of those modules. `just pre-commit` and `.forgejo/workflows/check.yml` therefore run build and test twice, once with default features and once with `--features server`, and clippy three times, adding `--features web --target wasm32-unknown-unknown`. That third leg is the only one that compiles `#[cfg(target_arch = "wasm32")]` code, so a warning there is invisible to the other two; it was a bare `cargo check` with no `--deny warnings` until LINKS-39, which is how five of them accumulated. The `tests/` targets are all `#![cfg(feature = "server")]`, so they only ever run on the server leg, and so does the doc-test leg: every module carrying a doc example is behind `#[cfg(feature = "server")]`, so `cargo test --doc` without it collects zero tests and passes vacuously.
+Because `default = []`, any check that omits `--features server` compiles none of those modules. `just check-ci` and `.forgejo/workflows/check.yml` therefore run build and test twice, once with default features and once with `--features server`, and clippy three times, adding `--features web --target wasm32-unknown-unknown`. That third leg is the only one that compiles `#[cfg(target_arch = "wasm32")]` code, so a warning there is invisible to the other two; it was a bare `cargo check` with no `--deny warnings` until LINKS-39, which is how five of them accumulated. The `tests/` targets are all `#![cfg(feature = "server")]`, so they only ever run on the server leg, and so does the doc-test leg: every module carrying a doc example is behind `#[cfg(feature = "server")]`, so `cargo test --doc` without it collects zero tests and passes vacuously.
 
 There are no `standalone`/`saas` build features. A single binary and OCI image serves both deployment modes; the mode is resolved at runtime (see Configuration below).
 
@@ -123,7 +123,7 @@ Migrations are embedded at compile time by `sqlx::migrate!()` and are not copied
 - A new migration also needs a row in the Migration History table in `docs/DATABASE.md`, or `scripts/check-migration-docs.nu` fails CI. The table had drifted to six of fourteen rows before that guard existed (LINKS-46)
 - A migration that adds or drops a table or column also needs the Tables Reference in `docs/DATABASE.md` updated, or `database_doc_matches_the_migrated_schema` in `tests/db_schema.rs` fails: it compares every documented table and column against a migrated database in both directions. That guard is a test rather than a static script because the applied shape is not readable from the SQL text (`20250101000007` drops and re-adds `links.logo` inside a PL/pgSQL block). The reference had drifted through eleven migrations before it existed (LINKS-53)
 - Connection pool: 5 max connections, 30s timeout, 10min idle timeout
-- Tests get their own database: `tests/common/mod.rs::test_pool` derives `<database>_test` from `DATABASE_URL`, creates it, and migrates it, so a `just pre-commit` run never writes to dev data
+- Tests get their own database: `tests/common/mod.rs::test_pool` derives `<database>_test` from `DATABASE_URL`, creates it, and migrates it, so a `just check-ci` run never writes to dev data
 
 ## Configuration
 
