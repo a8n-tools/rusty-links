@@ -1,10 +1,13 @@
 #!/usr/bin/env nu
 
 # Reject drift between the hand-maintained copies of the check suite: the
-# `pre-commit` and `check` recipes in `justfile` and the steps in
+# `check-ci` and `check` recipes in `justfile` and the steps in
 # `.forgejo/workflows/check.yml`. Every cargo leg and every guard script in
-# `pre-commit` must appear in the workflow and the reverse, so that comparison
-# runs in both directions.
+# `check-ci` must appear in the workflow and the reverse, so that comparison
+# runs in both directions. `check-ci` is what the old `pre-commit` recipe
+# used to be (LINKS-87 moved the heavy matrix there after STD-4.2 and
+# STD-4.3 forbade compiling in a git hook); the local `pre-commit` recipe is
+# now common.just's fmt-only hook and is not part of this parity set.
 #
 # `check` is the third copy: the host-side lint pass, which LINKS-42 grew into the
 # same three clippy configurations CI runs. It is compared one way, because it
@@ -40,7 +43,7 @@
 
 const JUSTFILE = "justfile"
 const WORKFLOW = ".forgejo/workflows/check.yml"
-const RECIPE = "pre-commit"
+const RECIPE = "check-ci"
 const CHECK_RECIPE = "check"
 
 # Floors, set AT the real counts rather than below them: nine cargo legs and
@@ -476,9 +479,9 @@ def violations [just: record, ci: record, check: record]: nothing -> list<string
 def sample-justfile []: nothing -> string {
     [
         '# A comment above the recipe.'
-        'pre-commit: ensure-env ensure-css'
+        'check-ci: ensure-env ensure-css'
         '    #!/usr/bin/env nu'
-        '    print "\n[pre-commit] cargo clippy --all-targets --features bogus -- --deny warnings"'
+        '    print "\n[check-ci] cargo clippy --all-targets --features bogus -- --deny warnings"'
         '    ^nu scripts/check-suite-parity.nu --self-test'
         '    ^nu scripts/check-suite-parity.nu'
         '    ^nu scripts/check-migration-immutability.nu'
@@ -669,12 +672,12 @@ def run-self-test [] {
     expect-rejected "a justfile leg whose flags genuinely differ" (violations $all_features $ci $check)
 
     # Nothing parsed must fail rather than compare [] to [].
-    let renamed = (justfile-legs (sample-justfile | str replace "pre-commit: ensure-env ensure-css" "precommit: ensure-env ensure-css") $RECIPE)
+    let renamed = (justfile-legs (sample-justfile | str replace "check-ci: ensure-env ensure-css" "checkci: ensure-env ensure-css") $RECIPE)
     if ($renamed.problems | is-empty) {
         print --stderr "[check-suite-parity] SELF-TEST FAILED: a renamed recipe was accepted instead of failing loudly."
         exit 1
     }
-    expect-rejected "a justfile with no pre-commit recipe" (violations $renamed $ci $check)
+    expect-rejected "a justfile with no check-ci recipe" (violations $renamed $ci $check)
     let no_jobs = (workflow-legs "name: Check\non:\n  push:\n    branches: [main]\n")
     if ($no_jobs.problems | is-empty) {
         print --stderr "[check-suite-parity] SELF-TEST FAILED: a workflow with no jobs was accepted instead of failing loudly."

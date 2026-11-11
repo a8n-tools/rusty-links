@@ -72,6 +72,13 @@ const EXCEPTIONS = [
         review_by: "2027-02-24"
         reason: "No fixed version exists upstream. rsa is in Cargo.lock only through sqlx-mysql, and Cargo.toml takes sqlx without the mysql driver, so nothing here compiles it: `cargo tree --invert --package rsa` matches no package."
     }
+    {
+        id: "RUSTSEC-2026-0459"
+        package: "libsqlite3-sys"
+        issue: "LINKS-89"
+        review_by: "2027-05-15"
+        reason: "C SQLite CVE-2026-119375 inside libsqlite3-sys. The crate is in Cargo.lock only through sqlx-macros-core 0.8.6, which lists sqlx-sqlite as a non-optional dep; rusty-links takes sqlx without the sqlite feature, so `cargo tree --invert --package libsqlite3-sys` matches no package and no C code is linked. Upstream fix requires sqlx dropping sqlite from macros-core default deps, or a breaking sqlx major bump."
+    }
 ]
 
 # `docker compose run --rm` gives every invocation its own container, so an

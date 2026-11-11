@@ -1,36 +1,69 @@
 # Rusty Links - Task Runner
 
+# SPEC-1.5, SPEC-3.1: app set before the import; any other overridden variable would go here too.
+app := "rusty-links"
+
+# LINKS-87: the compose `app` service in compose.dev.yml is this repo's dev
+# container; common.just's `pre-commit-compose` runs the fmt leg there.
+# `pre_commit_mode` defaults to "compose", repeated here only to pin the
+# behavior against a future default change.
+pre_commit_mode := "compose"
+compose_service := "app"
+
+# LINKS-87: the heavy per-leg matrix (static guards, dependency audit, three
+# clippy configurations, two build configurations, library tests, doc tests,
+# Postgres integration tests) lives in `check-ci` below. It is NOT wired
+# into `pre_push_checks`: STD-4.2 and STD-4.3 forbid compiling code in a
+# git hook (including through `pre_push_checks`), and
+# `.forgejo/workflows/check.yml` is the authoritative run of that matrix.
+# Run `just check-ci` on demand before a push when local confidence beats
+# waiting for CI.
+
+# LINKS-87: single-crate layout for common's `create-release` dispatcher.
+# `release_crate` defaults to `app` ("rusty-links"), so it is not set.
+release_layout := "generic"
+
+# SPEC-1.5, SPEC-3.1: import after the variables above it.
+set allow-duplicate-recipes := true
+
+import 'common/common.just'
+
+# SPEC-1.6, SPEC-3.2: default MUST be first and MUST be redefined here, not inherited.
 # List available recipes
 default:
     @just --list
 
-# Install the git pre-commit hook (run once per fresh clone). Writes a stub at .git/hooks/pre-commit that execs `just pre-commit`. Bypass with `git commit --no-verify`.
-install-hooks:
-    #!/usr/bin/env nu
-    let hook = ".git/hooks/pre-commit"
-    # Remove first so a leftover symlink from an older install does not get
-    # written through to its target file. `try` swallows the not-found case.
-    try { rm $hook }
-    "#!/usr/bin/env sh\nexec just pre-commit\n" | save $hook
-    ^chmod +x $hook
-    print $"Wrote ($hook) -> just pre-commit"
+# LINKS-87: `install-hooks`, `pre-commit` and the fmt-only leg of `pre-push` now
+# come from common.just. The heavy per-leg matrix (static guards, dependency
+# audit, three clippy configurations, two build configurations, library tests,
+# doc tests, Postgres integration tests) lives in `check-ci` below. It is
+# NOT reachable from `pre-push` or any hook: STD-4.2 and STD-4.3 forbid
+# compiling in a hook, and `.forgejo/workflows/check.yml` runs the matrix
+# in CI.
 
-# Run every check .forgejo/workflows/check.yml runs: the five static guards on the host, then
-# the cargo legs inside the dev compose `app` container. scripts/check-suite-parity.nu compares
-# this recipe against the workflow and fails when either grows, loses or weakens a leg (LINKS-49).
-# The dependency audit runs next, before anything compiles: it reads Cargo.lock rather than the
-# build, so a RUSTSEC advisory fails in seconds instead of after the Rust legs (LINKS-52).
-# Covers all three compilation configurations: default features, `server`, and `web` on wasm.
-# `default = []` gates every server module behind `#[cfg(feature = "server")]`, so the
-# default-feature legs alone compile almost none of the crate (LINKS-36).
-# All three configurations lint under `--deny warnings`. The wasm leg was a bare
-# `cargo check`, so five warnings in browser-only code stayed green (LINKS-39).
-# The last two legs cover the test targets no `--lib` run reaches: the doc examples,
-# which nothing in the repo compiled until LINKS-48, and the tests/ targets against
-# the compose `postgres` service, which `cargo test --lib` never ran (LINKS-44).
-pre-commit: ensure-env ensure-css
+# Run every check .forgejo/workflows/check.yml runs: the five static guards on
+# the host, then the dependency audit, then the cargo legs inside the dev
+# compose `app` container. scripts/check-suite-parity.nu compares this recipe
+# against the workflow and fails when either grows, loses or weakens a leg
+# (LINKS-49). The dependency audit runs next, before anything compiles: it
+# reads Cargo.lock rather than the build, so a RUSTSEC advisory fails in
+# seconds instead of after the Rust legs (LINKS-52). Covers all three
+# compilation configurations: default features, `server`, and `web` on wasm.
+# `default = []` gates every server module behind `#[cfg(feature = "server")]`,
+# so the default-feature legs alone compile almost none of the crate
+# (LINKS-36). All three configurations lint under `--deny warnings`. The wasm
+# leg was a bare `cargo check`, so five warnings in browser-only code stayed
+# green (LINKS-39). The last two legs cover the test targets no `--lib` run
+# reaches: the doc examples, which nothing in the repo compiled until LINKS-48,
+# and the tests/ targets against the compose `postgres` service, which
+# `cargo test --lib` never ran (LINKS-44). `cargo fmt --check` is kept here
+# too, mirroring CI, so `scripts/check-suite-parity.nu` can enforce the
+# workflow-vs-recipe parity in both directions (common's `pre-commit-compose`
+# also runs it, which is the cost of the parity guard).
+[group: 'check']
+check-ci: ensure-env ensure-css
     #!/usr/bin/env nu
-    print "\n[pre-commit] static guards"
+    print "\n[check-ci] static guards"
     ^nu scripts/check-suite-parity.nu --self-test
     ^nu scripts/check-suite-parity.nu
     ^nu scripts/check-migration-immutability.nu
@@ -39,34 +72,34 @@ pre-commit: ensure-env ensure-css
     ^nu scripts/check-build-flags.nu
     ^nu scripts/check-dev-clean-volumes.nu --self-test
     ^nu scripts/check-dev-clean-volumes.nu
-    print "\n[pre-commit] dependency audit"
+    print "\n[check-ci] dependency audit"
     ^nu scripts/check-dependency-audit.nu --self-test
     ^nu scripts/check-dependency-audit.nu --runner "docker compose --file compose.dev.yml run --rm --no-deps --env RUST_LOG=warn app"
-    print "\n[pre-commit] cargo fmt --check"
+    print "\n[check-ci] cargo fmt --check"
     ^docker compose --file compose.dev.yml run --rm --no-deps app cargo fmt --check
-    print "\n[pre-commit] cargo clippy --all-targets -- --deny warnings"
+    print "\n[check-ci] cargo clippy --all-targets -- --deny warnings"
     ^docker compose --file compose.dev.yml run --rm --no-deps app cargo clippy --all-targets -- --deny warnings
-    print "\n[pre-commit] cargo clippy --all-targets --features server -- --deny warnings"
+    print "\n[check-ci] cargo clippy --all-targets --features server -- --deny warnings"
     ^docker compose --file compose.dev.yml run --rm --no-deps app cargo clippy --all-targets --features server -- --deny warnings
-    print "\n[pre-commit] cargo clippy --all-targets --features web --target wasm32-unknown-unknown -- --deny warnings"
+    print "\n[check-ci] cargo clippy --all-targets --features web --target wasm32-unknown-unknown -- --deny warnings"
     ^docker compose --file compose.dev.yml run --rm --no-deps app cargo clippy --all-targets --features web --target wasm32-unknown-unknown -- --deny warnings
-    print "\n[pre-commit] cargo build --all-targets"
+    print "\n[check-ci] cargo build --all-targets"
     ^docker compose --file compose.dev.yml run --rm --no-deps app cargo build --all-targets
-    print "\n[pre-commit] cargo build --all-targets --features server"
+    print "\n[check-ci] cargo build --all-targets --features server"
     ^docker compose --file compose.dev.yml run --rm --no-deps app cargo build --all-targets --features server
-    print "\n[pre-commit] cargo test --lib"
+    print "\n[check-ci] cargo test --lib"
     ^docker compose --file compose.dev.yml run --rm app cargo test --lib
-    print "\n[pre-commit] cargo test --features server --lib"
+    print "\n[check-ci] cargo test --features server --lib"
     ^docker compose --file compose.dev.yml run --rm app cargo test --features server --lib
-    print "\n[pre-commit] doc tests (server)"
+    print "\n[check-ci] doc tests (server)"
     ^nu scripts/check-doc-tests-ran.nu --self-test
     ^nu scripts/check-doc-tests-ran.nu --runner "docker compose --file compose.dev.yml run --rm --no-deps app"
-    print "\n[pre-commit] apply migrations to the test database"
+    print "\n[check-ci] apply migrations to the test database"
     ^docker compose --file compose.dev.yml run --rm app cargo test --features server --test db_schema
-    print "\n[pre-commit] integration tests against the compose postgres"
+    print "\n[check-ci] integration tests against the compose postgres"
     ^nu scripts/check-db-tests-ran.nu --self-test
     ^nu scripts/check-db-tests-ran.nu --runner "docker compose --file compose.dev.yml run --rm app"
-    print "\n[pre-commit] all checks passed"
+    print "\n[check-ci] all checks passed"
 
 # Use the per-user dev compose file
 compose := "docker compose -f compose.dev.yml "
@@ -288,87 +321,9 @@ dev-clean-all: dev-clean
 
 # ── Release ──────────────────────────────────────────────────────────────────
 
-# Create a release: bump major (vx.0.0), minor (v0.x.0), or hotfix (v0.0.x), push branch, and print PR link
-# After the PR is merged, the create-release workflow creates the tag and release automatically
-[group: 'release']
-create-release bump:
-    #!/usr/bin/env nu
-    let bump = "{{ bump }}"
-
-    # Abort if there are uncommitted changes
-    let status = git status --porcelain | str trim
-    if ($status | is-not-empty) {
-        print $"(ansi red)Working tree is dirty. Please stash or commit your changes first.(ansi reset)"
-        exit 1
-    }
-
-    # Switch to main if not already there
-    let branch = git branch --show-current | str trim
-    if $branch != "main" {
-        print $"Switching from ($branch) to main..."
-        git checkout main
-    }
-
-    # Pull latest changes
-    git pull --rebase origin main
-
-    # Calculate next version
-    let current = (open Cargo.toml | get package.version | split row "." | each { into int })
-    let next = match $bump {
-        "major" => [$"($current.0 + 1)" "0" "0"],
-        "minor" => [$"($current.0)" $"($current.1 + 1)" "0"],
-        "hotfix" => [$"($current.0)" $"($current.1)" $"($current.2 + 1)"],
-        _ => { print $"(ansi red)Usage: just create-release <major|minor|hotfix>(ansi reset)"; exit 1 }
-    }
-    let bare = ($next | str join ".")
-    let tag = $"v($bare)"
-    let release_branch = $"release/($tag)"
-
-    # Create release branch, bump version, and commit
-    git checkout -b $release_branch
-    open Cargo.toml | update package.version $bare | to toml | collect | save --force Cargo.toml
-    git add Cargo.toml
-    git commit --signoff --message $"Release ($tag)"
-
-    # Push release branch
-    git push --set-upstream origin $release_branch
-
-    # Open the release PR via fj. Body lives in a tempfile so the
-    # changelog can grow later without inline escaping pain.
-    let body_file = (mktemp --tmpdir --suffix .md)
-    [
-        $"Automated release PR for ($tag)."
-        ""
-        $"After merge, `.forgejo/workflows/create-release.yml` creates the ($tag) tag and release, and `.forgejo/workflows/build-oci-image.yml` publishes the ($tag) image."
-    ] | str join "\n" | save --force $body_file
-    let fj_result = (^fj --host dev.a8n.run pr create $"Release ($tag)" --body-file $body_file | complete)
-    rm $body_file
-    if $fj_result.exit_code != 0 {
-        print $"(ansi red)fj pr create failed(ansi reset)"
-        print $fj_result.stderr
-        exit 1
-    }
-
-    # `fj pr create` prints `created pull request #N: <title>` on success.
-    # Parse the number out and build the PR URL from `origin`.
-    let pr_num = (
-        $fj_result.stdout
-        | str trim
-        | parse --regex 'created pull request #(?P<num>\d+)'
-        | get num.0?
-    )
-    let remote = (git remote get-url origin | str trim)
-    let base_url = if ($remote | str starts-with "ssh://") {
-        $remote | str replace "ssh://git@" "https://" | str replace "git.a8n.run" "dev.a8n.run" | str replace ".git" ""
-    } else {
-        $remote | str replace --regex "git@([^:]+):" "https://$1/" | str replace "git.a8n.run" "dev.a8n.run" | str replace ".git" ""
-    }
-    print $"(ansi green)Pushed ($release_branch)(ansi reset)"
-    if ($pr_num | is-not-empty) {
-        print $"PR: ($base_url)/pulls/($pr_num)"
-    } else {
-        # fj output format drifted; fall back to whatever it said.
-        print $"fj output: ($fj_result.stdout | str trim)"
-    }
-    print $"After merging, the create-release workflow will tag and release ($tag) automatically."
+# LINKS-87: `create-release` now comes from common.just via `release_layout
+# := "generic"` (set above). Common bumps `[package] version` in Cargo.toml,
+# opens the release PR via `fj --host dev.a8n.run pr create`, and runs the
+# same preflight checks the old local recipe did. The automatic tag + image
+# publish still runs through .forgejo/workflows/create-release.yml on merge.
 
