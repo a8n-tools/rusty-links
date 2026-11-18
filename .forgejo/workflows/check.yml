@@ -17,7 +17,7 @@ jobs:
     # Dev label: this job compiles and links Rust on the runner (build scripts and
     # the host-target build/test need cc/ld plus glibc and OpenSSL headers, which
     # only the dev image carries).
-    runs-on: ${{ vars.RUNS_ON_OPENSUSE_BASE_HEAVY }}
+    runs-on: ${{ vars.RUNS_ON_OPENSUSE_HEAVY }}
 
     # Postgres for the tests/ targets (LINKS-44). Without it the only test legs
     # were `cargo test --lib`, so every query in src/models/ and src/auth/ was
@@ -186,7 +186,7 @@ jobs:
     # under `Check / `. The caller must set `runs-on`: this Forgejo instance does
     # not expand a cross-repo reusable `uses:` otherwise.
     uses: https://dev.a8n.run/psa-systems/common/.forgejo/workflows/check-secrets.yml@main
-    runs-on: ${{ vars.RUNS_ON_OPENSUSE_BASE_MEDIUM }}
+    runs-on: ${{ vars.RUNS_ON_OPENSUSE_MEDIUM }}
     secrets: inherit
     with:
       # Kingfisher's working-tree pass honours these path excludes; its

@@ -23,6 +23,20 @@ compose_service := "app"
 # `release_crate` defaults to `app` ("rusty-links"), so it is not set.
 release_layout := "generic"
 
+# The local `commit-msg` secrets scan (`check-secrets-staged`) has no
+# access to the `kingfisher_excludes`/`kingfisher_skip_regex`/
+# `noseyparker_findings_exclude` inputs `.forgejo/workflows/check.yml` passes
+# to the CI `check-secrets` workflow, so without these it flags the same
+# known-benign fixtures documented there (test Postgres URIs, fixture
+# passwords, the `src/ui/http.rs` Bearer doc comment, and that `with:` block's
+# own `kingfisher_skip_regex` string, which itself contains the literal
+# "Authorization: Bearer" fixture text) on any commit that merely stages
+# `check.yml`, as this one does. Mirrors that `with:` block's two string
+# values verbatim so a local commit touching `check.yml` passes the same
+# fixtures CI already accepts.
+secrets_kingfisher_skip_regex := "postgres(?:ql)?://(?:rusty_links|rustylinks|user):(?:password|pass|rustylinks|changeme_secure_password_here|\\*{4})@|SecurePassword123!|SecurePass123!|StrongPassword123!|TestPassword123!|AnotherPassword123!|hunter2hunter2|my_secure_password_123|same_password|secure_password|password123|user_password|TEST_PASSWORD|changeme_secure_password_here|Authorization: Bearer header from localStorage"
+secrets_noseyparker_findings_exclude := "283448845a7df4dedac5c628b95bbf5f135d10a9,a2d90f8336fb80403b370b4c3d19534306c921e5,984900e09cba3c24729919ea873654d0f2a8ee20,12fd94cc81fa6ee60078c2601b04889cedc05b72,c48cdb78d2634f82388811333eb65677878f6404,9de4f394638049bba953486ca669c48d07c23103,f74340d7517e7db622bd0d692a6955d66cb60824,88095d0bb50bb58b62fa33efceae5c6f32ed7d15,2f811693e55516a7a6d07b07814d4f980cc9c55a,7f51f9e5353980886b39a256901644e8164824ce,69b4dbec98f9c20100f4d4b4341cec007278f99e,876d87057187d3664083e9e224431e08e5cf4a16,42983e83c204a6c662ff6f3859656412e2330409,74e56334d5d0b2cbd9ef9894d1e7b0b691906245,867002f357950c0afdc9abddca9f1cd9b76d4a8d,5626245e096554564889840f5662ae6cb1fc0112,bd289f453d91858b7ec29bb1271e13d13d7f9e40,8f28ff83937426e6ae8a72798571a9344e1c9730,b4f41ea35f7fcd55877280c00bcbeceb7508f1f9,e2396711c2cafcf18e3095e13bc8b3806c72a8da,1ec6bd496726bbe6958cc342b443337bda6a8540,3f4a3c40b9a1d98e48b1e8ced76bb86e306ae51c"
+
 # SPEC-1.5, SPEC-3.1: import after the variables above it.
 set allow-duplicate-recipes := true
 
